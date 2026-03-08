@@ -44,7 +44,7 @@ export function HeroSection() {
             <a
               href="#services"
               onClick={() => trackEvent("explore_solutions_click", { placement: "hero" })}
-              className="inline-flex items-center gap-2 rounded-full bg-emerald-400 px-6 py-3 text-sm font-semibold text-black transition hover:bg-emerald-300"
+              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-emerald-300 to-cyan-300 px-6 py-3 text-sm font-semibold text-black transition hover:from-emerald-200 hover:to-cyan-200"
             >
               Explore Solutions
               <ArrowRight className="h-4 w-4" />
@@ -52,7 +52,7 @@ export function HeroSection() {
             <a
               href="#contact"
               onClick={() => trackEvent("start_project_click", { placement: "hero" })}
-              className="rounded-full border border-white/20 bg-white/5 px-6 py-3 text-sm font-semibold text-white transition hover:border-cyan-300/45 hover:text-cyan-200"
+              className="rounded-full border border-cyan-300/25 bg-white/5 px-6 py-3 text-sm font-semibold text-white transition hover:border-cyan-300/50 hover:text-cyan-200"
             >
               Start a Project
             </a>
