@@ -18,7 +18,9 @@ export type Product = {
   subtitle: string;
   description: string;
   badge: string;
-  status: "Live" | "Coming Soon";
+  status: "In Market" | "Active Build" | "Deployed";
+  highlights: string[];
+  href?: string;
 };
 
 export type Service = {
@@ -52,15 +54,27 @@ export const products: Product[] = [
     description:
       "Reflex-based training, adaptive coaching, and gamified drills that help learners build speaking confidence faster.",
     badge: "Education AI",
-    status: "Live"
+    status: "In Market",
+    highlights: ["Adaptive lessons", "Pronunciation feedback", "Gamified progress engine"]
   },
   {
-    name: "Jungle Analytics",
-    subtitle: "Business Insight Dashboard",
+    name: "Amalytics",
+    subtitle: "Business Budget + Growth Intelligence",
     description:
-      "A decision cockpit for revenue, campaign, and operations intelligence with predictive recommendations.",
-    badge: "Business Intelligence",
-    status: "Coming Soon"
+      "A live analytics workspace for business budgeting, marketing spend efficiency, and growth forecasting.",
+    badge: "Analytics Platform",
+    status: "Active Build",
+    highlights: ["Budget tracking", "Campaign ROI intelligence", "Cashflow and growth forecasting"],
+    href: "https://www.amalytics.co/"
+  },
+  {
+    name: "Jungle Table Ordering OS",
+    subtitle: "Restaurant Tablet + KDS Platform",
+    description:
+      "A full in-restaurant ordering system with table screens, live kitchen display workflows, and waiter call routing.",
+    badge: "Hospitality Tech",
+    status: "Active Build",
+    highlights: ["Table-side ordering UI", "Kitchen display system", "Realtime staff call and order status"]
   }
 ];
 
@@ -121,9 +135,9 @@ export const systemsWeBuild: BuildSystem[] = [
 ];
 
 export const roadmap = [
-  { year: "2025", title: "Franco App", detail: "AI reflex learning and gamified training platform." },
-  { year: "2026", title: "Jungle Analytics", detail: "Connected analytics for growth and operations." },
-  { year: "Future", title: "AI Automation Suite", detail: "Cross-business autonomous workflow operating layer." }
+  { year: "2025", title: "Franco App", detail: "Launched with AI reflex learning and structured speaking progression." },
+  { year: "2026", title: "Amalytics", detail: "Rolling out business budget intelligence and decision dashboards." },
+  { year: "2026-2027", title: "Jungle Table Ordering OS", detail: "Deploying tablet-based restaurant ordering and KDS workflows." }
 ];
 
 export const demoSuggestions = ["Automate my business", "Build a CRM system", "Create analytics dashboard"];
