@@ -1,33 +1,32 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { Sparkles } from "lucide-react";
 
 import { navLinks } from "../lib/content";
 import { trackEvent } from "../lib/analytics";
+import { BrandLogo } from "./BrandLogo";
 
 export function Navbar() {
   return (
     <header className="sticky top-4 z-50 section-shell">
       <nav className="mt-4 flex items-center justify-between rounded-full border border-cyan-300/15 bg-black/55 px-5 py-3 backdrop-blur-xl">
         <Link href="/" className="inline-flex items-center gap-2 text-base font-semibold tracking-tight text-white">
-          <Image
-            src="/jungle-labs-logo.svg"
-            alt="Jungle Labs"
-            width={150}
-            height={36}
-            className="h-8 w-auto"
-            priority
-          />
+          <BrandLogo width={150} height={36} className="h-8 w-auto" priority />
           <Sparkles className="h-4 w-4 text-cyan-300" />
         </Link>
 
         <div className="hidden items-center gap-6 text-sm text-white/75 md:flex">
           {navLinks.map((item) => (
-            <a key={item.href} href={item.href} className="transition hover:text-cyan-300">
-              {item.label}
-            </a>
+            item.href.startsWith("/") ? (
+              <Link key={item.href} href={item.href} className="transition hover:text-cyan-300">
+                {item.label}
+              </Link>
+            ) : (
+              <a key={item.href} href={item.href} className="transition hover:text-cyan-300">
+                {item.label}
+              </a>
+            )
           ))}
           <Link href="/services" className="transition hover:text-cyan-300">
             Services Page

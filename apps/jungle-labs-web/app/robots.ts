@@ -6,6 +6,6 @@ export default function robots(): MetadataRoute.Robots {
       userAgent: "*",
       allow: "/"
     },
-    sitemap: "https://www.junglelabsworld.ca/sitemap.xml"
+    sitemap: ["https://www.junglelabsworld.ca/sitemap.xml", "https://www.junglelabsworld.ca/rss.xml"]
   };
 }

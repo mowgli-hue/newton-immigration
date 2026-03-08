@@ -1,0 +1,12 @@
+[build]
+  base = "apps/mobile"
+  command = "npm run build:web:netlify"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

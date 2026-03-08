@@ -1,0 +1,85 @@
+{
+  "name": "clb-french-trainer",
+  "version": "0.1.0",
+  "main": "electron/main.js",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:mobile": "npm run start --workspace @clb/mobile --",
+    "dev:mobile:node20": "PATH=\"/opt/homebrew/opt/node@20/bin:$PATH\" npm run start --workspace @clb/mobile --",
+    "dev:backend": "npm run dev --workspace @clb/backend",
+    "build": "npm run build --workspace @clb/backend",
+    "check:mobile": "npx tsc --noEmit -p apps/mobile/tsconfig.json",
+    "check:backend": "npx tsc --noEmit -p apps/backend/tsconfig.json",
+    "check:diagnostic-quality": "node scripts/checkDiagnosticQuality.cjs",
+    "check:diagnostic-quality:strict": "node scripts/checkDiagnosticQuality.cjs --strict",
+    "check:stability": "npm run check:mobile && npm run check:backend && npm run check:diagnostic-quality:strict && npm run lint --workspace @clb/mobile && npm run test --workspace @clb/mobile -- --watchAll=false --passWithNoTests",
+    "lint": "npm run lint --workspaces",
+    "test": "npm run test --workspaces",
+    "desktop": "electron .",
+    "desktop:dev": "FRANCO_DESKTOP_URL=http://localhost:8081 electron .",
+    "build:desktop": "electron-builder"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "expo": "~54.0.33",
+    "react": "19.2.4",
+    "react-native": "0.81.5"
+  },
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.franco.desktop",
+    "productName": "Franco",
+    "directories": {
+      "output": "release"
+    },
+    "artifactName": "Franco-${version}-${os}-${arch}.${ext}",
+    "files": [
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraMetadata": {
+      "name": "franco-desktop"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.education",
+      "icon": "electron/assets/icon.png"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "electron/assets/icon.png"
+    },
+    "dmg": {
+      "title": "Franco Installer",
+      "artifactName": "Franco-${version}.dmg"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "Franco-Setup-${version}.exe",
+      "shortcutName": "Franco"
+    }
+  },
+  "overrides": {
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "react-native": "0.81.5",
+    "react-native-reanimated": "4.1.1",
+    "react-native-worklets": "0.5.1",
+    "react-native-gesture-handler": "~2.28.0",
+    "react-native-svg": "15.12.1"
+  }
+}

@@ -10,7 +10,8 @@
     "dev:api:nowatch": "npm run dev:nowatch --workspace @jungle/api-server",
     "dev:tablet": "npm run dev --workspace @jungle/tablet-app",
     "dev:admin": "npm run dev --workspace @jungle/admin-kds-web",
-    "dev:jungle-web": "npm run dev --workspace @jungle/jungle-labs-web"
+    "dev:jungle-web": "npm run dev --workspace @jungle/jungle-labs-web",
+    "blog:auto": "node scripts/auto-blog.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

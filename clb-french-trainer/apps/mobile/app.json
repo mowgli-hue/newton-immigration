@@ -1,0 +1,60 @@
+{
+  "expo": {
+    "name": "Franco",
+    "slug": "clb-french-trainer",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "clbfrenchtrainer",
+    "userInterfaceStyle": "light",
+    "icon": "./assets/images/icon.png",
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
+    },
+    "web": {
+      "bundler": "metro",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Franco uses your microphone to assess French pronunciation."
+      },
+      "bundleIdentifier": "com.anonymous.clb-french-trainer"
+    },
+    "android": {
+      "package": "com.anonymous.clbfrenchtrainer",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.READ_EXTERNAL_STORAGE"
+      ]
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "plugins": [
+      "expo-audio"
+    ],
+    "extra": {
+      "firebasePublic": {
+        "apiKey": "AIzaSyBAz-b1uC7l40gpoo4PpCkYReGHtvVmkb8",
+        "authDomain": "clb-french-trainer.firebaseapp.com",
+        "projectId": "clb-french-trainer",
+        "storageBucket": "clb-french-trainer.firebasestorage.app",
+        "messagingSenderId": "3957043103",
+        "appId": "1:3957043103:web:69b530f65d5c7ce30397aa"
+      },
+      "eas": {
+        "projectId": "9702e0c6-6684-45c3-a3be-1887bae26ff7"
+      }
+    }
+  }
+}

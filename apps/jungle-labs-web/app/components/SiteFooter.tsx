@@ -1,6 +1,6 @@
 import { Facebook, Instagram, Linkedin, Mail, MapPin, Phone } from "lucide-react";
-import Image from "next/image";
 import { socialLinks } from "../lib/content";
+import { BrandLogo } from "./BrandLogo";
 
 export function SiteFooter() {
   const linkedIn = socialLinks.find((link) => link.name === "LinkedIn")?.href ?? "#";
@@ -12,13 +12,7 @@ export function SiteFooter() {
       <div className="rounded-3xl border border-white/10 bg-black/50 p-6 text-sm text-white/65 backdrop-blur-xl md:p-8">
         <div className="grid gap-7 md:grid-cols-3">
           <div>
-            <Image
-              src="/jungle-labs-logo.svg"
-              alt="Jungle Labs"
-              width={180}
-              height={46}
-              className="h-10 w-auto"
-            />
+            <BrandLogo width={180} height={46} className="h-10 w-auto" />
             <p className="mt-3 max-w-sm leading-relaxed">
               AI automation, software systems, and analytics infrastructure for modern businesses.
             </p>
