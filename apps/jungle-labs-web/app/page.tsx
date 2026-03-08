@@ -1,6 +1,7 @@
 import { AIDemoSection } from "./components/AIDemoSection";
 import { ContactCTA } from "./components/ContactCTA";
 import { EcosystemSection } from "./components/EcosystemSection";
+import { LeadIntentSection } from "./components/LeadIntentSection";
 import { HeroSection } from "./components/HeroSection";
 import { MotionRibbon } from "./components/MotionRibbon";
 import { Navbar } from "./components/Navbar";
@@ -10,6 +11,7 @@ import { ServicesSection } from "./components/ServicesSection";
 import { SiteFooter } from "./components/SiteFooter";
 import { StorySection } from "./components/StorySection";
 import { SystemsSection } from "./components/SystemsSection";
+import { ChatbotFab } from "./components/ChatbotFab";
 
 const orgSchema = {
   "@context": "https://schema.org",
@@ -47,6 +49,7 @@ export default function HomePage() {
       <Navbar />
       <HeroSection />
       <MotionRibbon />
+      <LeadIntentSection />
       <StorySection />
       <ProductsSection />
       <ServicesSection />
@@ -56,6 +59,7 @@ export default function HomePage() {
       <AIDemoSection />
       <ContactCTA />
       <SiteFooter />
+      <ChatbotFab />
     </main>
   );
 }

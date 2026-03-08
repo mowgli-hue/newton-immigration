@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import { Bot, SendHorizonal, User } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { AnimatedSection } from "./AnimatedSection";
 import { demoSuggestions } from "../lib/content";
@@ -15,18 +15,18 @@ type Message = {
 
 const responses: Record<string, string> = {
   "automate my business":
-    "We map your high-friction workflows, design an AI automation layer, and deploy approval-safe actions across your tools in phased sprints.",
+    "We map your highest-cost manual workflow, design an automation architecture, and deploy phased AI agents with approval-safe actions.",
   "build a crm system":
-    "We architect a custom CRM for your pipeline, client lifecycle, and reporting needs with role-based dashboards and integration with communication channels.",
+    "We define your pipeline stages, client lifecycle, and team permissions, then ship a custom CRM aligned to your exact operations.",
   "create analytics dashboard":
-    "We build a live metrics command center with KPI modeling, cohort trends, and alerting so your team can act on insights in real time."
+    "We build a live metrics layer with KPI trees, budget-to-revenue visibility, and executive-ready decision views."
 };
 
 function resolveReply(input: string) {
   const key = input.trim().toLowerCase();
   return (
     responses[key] ??
-    "Jungle Labs can turn that into a scoped build plan. We typically start with discovery, define architecture, and ship an MVP in focused milestones."
+    "Jungle Labs can turn that into a scoped build plan. We start with discovery, define architecture, then launch an execution-ready MVP in focused milestones."
   );
 }
 
@@ -35,28 +35,71 @@ export function AIDemoSection() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
-      text: "I am Jungle Labs AI. Ask me what system you want to build and I will show how we can execute it."
+      text: "Describe your business challenge. I will suggest a practical system plan you can deploy."
     }
   ]);
+
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [company, setCompany] = useState("");
+  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+
+  const latestUserPrompt = useMemo(
+    () => [...messages].reverse().find((message) => message.role === "user")?.text ?? "",
+    [messages]
+  );
 
   const submit = (value: string) => {
     const clean = value.trim();
     if (!clean) return;
     trackEvent("ai_demo_prompt_submit", { prompt: clean.slice(0, 60) });
 
-    setMessages((prev) => [
-      ...prev,
-      { role: "user", text: clean },
-      { role: "assistant", text: resolveReply(clean) }
-    ]);
+    setMessages((prev) => [...prev, { role: "user", text: clean }, { role: "assistant", text: resolveReply(clean) }]);
     setInput("");
   };
 
+  const submitLead = async () => {
+    if (!name || !email || !latestUserPrompt) {
+      setStatus("error");
+      return;
+    }
+
+    setStatus("loading");
+
+    try {
+      const params = new URLSearchParams(window.location.search);
+
+      const response = await fetch("/api/lead", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          name,
+          email,
+          company,
+          challenge: latestUserPrompt,
+          utm_source: params.get("utm_source") || "",
+          utm_medium: params.get("utm_medium") || "",
+          utm_campaign: params.get("utm_campaign") || "",
+          page: window.location.pathname
+        })
+      });
+
+      if (!response.ok) throw new Error("Failed");
+
+      setStatus("success");
+      trackEvent("lead_form_submit", { source: "chatbot" });
+    } catch {
+      setStatus("error");
+    }
+  };
+
   return (
-    <AnimatedSection className="section-shell mt-24">
+    <AnimatedSection id="ai-demo" className="section-shell mt-24">
       <div className="mb-8 max-w-3xl">
         <p className="section-kicker">Interactive AI Demo</p>
-        <h2 className="section-title">Try a chatbot-style system planning experience</h2>
+        <h2 className="section-title">Use the chatbot to get a build plan, then send it to your inbox</h2>
       </div>
 
       <div className="glass-card p-5 md:p-7">
@@ -115,12 +158,52 @@ export function AIDemoSection() {
           />
           <button
             onClick={() => submit(input)}
-            className="inline-flex items-center justify-center gap-2 rounded-full bg-emerald-400 px-5 py-3 text-sm font-semibold text-black transition hover:bg-emerald-300"
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-emerald-300 to-cyan-300 px-5 py-3 text-sm font-semibold text-black transition hover:from-emerald-200 hover:to-cyan-200"
           >
             Send
             <SendHorizonal className="h-4 w-4" />
           </button>
         </div>
+
+        {latestUserPrompt ? (
+          <div className="mt-6 rounded-2xl border border-emerald-300/25 bg-emerald-400/10 p-4 md:p-5">
+            <p className="text-sm font-semibold text-emerald-100">Get this AI build plan in your inbox</p>
+            <p className="mt-1 text-sm text-emerald-50/85">
+              Add your details and our team will send a refined project scope with implementation steps.
+            </p>
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <input
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="Your name"
+                className="rounded-xl border border-white/20 bg-black/30 px-4 py-2.5 text-sm text-white placeholder:text-white/40 outline-none focus:border-emerald-300/55"
+              />
+              <input
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="Work email"
+                className="rounded-xl border border-white/20 bg-black/30 px-4 py-2.5 text-sm text-white placeholder:text-white/40 outline-none focus:border-emerald-300/55"
+              />
+              <input
+                value={company}
+                onChange={(event) => setCompany(event.target.value)}
+                placeholder="Company (optional)"
+                className="rounded-xl border border-white/20 bg-black/30 px-4 py-2.5 text-sm text-white placeholder:text-white/40 outline-none focus:border-emerald-300/55"
+              />
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <button
+                onClick={submitLead}
+                disabled={status === "loading"}
+                className="rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-emerald-100 disabled:opacity-60"
+              >
+                {status === "loading" ? "Submitting..." : "Send My Plan"}
+              </button>
+              {status === "success" ? <span className="text-sm text-emerald-100">Thanks. We received your request.</span> : null}
+              {status === "error" ? <span className="text-sm text-rose-200">Please complete required fields and retry.</span> : null}
+            </div>
+          </div>
+        ) : null}
       </div>
     </AnimatedSection>
   );
