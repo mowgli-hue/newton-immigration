@@ -1,0 +1,20 @@
+{
+  "name": "jungle-labs-ordering",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace @jungle/api-server",
+    "dev:api:nowatch": "npm run dev:nowatch --workspace @jungle/api-server",
+    "dev:tablet": "npm run dev --workspace @jungle/tablet-app",
+    "dev:admin": "npm run dev --workspace @jungle/admin-kds-web",
+    "dev:jungle-web": "npm run dev --workspace @jungle/jungle-labs-web"
+  },
+  "dependencies": {
+    "expo": "^54.0.33",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  }
+}
