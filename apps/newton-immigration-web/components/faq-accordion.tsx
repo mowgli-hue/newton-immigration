@@ -8,13 +8,13 @@ export function FAQAccordion() {
   const [open, setOpen] = useState<number | null>(0);
 
   return (
-    <div className="rounded-2xl bg-white p-6 shadow-glass">
+    <div className="glass-card rounded-2xl p-6 shadow-glass">
       <h2 className="text-2xl font-semibold">Frequently Asked Questions</h2>
       <div className="mt-4 space-y-3">
         {faqs.map((item, idx) => {
           const isOpen = open === idx;
           return (
-            <article key={item.q} className="rounded-lg border border-black/10 bg-white">
+            <article key={item.q} className="rounded-lg border border-white/10 bg-black/15">
               <button
                 onClick={() => setOpen(isOpen ? null : idx)}
                 className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"

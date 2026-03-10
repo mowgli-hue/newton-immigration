@@ -18,6 +18,8 @@ NEXT_PUBLIC_SITE_URL=http://localhost:3004
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
 LEAD_WEBHOOK_URL=
+NEWS_API_KEY=
+NEWS_API_PROVIDER=gnews
 ```
 
 ## Main routes
@@ -40,3 +42,4 @@ LEAD_WEBHOOK_URL=
 - `POST /api/ai-advisor` (advisor response logic)
 - `POST /api/stripe/checkout` (Stripe Checkout session)
 - `POST /api/stripe/webhook` (Stripe webhook verification)
+- `GET /api/news` (live immigration news feed)

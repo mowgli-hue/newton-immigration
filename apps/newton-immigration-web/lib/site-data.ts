@@ -161,27 +161,23 @@ export const youtubeVideos = [
 export const immigrationTypes = [
   {
     title: "Express Entry",
-    image:
-      "https://images.unsplash.com/photo-1524492412937-b28074a5d7da?auto=format&fit=crop&w=1200&q=80",
-    text: "Fast-track PR pathway for skilled workers with CRS ranking."
+    text: "Fast-track PR pathway for skilled workers with CRS ranking.",
+    tone: "from-rose-700/40 to-slate-900"
   },
   {
     title: "Study Permits",
-    image:
-      "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=1200&q=80",
-    text: "Build long-term immigration strategy through Canada education."
+    text: "Build long-term immigration strategy through Canada education.",
+    tone: "from-blue-700/40 to-slate-900"
   },
   {
     title: "Work Permits",
-    image:
-      "https://images.unsplash.com/photo-1565688527174-7750590f4a1b?auto=format&fit=crop&w=1200&q=80",
-    text: "Employer and open permit options with PR transition planning."
+    text: "Employer and open permit options with PR transition planning.",
+    tone: "from-emerald-700/40 to-slate-900"
   },
   {
     title: "PNP Programs",
-    image:
-      "https://images.unsplash.com/photo-1517935706615-2717063c2225?auto=format&fit=crop&w=1200&q=80",
-    text: "Province-targeted nominations that can unlock +600 CRS points."
+    text: "Province-targeted nominations that can unlock +600 CRS points.",
+    tone: "from-orange-700/40 to-slate-900"
   }
 ];
 

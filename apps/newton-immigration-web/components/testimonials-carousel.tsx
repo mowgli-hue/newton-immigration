@@ -15,7 +15,7 @@ export function TestimonialsCarousel() {
   }, []);
 
   return (
-    <div className="rounded-2xl bg-white p-6 shadow-glass">
+    <div className="glass-card rounded-2xl p-6 shadow-glass">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-2xl font-semibold">Client Success Stories</h2>
         <div className="flex gap-2">

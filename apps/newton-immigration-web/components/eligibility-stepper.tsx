@@ -37,7 +37,7 @@ export function EligibilityStepper() {
   }, [answers]);
 
   return (
-    <div className="rounded-2xl bg-white p-6 shadow-glass">
+    <div className="glass-card rounded-2xl p-6 shadow-glass">
       <h2 className="text-2xl font-semibold">Quick Eligibility Checker</h2>
       <p className="mt-2 text-sm text-newton-dark/75">Step {step} of 4</p>
       <div className="mt-3 h-2 w-full rounded-full bg-black/10">

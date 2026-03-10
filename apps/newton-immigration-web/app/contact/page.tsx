@@ -54,9 +54,9 @@ export default function ContactPage() {
       </div>
 
       <div className="mt-6 grid gap-3 md:grid-cols-3">
-        <a href={socialLinks.instagram} target="_blank" className="rounded-lg border border-black/10 bg-white px-4 py-3 text-sm font-semibold text-newton-dark">Instagram</a>
-        <a href={socialLinks.youtube} target="_blank" className="rounded-lg border border-black/10 bg-white px-4 py-3 text-sm font-semibold text-newton-dark">YouTube</a>
-        <a href={socialLinks.google} target="_blank" className="rounded-lg border border-black/10 bg-white px-4 py-3 text-sm font-semibold text-newton-dark">Google Profile</a>
+        <a href={socialLinks.instagram} target="_blank" className="rounded-lg border border-white/15 bg-black/20 px-4 py-3 text-sm font-semibold text-newton-dark">Instagram</a>
+        <a href={socialLinks.youtube} target="_blank" className="rounded-lg border border-white/15 bg-black/20 px-4 py-3 text-sm font-semibold text-newton-dark">YouTube</a>
+        <a href={socialLinks.google} target="_blank" className="rounded-lg border border-white/15 bg-black/20 px-4 py-3 text-sm font-semibold text-newton-dark">Google Profile</a>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="glass-card mt-8 space-y-4 rounded-xl p-5 shadow-glass">

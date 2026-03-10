@@ -10,14 +10,18 @@ import { FAQAccordion } from "@/components/faq-accordion";
 import { EligibilityStepper } from "@/components/eligibility-stepper";
 import { ImmigrationTypesGallery } from "@/components/immigration-types-gallery";
 import { InteractiveLocations } from "@/components/interactive-locations";
+import { getLatestImmigrationNews } from "@/lib/news";
 import { companyInfo, newsItems, programs, socialLinks, youtubeVideos } from "@/lib/site-data";
 
-export default function HomePage() {
+export default async function HomePage() {
+  const liveNews = await getLatestImmigrationNews();
+  const displayNews = liveNews.length ? liveNews.slice(0, 4) : newsItems;
+
   return (
     <>
       <HeroSection />
 
-      <div className="mx-auto max-w-7xl space-y-16 px-4 py-14">
+      <div className="grid-glow mx-auto max-w-7xl space-y-16 px-4 py-14">
         <AnimatedSection>
           <div className="grid gap-4 sm:grid-cols-3">
             <AnimatedCounter value={3500} label="Assessments Completed" />
@@ -47,7 +51,7 @@ export default function HomePage() {
         </AnimatedSection>
 
         <AnimatedSection>
-          <div className="rounded-2xl border border-newton-red/20 bg-red-50 p-5">
+          <div className="rounded-2xl border border-newton-red/30 bg-gradient-to-br from-red-950/50 to-black/30 p-5">
             <p className="text-xs font-semibold uppercase tracking-wide text-newton-red">{companyInfo.legalName}</p>
             <h2 className="mt-2 text-2xl font-semibold">{companyInfo.tagline}</h2>
             <p className="mt-2 text-sm text-newton-dark/80">{companyInfo.coverage}</p>
@@ -56,7 +60,7 @@ export default function HomePage() {
         </AnimatedSection>
 
         <AnimatedSection>
-          <div className="grid gap-6 rounded-2xl bg-white p-6 shadow-glass lg:grid-cols-2">
+          <div className="glass-card grid gap-6 rounded-2xl p-6 shadow-glass lg:grid-cols-2">
             <div>
               <h2 className="text-2xl font-semibold">Boost Your CRS Score with French</h2>
               <p className="mt-3 text-sm text-newton-dark/75">
@@ -82,17 +86,22 @@ export default function HomePage() {
           </div>
         </AnimatedSection>
 
-        <AnimatedSection>
+        <AnimatedSection className="relative">
           <div className="mb-6 flex items-center justify-between">
             <h2 className="text-2xl font-semibold">Immigration News</h2>
             <Link href="/immigration-news" className="inline-flex items-center gap-2 text-sm font-semibold text-newton-red">View updates <Newspaper size={16} /></Link>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
-            {newsItems.map((item) => (
+            {displayNews.map((item) => (
               <article key={item.title} className="glass-card rounded-xl p-5 shadow-glass">
                 <p className="text-xs font-semibold uppercase text-newton-red">{item.category}</p>
                 <h3 className="mt-2 text-lg font-semibold">{item.title}</h3>
                 <p className="mt-2 text-sm text-newton-dark/75">{item.text}</p>
+                {"url" in item ? (
+                  <a href={item.url as string} target="_blank" className="mt-3 inline-block text-sm font-semibold text-newton-red">
+                    Read source
+                  </a>
+                ) : null}
               </article>
             ))}
           </div>
@@ -138,7 +147,7 @@ export default function HomePage() {
         </AnimatedSection>
 
         <AnimatedSection>
-          <div className="rounded-2xl bg-newton-dark px-6 py-10 text-white">
+          <div className="rounded-2xl bg-[#101722] px-6 py-10 text-white">
             <div className="grid gap-5 lg:grid-cols-3">
               <div className="rounded-xl border border-white/15 p-5">
                 <Sparkles className="text-newton-red" />

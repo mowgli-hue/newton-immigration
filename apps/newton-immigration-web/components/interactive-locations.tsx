@@ -19,8 +19,8 @@ export function InteractiveLocations() {
               onClick={() => setActive(idx)}
               className={`w-full rounded-lg border px-3 py-2 text-left text-sm transition ${
                 idx === active
-                  ? "border-newton-red bg-red-50 text-newton-dark"
-                  : "border-black/10 bg-white/60 text-newton-dark/80 hover:border-newton-red/40"
+                  ? "border-newton-red bg-red-950/35 text-newton-dark"
+                  : "border-white/10 bg-black/20 text-newton-dark/80 hover:border-newton-red/40"
               }`}
             >
               <p className="font-semibold">{location.city}</p>

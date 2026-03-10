@@ -2,6 +2,14 @@
 
 import { motion } from "framer-motion";
 import { immigrationTypes } from "@/lib/site-data";
+import { BriefcaseBusiness, GraduationCap, Layers3, PlaneTakeoff } from "lucide-react";
+
+const iconMap: Record<string, any> = {
+  "Express Entry": Layers3,
+  "Study Permits": GraduationCap,
+  "Work Permits": BriefcaseBusiness,
+  "PNP Programs": PlaneTakeoff
+};
 
 export function ImmigrationTypesGallery() {
   return (
@@ -10,13 +18,21 @@ export function ImmigrationTypesGallery() {
         <motion.article
           key={item.title}
           whileHover={{ y: -6 }}
-          className="group relative overflow-hidden rounded-xl shadow-glass"
+          className="group relative overflow-hidden rounded-xl border border-white/10 shadow-glass"
         >
-          <img src={item.image} alt={item.title} className="h-60 w-full object-cover transition duration-500 group-hover:scale-105" loading="lazy" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-          <div className="absolute bottom-0 p-4 text-white">
-            <h3 className="text-lg font-semibold">{item.title}</h3>
-            <p className="mt-1 text-sm text-white/85">{item.text}</p>
+          <div className={`h-60 bg-gradient-to-br ${item.tone} p-5`}>
+            <div className="flex h-full flex-col justify-between">
+              <div className="rounded-full border border-white/30 bg-white/10 p-3 w-fit">
+                {(() => {
+                  const Icon = iconMap[item.title] ?? Layers3;
+                  return <Icon className="h-5 w-5 text-white" />;
+                })()}
+              </div>
+              <div className="rounded-lg border border-white/15 bg-black/25 p-4 text-white">
+                <h3 className="text-lg font-semibold">{item.title}</h3>
+                <p className="mt-1 text-sm text-white/85">{item.text}</p>
+              </div>
+            </div>
           </div>
         </motion.article>
       ))}

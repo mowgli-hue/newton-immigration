@@ -5,7 +5,7 @@ import { companyInfo, locations, socialLinks } from "@/lib/site-data";
 
 export function SiteFooter() {
   return (
-    <footer className="mt-20 bg-newton-dark text-white">
+    <footer className="mt-20 border-t border-white/10 bg-[#0a0f19] text-white">
       <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 md:grid-cols-4">
         <div>
           <Logo darkText={false} />

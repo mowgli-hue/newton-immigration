@@ -21,11 +21,11 @@ export function Navbar() {
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-50 border-b border-black/5 bg-white/80 backdrop-blur-md">
+    <header className="sticky top-0 z-50 border-b border-white/10 bg-[#0c121d]/85 backdrop-blur-md">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
         <Logo />
 
-        <button className="inline-flex rounded-md border border-black/10 p-2 md:hidden" onClick={() => setOpen((v) => !v)} aria-label="Toggle menu">
+        <button className="inline-flex rounded-md border border-white/20 p-2 text-white md:hidden" onClick={() => setOpen((v) => !v)} aria-label="Toggle menu">
           <Menu size={18} />
         </button>
 
@@ -52,7 +52,7 @@ export function Navbar() {
       </div>
 
       {open ? (
-        <div className="border-t border-black/10 bg-white px-4 py-4 md:hidden">
+        <div className="border-t border-white/10 bg-[#0c121d] px-4 py-4 md:hidden">
           <div className="flex flex-col gap-3">
             {navLinks.map((link) => (
               <Link key={link.href} href={link.href} onClick={() => setOpen(false)} className="text-sm text-newton-dark/90">

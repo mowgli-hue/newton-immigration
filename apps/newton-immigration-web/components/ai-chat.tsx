@@ -43,9 +43,9 @@ export function AIAdvisorChat() {
   return (
     <div className="glass-card rounded-2xl p-5 shadow-glass">
       <h3 className="text-lg font-semibold">Newton Immigration AI Advisor</h3>
-      <div className="mt-4 h-80 space-y-3 overflow-y-auto rounded-lg border border-black/10 bg-white/70 p-3">
+      <div className="mt-4 h-80 space-y-3 overflow-y-auto rounded-lg border border-white/10 bg-black/20 p-3">
         {messages.map((msg, idx) => (
-          <div key={idx} className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${msg.role === "user" ? "ml-auto bg-newton-red text-white" : "bg-white text-newton-dark"}`}>
+          <div key={idx} className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${msg.role === "user" ? "ml-auto bg-newton-red text-white" : "bg-black/30 text-newton-dark"}`}>
             {msg.text}
           </div>
         ))}
@@ -53,7 +53,7 @@ export function AIAdvisorChat() {
 
       <div className="mt-3 flex flex-wrap gap-2">
         {advisorQuickQuestions.map((q) => (
-          <button key={q} onClick={() => sendQuestion(q)} className="rounded-full border border-black/15 bg-white px-3 py-1.5 text-xs text-newton-dark/85 hover:border-newton-red/40">
+          <button key={q} onClick={() => sendQuestion(q)} className="rounded-full border border-white/15 bg-black/20 px-3 py-1.5 text-xs text-newton-dark/85 hover:border-newton-red/40">
             {q}
           </button>
         ))}
@@ -64,7 +64,7 @@ export function AIAdvisorChat() {
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           placeholder="Can I apply for PR with CRS 460?"
-          className="flex-1 rounded-md border border-black/15 bg-white px-3 py-2 text-sm outline-none focus:border-newton-red"
+          className="flex-1 rounded-md border border-white/15 bg-black/25 px-3 py-2 text-sm text-newton-dark outline-none focus:border-newton-red"
         />
         <button type="submit" className="rounded-md bg-newton-red px-4 py-2 text-sm font-semibold text-white">
           Ask
