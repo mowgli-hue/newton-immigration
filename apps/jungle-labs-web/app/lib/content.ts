@@ -47,6 +47,7 @@ export const navLinks = [
   { label: "Products", href: "#products" },
   { label: "Services", href: "#services" },
   { label: "Technology", href: "#ecosystem" },
+  { label: "Learn French", href: "/learn-french" },
   { label: "Blog", href: "/blog" },
   { label: "Contact", href: "#contact" }
 ];
@@ -62,12 +63,12 @@ export const products: Product[] = [
     highlights: ["Adaptive lessons", "Pronunciation feedback", "Gamified progress engine"],
     downloads: [
       {
-        label: "Join iOS Waitlist",
-        href: "mailto:admin@junglelabsworld.com?subject=Franco%20iOS%20Waitlist"
+        label: "Download for macOS (.dmg)",
+        href: "https://github.com/mowgli-hue/Franco/releases/download/v0.1.1/Franco-0.1.0.dmg"
       },
       {
-        label: "Join Android Waitlist",
-        href: "mailto:admin@junglelabsworld.com?subject=Franco%20Android%20Waitlist"
+        label: "Download for Windows (.exe)",
+        href: "https://github.com/mowgli-hue/Franco/releases/download/v0.1.1/Franco-Setup-0.1.0.exe"
       }
     ]
   },

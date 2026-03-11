@@ -13,6 +13,7 @@ import { SiteFooter } from "./components/SiteFooter";
 import { StorySection } from "./components/StorySection";
 import { SystemsSection } from "./components/SystemsSection";
 import { ChatbotFab } from "./components/ChatbotFab";
+import { LearnFrenchPromoSection } from "./components/LearnFrenchPromoSection";
 
 const orgSchema = {
   "@context": "https://schema.org",
@@ -58,6 +59,7 @@ export default function HomePage() {
       <EcosystemSection />
       <SystemsSection />
       <RoadmapSection />
+      <LearnFrenchPromoSection />
       <AIDemoSection />
       <ContactCTA />
       <SiteFooter />
