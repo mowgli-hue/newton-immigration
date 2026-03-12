@@ -48,6 +48,7 @@ export const navLinks = [
   { label: "Services", href: "#services" },
   { label: "Technology", href: "#ecosystem" },
   { label: "Learn French", href: "/learn-french" },
+  { label: "French Resources", href: "/french-learning-resources" },
   { label: "Blog", href: "/blog" },
   { label: "Contact", href: "#contact" }
 ];

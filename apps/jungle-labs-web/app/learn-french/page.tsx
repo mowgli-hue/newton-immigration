@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { Navbar } from "../components/Navbar";
 import { SiteFooter } from "../components/SiteFooter";
@@ -109,6 +110,18 @@ export default function LearnFrenchPage() {
             route to long-term fluency.
           </p>
         </article>
+
+        <div className="mt-8 grid gap-3 md:grid-cols-3">
+          <Link href="/learn-french-for-beginners" className="rounded-2xl border border-sky-300/25 bg-sky-400/10 p-4 text-sm text-sky-100 hover:bg-sky-400/15">
+            Learn French for Beginners
+          </Link>
+          <Link href="/how-to-practice-french-speaking" className="rounded-2xl border border-cyan-300/25 bg-cyan-400/10 p-4 text-sm text-cyan-100 hover:bg-cyan-400/15">
+            How to Practice French Speaking
+          </Link>
+          <Link href="/best-app-to-learn-french" className="rounded-2xl border border-emerald-300/25 bg-emerald-400/10 p-4 text-sm text-emerald-100 hover:bg-emerald-400/15">
+            Best App to Learn French
+          </Link>
+        </div>
 
         <div className="mt-10 rounded-3xl border border-white/10 bg-black/35 p-6">
           <h2 className="text-2xl font-semibold text-white">Learn French FAQ</h2>

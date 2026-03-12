@@ -26,6 +26,30 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.82
     },
     {
+      url: `${base}/learn-french-for-beginners`,
+      lastModified: new Date(),
+      changeFrequency: "weekly",
+      priority: 0.78
+    },
+    {
+      url: `${base}/how-to-practice-french-speaking`,
+      lastModified: new Date(),
+      changeFrequency: "weekly",
+      priority: 0.78
+    },
+    {
+      url: `${base}/best-app-to-learn-french`,
+      lastModified: new Date(),
+      changeFrequency: "weekly",
+      priority: 0.78
+    },
+    {
+      url: `${base}/french-learning-resources`,
+      lastModified: new Date(),
+      changeFrequency: "weekly",
+      priority: 0.8
+    },
+    {
       url: `${base}/blog`,
       lastModified: new Date(),
       changeFrequency: "weekly",
