@@ -1,0 +1,1160 @@
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
+import { randomUUID } from "node:crypto";
+import {
+  AiStatus,
+  AppStore,
+  AppUser,
+  CaseItem,
+  CaseStatus,
+  ClientInvite,
+  Company,
+  DocumentItem,
+  MessageItem,
+  NotificationItem,
+  PgwpIntakeData,
+  Session,
+  Stage,
+  TaskItem
+} from "@/lib/models";
+import { sampleCases, seedCompany, seedUsers } from "@/lib/data";
+import { getMissingChecklistDocs } from "@/lib/application-checklists";
+import { getMissingImm5710Questions } from "@/lib/imm5710";
+import { generatePgwpDraft } from "@/lib/pgwp";
+import { getStorePath } from "@/lib/storage-paths";
+
+const STORE_PATH = getStorePath();
+
+const defaultStore: AppStore = {
+  companies: [seedCompany],
+  users: seedUsers,
+  cases: sampleCases,
+  messages: [
+    {
+      id: "MSG-1",
+      companyId: "CMP-1",
+      caseId: "CASE-1021",
+      senderType: "staff",
+      senderName: "Aman",
+      text: "Please upload your latest passport and permit copy.",
+      createdAt: new Date().toISOString()
+    },
+    {
+      id: "MSG-2",
+      companyId: "CMP-1",
+      caseId: "CASE-1021",
+      senderType: "ai",
+      senderName: "FlowDesk AI",
+      text: "I can help you verify if your documents are complete before review.",
+      createdAt: new Date().toISOString()
+    }
+  ],
+  documents: [
+    {
+      id: "DOC-1",
+      companyId: "CMP-1",
+      caseId: "CASE-1021",
+      name: "Passport Bio Page",
+      status: "received",
+      link: "https://drive.google.com/newton/docs/passport",
+      createdAt: new Date().toISOString()
+    }
+  ],
+  tasks: [],
+  notifications: [],
+  sessions: [],
+  invites: []
+};
+
+function migrateStore(raw: Partial<AppStore>): AppStore {
+  const companies =
+    (raw.companies && raw.companies.length > 0 ? raw.companies : [seedCompany]).map((c) => ({
+      ...c,
+      branding: {
+        ...seedCompany.branding,
+        ...(c.branding ?? {})
+      }
+    }));
+
+  const users = (raw.users ?? seedUsers).map((u, idx) => ({
+    ...u,
+    companyId: u.companyId ?? companies[0].id,
+    userType: u.userType ?? "staff"
+  }));
+
+  const cases = (raw.cases ?? sampleCases).map((c, idx) => ({
+    ...c,
+    companyId: c.companyId ?? companies[0].id,
+    caseStatus: (c.caseStatus as CaseStatus) ?? "lead",
+    aiStatus: (c.aiStatus as AiStatus) ?? "idle",
+    leadPhone: c.leadPhone ?? undefined,
+    leadEmail: c.leadEmail ?? undefined,
+    sourceLeadKey: c.sourceLeadKey ?? undefined,
+    balanceAmount: c.balanceAmount ?? 0,
+    retainerSigned: c.retainerSigned ?? false,
+    retainerSentAt: c.retainerSentAt ?? undefined,
+    docsUploadLink: c.docsUploadLink ?? "",
+    applicationFormsLink: c.applicationFormsLink ?? undefined,
+    submittedFolderLink: c.submittedFolderLink ?? undefined,
+    correspondenceFolderLink: c.correspondenceFolderLink ?? undefined,
+    questionnaireLink: c.questionnaireLink ?? "",
+    paymentMethod: c.paymentMethod ?? "interac",
+    interacRecipient: c.interacRecipient ?? "",
+    interacInstructions:
+      c.interacInstructions ??
+      ((c as any).paymentLink
+        ? `Use previous payment link: ${(c as any).paymentLink}`
+        : "Send Interac e-Transfer with case number."),
+    paymentStatus: c.paymentStatus ?? (c.retainerSigned ? "paid" : "pending"),
+    paymentPaidAt: c.paymentPaidAt ?? undefined,
+    imm5710Automation: c.imm5710Automation ?? { status: "idle" },
+    pgwpIntake: c.pgwpIntake ?? undefined,
+    retainerRecord: c.retainerRecord ?? undefined,
+    servicePackage: c.servicePackage ?? {
+      name: "Standard Service",
+      retainerAmount: c.balanceAmount ?? 0,
+      balanceAmount: c.balanceAmount ?? 0,
+      milestones: []
+    },
+    invoices: c.invoices ?? []
+  }));
+
+  return {
+    companies,
+    users,
+    cases,
+    messages: raw.messages ?? defaultStore.messages,
+    documents: raw.documents ?? defaultStore.documents,
+    tasks: raw.tasks ?? [],
+    notifications: raw.notifications ?? [],
+    sessions: raw.sessions ?? [],
+    invites: raw.invites ?? []
+  };
+}
+
+async function ensureStoreFile() {
+  await mkdir(dirname(STORE_PATH), { recursive: true });
+  try {
+    await readFile(STORE_PATH, "utf8");
+  } catch {
+    await writeFile(STORE_PATH, JSON.stringify(defaultStore, null, 2), "utf8");
+  }
+}
+
+export async function readStore(): Promise<AppStore> {
+  await ensureStoreFile();
+  const raw = await readFile(STORE_PATH, "utf8");
+  return migrateStore(JSON.parse(raw) as Partial<AppStore>);
+}
+
+export async function writeStore(next: AppStore): Promise<void> {
+  await ensureStoreFile();
+  await writeFile(STORE_PATH, JSON.stringify(next, null, 2), "utf8");
+}
+
+export async function findUserByCredentials(email: string, password: string): Promise<AppUser | null> {
+  const store = await readStore();
+  const found = store.users.find(
+    (u) => u.email.toLowerCase() === email.toLowerCase().trim() && u.password === password
+  );
+  return found ?? null;
+}
+
+export async function createCompanyWithAdmin(input: {
+  companyName: string;
+  adminName: string;
+  email: string;
+  password: string;
+}): Promise<{ company: Company; user: AppUser }> {
+  const store = await readStore();
+  const existing = store.users.find((u) => u.email.toLowerCase() === input.email.toLowerCase());
+  if (existing) {
+    throw new Error("Email already in use");
+  }
+
+  const slugBase = input.companyName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+  const slug = `${slugBase || "company"}-${Math.floor(Math.random() * 900 + 100)}`;
+
+  const company: Company = {
+    id: `CMP-${store.companies.length + 1}`,
+    name: input.companyName,
+    slug,
+    branding: {
+      ...seedCompany.branding,
+      appName: input.companyName,
+      logoText: `${input.companyName} Portal`,
+      driveRootLink: ""
+    },
+    createdAt: new Date().toISOString()
+  };
+
+  const user: AppUser = {
+    id: `USR-${store.users.length + 1}`,
+    companyId: company.id,
+    name: input.adminName,
+    email: input.email,
+    role: "Admin",
+    userType: "staff",
+    password: input.password
+  };
+
+  store.companies.push(company);
+  store.users.push(user);
+  await writeStore(store);
+  return { company, user };
+}
+
+export async function createSession(user: AppUser): Promise<Session> {
+  const store = await readStore();
+  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString();
+  const session: Session = {
+    token: randomUUID(),
+    userId: user.id,
+    companyId: user.companyId,
+    expiresAt
+  };
+
+  store.sessions = store.sessions
+    .filter((s) => new Date(s.expiresAt).getTime() > Date.now())
+    .concat(session);
+  await writeStore(store);
+  return session;
+}
+
+export async function createClientInvite(input: {
+  companyId: string;
+  caseId: string;
+  createdByUserId: string;
+  email?: string;
+}): Promise<ClientInvite> {
+  const store = await readStore();
+  const caseItem = store.cases.find((c) => c.companyId === input.companyId && c.id === input.caseId);
+  if (!caseItem) throw new Error("Case not found");
+
+  const invite: ClientInvite = {
+    token: randomUUID(),
+    companyId: input.companyId,
+    caseId: input.caseId,
+    email: input.email?.trim() || undefined,
+    createdByUserId: input.createdByUserId,
+    status: "pending",
+    expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14).toISOString(),
+    createdAt: new Date().toISOString()
+  };
+
+  store.invites = [invite, ...store.invites];
+  await writeStore(store);
+  return invite;
+}
+
+export async function getLatestClientInviteForCase(
+  companyId: string,
+  caseId: string
+): Promise<ClientInvite | null> {
+  const store = await readStore();
+  const caseItem = store.cases.find((c) => c.companyId === companyId && c.id === caseId);
+  if (!caseItem) return null;
+
+  const invites = store.invites
+    .filter((i) => i.companyId === companyId && i.caseId === caseId)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  return invites[0] ?? null;
+}
+
+export async function getClientInviteByToken(token: string): Promise<ClientInvite | null> {
+  const store = await readStore();
+  const invite = store.invites.find((i) => i.token === token);
+  if (!invite) return null;
+
+  if (invite.status === "pending" && new Date(invite.expiresAt).getTime() <= Date.now()) {
+    invite.status = "expired";
+    await writeStore(store);
+  }
+
+  return store.invites.find((i) => i.token === token) ?? null;
+}
+
+export async function acceptClientInvite(input: {
+  token: string;
+  name: string;
+  email: string;
+  password: string;
+}): Promise<{ user: AppUser; company: Company; caseItem: CaseItem }> {
+  const store = await readStore();
+  const inviteIdx = store.invites.findIndex((i) => i.token === input.token);
+  if (inviteIdx === -1) throw new Error("Invite not found");
+  const invite = store.invites[inviteIdx];
+  if (new Date(invite.expiresAt).getTime() <= Date.now()) throw new Error("Invite has expired");
+
+  const company = store.companies.find((c) => c.id === invite.companyId);
+  if (!company) throw new Error("Company not found");
+  const caseIdx = store.cases.findIndex((c) => c.companyId === invite.companyId && c.id === invite.caseId);
+  if (caseIdx === -1) throw new Error("Case not found");
+
+  // Allow the same invite link to re-open portal after first acceptance.
+  if (invite.status === "accepted" && invite.usedByUserId) {
+    const existingUser = store.users.find((u) => u.id === invite.usedByUserId && u.companyId === invite.companyId);
+    if (!existingUser) throw new Error("Invite user not found");
+    return { user: existingUser, company, caseItem: store.cases[caseIdx] };
+  }
+
+  if (invite.status !== "pending") throw new Error("Invite is no longer valid");
+
+  const existing = store.users.find((u) => u.email.toLowerCase() === input.email.toLowerCase());
+  if (existing) throw new Error("Email already in use");
+
+  const user: AppUser = {
+    id: `USR-${store.users.length + 1}`,
+    companyId: invite.companyId,
+    name: input.name.trim(),
+    email: input.email.trim(),
+    role: "Owner",
+    userType: "client",
+    password: input.password,
+    caseId: invite.caseId
+  };
+
+  store.users.push(user);
+  store.cases[caseIdx] = {
+    ...store.cases[caseIdx],
+    client: user.name,
+    clientUserId: user.id
+  };
+  store.invites[inviteIdx] = {
+    ...invite,
+    status: "accepted",
+    usedByUserId: user.id,
+    acceptedAt: new Date().toISOString()
+  };
+  await writeStore(store);
+
+  return { user, company, caseItem: store.cases[caseIdx] };
+}
+
+export async function destroySession(token: string): Promise<void> {
+  const store = await readStore();
+  store.sessions = store.sessions.filter((s) => s.token !== token);
+  await writeStore(store);
+}
+
+export async function resolveUserFromSession(token: string): Promise<AppUser | null> {
+  const store = await readStore();
+  const session = store.sessions.find((s) => s.token === token);
+  if (!session) return null;
+
+  if (new Date(session.expiresAt).getTime() <= Date.now()) {
+    store.sessions = store.sessions.filter((s) => s.token !== token);
+    await writeStore(store);
+    return null;
+  }
+
+  return store.users.find((u) => u.id === session.userId) ?? null;
+}
+
+export async function listCases(companyId: string): Promise<CaseItem[]> {
+  const store = await readStore();
+  return store.cases.filter((c) => c.companyId === companyId);
+}
+
+export async function findCompanyById(companyId: string): Promise<Company | null> {
+  const store = await readStore();
+  return store.companies.find((c) => c.id === companyId) ?? null;
+}
+
+export async function findCompanyBySlug(slug: string): Promise<Company | null> {
+  const store = await readStore();
+  return store.companies.find((c) => c.slug === slug) ?? null;
+}
+
+export async function updateCompanyBranding(
+  companyId: string,
+  patch: Partial<Company["branding"]>
+): Promise<Company | null> {
+  const store = await readStore();
+  const idx = store.companies.findIndex((c) => c.id === companyId);
+  if (idx === -1) return null;
+  store.companies[idx] = {
+    ...store.companies[idx],
+    branding: {
+      ...store.companies[idx].branding,
+      ...patch
+    }
+  };
+  await writeStore(store);
+  return store.companies[idx];
+}
+
+export async function getCase(companyId: string, caseId: string): Promise<CaseItem | null> {
+  const store = await readStore();
+  return store.cases.find((c) => c.companyId === companyId && c.id === caseId) ?? null;
+}
+
+export async function createCase(input: {
+  companyId: string;
+  client: string;
+  formType: string;
+  leadPhone?: string;
+  leadEmail?: string;
+  sourceLeadKey?: string;
+}): Promise<CaseItem> {
+  const store = await readStore();
+  const company = store.companies.find((c) => c.id === input.companyId);
+  const companyCases = store.cases.filter((c) => c.companyId === input.companyId);
+  const nextId = `CASE-${1000 + companyCases.length + 1}`;
+  const item: CaseItem = {
+    id: nextId,
+    companyId: input.companyId,
+    client: input.client,
+    caseStatus: "lead",
+    aiStatus: "idle",
+    leadPhone: input.leadPhone?.trim() || undefined,
+    leadEmail: input.leadEmail?.trim() || undefined,
+    sourceLeadKey: input.sourceLeadKey?.trim() || undefined,
+    formType: input.formType,
+    owner: "N/A",
+    reviewer: "N/A",
+    stage: "Lead",
+    dueInDays: 7,
+    unreadClientMessages: 0,
+    docsPending: 5,
+    balanceAmount: 0,
+    retainerSigned: false,
+    retainerSentAt: undefined,
+    docsUploadLink: company?.branding?.driveRootLink || "",
+    applicationFormsLink: undefined,
+    submittedFolderLink: undefined,
+    correspondenceFolderLink: undefined,
+    questionnaireLink: "",
+    paymentMethod: "interac",
+    interacRecipient: "",
+    interacInstructions: "",
+    paymentStatus: "pending",
+    paymentPaidAt: undefined,
+    imm5710Automation: { status: "idle" },
+    pgwpIntake: undefined,
+    retainerRecord: undefined,
+    servicePackage: {
+      name: "Standard Service",
+      retainerAmount: 0,
+      balanceAmount: 0,
+      milestones: []
+    },
+    invoices: []
+  };
+  store.cases = [item, ...store.cases];
+  await writeStore(store);
+  return item;
+}
+
+function inferCaseStatusFromStage(stage: Stage): CaseStatus {
+  if (stage === "Lead") return "lead";
+  if (stage === "Under Review") return "under_review";
+  if (stage === "Submitted" || stage === "Decision") return "submitted";
+  if (stage === "Assigned" || stage === "Intake" || stage === "Paid") return "active";
+  return "active";
+}
+
+function mapCaseStatusToStage(status: CaseStatus): Stage {
+  if (status === "lead") return "Lead";
+  if (status === "active") return "Assigned";
+  if (status === "under_review") return "Under Review";
+  if (status === "ready") return "Submitted";
+  if (status === "submitted") return "Submitted";
+  return "Assigned";
+}
+
+function findCaseTasks(store: AppStore, companyId: string, caseId: string) {
+  return store.tasks.filter((t) => t.companyId === companyId && t.caseId === caseId);
+}
+
+function hasOpenTaskWithTitle(store: AppStore, companyId: string, caseId: string, title: string) {
+  return store.tasks.some(
+    (t) =>
+      t.companyId === companyId &&
+      t.caseId === caseId &&
+      t.status === "pending" &&
+      t.title.toLowerCase() === title.toLowerCase()
+  );
+}
+
+function addAutomationTask(
+  store: AppStore,
+  input: {
+    companyId: string;
+    caseId: string;
+    title: string;
+    description: string;
+    assignedTo: string;
+    priority: "low" | "medium" | "high";
+  }
+) {
+  if (hasOpenTaskWithTitle(store, input.companyId, input.caseId, input.title)) return;
+  const task: TaskItem = {
+    id: `TSK-${store.tasks.length + 1}`,
+    companyId: input.companyId,
+    caseId: input.caseId,
+    title: input.title,
+    description: input.description,
+    assignedTo: input.assignedTo,
+    createdBy: "ai",
+    priority: input.priority,
+    status: "pending",
+    createdAt: new Date().toISOString()
+  };
+  store.tasks.unshift(task);
+}
+
+function addAutomationNotification(
+  store: AppStore,
+  input: { companyId: string; userId: string; type: "deadline" | "missing_doc" | "ai_alert"; message: string }
+) {
+  const notice: NotificationItem = {
+    id: `NTF-${store.notifications.length + 1}`,
+    companyId: input.companyId,
+    userId: input.userId,
+    type: input.type,
+    message: input.message,
+    read: false,
+    createdAt: new Date().toISOString()
+  };
+  store.notifications.unshift(notice);
+}
+
+function evaluateCaseAutomation(store: AppStore, caseItem: CaseItem) {
+  const requiredDocKeywords = ["passport", "study permit", "transcript", "completion letter"];
+  const docs = store.documents.filter((d) => d.companyId === caseItem.companyId && d.caseId === caseItem.id);
+  const hasAllRequired = requiredDocKeywords.every((keyword) =>
+    docs.some((d) => d.name.toLowerCase().includes(keyword))
+  );
+
+  const assignedTo = caseItem.owner && caseItem.owner !== "N/A" ? caseItem.owner : "Unassigned";
+
+  if (caseItem.paymentStatus === "paid") {
+    caseItem.caseStatus = caseItem.stage === "Under Review" ? "under_review" : "active";
+    if (!caseItem.aiStatus || caseItem.aiStatus === "idle") caseItem.aiStatus = "collecting_docs";
+  }
+
+  if (caseItem.paymentStatus === "pending") {
+    if (!hasOpenTaskWithTitle(store, caseItem.companyId, caseItem.id, "Follow up with client for payment")) {
+      addAutomationTask(store, {
+        companyId: caseItem.companyId,
+        caseId: caseItem.id,
+        title: "Follow up with client for payment",
+        description: "Payment is pending. Send payment reminder.",
+        assignedTo,
+        priority: "high"
+      });
+    }
+  }
+
+  if (caseItem.aiStatus === "collecting_docs" || caseItem.aiStatus === "waiting_client") {
+    if (!hasAllRequired) {
+      caseItem.aiStatus = "waiting_client";
+      addAutomationTask(store, {
+        companyId: caseItem.companyId,
+        caseId: caseItem.id,
+        title: "Follow up with client",
+        description: "Missing required PGWP documents. Follow up in 48h.",
+        assignedTo,
+        priority: "medium"
+      });
+    }
+  }
+
+  if (hasAllRequired && caseItem.paymentStatus === "paid") {
+    caseItem.aiStatus = "drafting";
+    addAutomationTask(store, {
+      companyId: caseItem.companyId,
+      caseId: caseItem.id,
+      title: "Review application",
+      description: "All required documents uploaded. Review draft package.",
+      assignedTo: caseItem.reviewer && caseItem.reviewer !== "N/A" ? caseItem.reviewer : assignedTo,
+      priority: "high"
+    });
+  }
+
+  if (caseItem.stage === "Submitted") {
+    caseItem.caseStatus = "submitted";
+    caseItem.aiStatus = "completed";
+    store.tasks = store.tasks.map((t) =>
+      t.companyId === caseItem.companyId && t.caseId === caseItem.id ? { ...t, status: "completed" } : t
+    );
+  } else {
+    caseItem.caseStatus = inferCaseStatusFromStage(caseItem.stage);
+  }
+
+  const adminUser = store.users.find((u) => u.companyId === caseItem.companyId && u.userType === "staff" && u.role === "Admin");
+  if (adminUser && caseItem.aiStatus === "drafting") {
+    addAutomationNotification(store, {
+      companyId: caseItem.companyId,
+      userId: adminUser.id,
+      type: "ai_alert",
+      message: `${caseItem.id} is ready for review (AI drafting completed docs check).`
+    });
+  }
+}
+
+function syncMissingIntakeTasksInStore(store: AppStore, caseItem: CaseItem, assignedTo: string) {
+  const formType = String(caseItem.formType || "").toLowerCase();
+  if (!formType.includes("pgwp") && !formType.includes("imm5710")) return;
+
+  const missing = getMissingImm5710Questions(caseItem.pgwpIntake);
+  const missingTitles = new Set(missing.map((q) => `IMM5710 data needed: ${q.label}`.toLowerCase()));
+
+  for (const q of missing) {
+    addAutomationTask(store, {
+      companyId: caseItem.companyId,
+      caseId: caseItem.id,
+      title: `IMM5710 data needed: ${q.label}`,
+      description: "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      assignedTo,
+      priority: "high"
+    });
+  }
+
+  store.tasks = store.tasks.map((t) => {
+    if (t.companyId !== caseItem.companyId || t.caseId !== caseItem.id) return t;
+    const isImmTask = t.title.toLowerCase().startsWith("imm5710 data needed:");
+    if (!isImmTask || t.status !== "pending") return t;
+    if (missingTitles.has(t.title.toLowerCase())) return t;
+    return { ...t, status: "completed" };
+  });
+}
+
+function syncMissingDocumentTasksInStore(store: AppStore, caseItem: CaseItem, assignedTo: string) {
+  const formType = String(caseItem.formType || "").toLowerCase();
+  const docs = store.documents.filter((d) => d.companyId === caseItem.companyId && d.caseId === caseItem.id);
+  const isPgwpCase = formType.includes("pgwp") || formType.includes("imm5710");
+  const missingDocLabels = isPgwpCase
+    ? generatePgwpDraft(caseItem, docs).missingDocuments
+    : getMissingChecklistDocs(caseItem.formType, docs);
+  const missingDocTitles = new Set(missingDocLabels.map((label) => `Missing document: ${label}`.toLowerCase()));
+
+  for (const label of missingDocLabels) {
+    addAutomationTask(store, {
+      companyId: caseItem.companyId,
+      caseId: caseItem.id,
+      title: `Missing document: ${label}`,
+      description: `Client must upload this required ${caseItem.formType} document before review/submission.`,
+      assignedTo,
+      priority: "high"
+    });
+  }
+
+  store.tasks = store.tasks.map((t) => {
+    if (t.companyId !== caseItem.companyId || t.caseId !== caseItem.id) return t;
+    const isDocTask = t.title.toLowerCase().startsWith("missing document:");
+    if (!isDocTask || t.status !== "pending") return t;
+    if (missingDocTitles.has(t.title.toLowerCase())) return t;
+    return { ...t, status: "completed" };
+  });
+
+  const missingIntake = isPgwpCase ? getMissingImm5710Questions(caseItem.pgwpIntake) : [];
+  const readyForReview =
+    missingDocLabels.length === 0 &&
+    missingIntake.length === 0 &&
+    Boolean(caseItem.retainerSigned) &&
+    (caseItem.paymentStatus === "paid" || caseItem.paymentStatus === "not_required");
+
+  if (readyForReview) {
+    caseItem.aiStatus = "drafting";
+    caseItem.stage = "Under Review";
+    caseItem.caseStatus = "under_review";
+    addAutomationTask(store, {
+      companyId: caseItem.companyId,
+      caseId: caseItem.id,
+      title: "Human review gate: approve submission package",
+      description: "AI precheck passed. Reviewer must verify package and approve submission readiness.",
+      assignedTo: caseItem.reviewer && caseItem.reviewer !== "N/A" ? caseItem.reviewer : assignedTo,
+      priority: "high"
+    });
+  }
+}
+
+function applyCaseAutomation(store: AppStore, caseItem: CaseItem) {
+  evaluateCaseAutomation(store, caseItem);
+  const assignedTo = caseItem.owner && caseItem.owner !== "N/A" ? caseItem.owner : "Unassigned";
+  syncMissingIntakeTasksInStore(store, caseItem, assignedTo);
+  syncMissingDocumentTasksInStore(store, caseItem, assignedTo);
+}
+
+export async function syncCaseAutomation(companyId: string, caseId: string): Promise<CaseItem | null> {
+  const store = await readStore();
+  const idx = store.cases.findIndex((c) => c.companyId === companyId && c.id === caseId);
+  if (idx === -1) return null;
+  applyCaseAutomation(store, store.cases[idx]);
+  await writeStore(store);
+  return store.cases[idx];
+}
+
+export async function signCaseRetainer(input: {
+  companyId: string;
+  caseId: string;
+  signerName: string;
+  signatureType: "initials" | "signature" | "typed";
+  signatureValue: string;
+  acceptedTerms: boolean;
+}): Promise<CaseItem | null> {
+  const store = await readStore();
+  const idx = store.cases.findIndex((c) => c.companyId === input.companyId && c.id === input.caseId);
+  if (idx === -1) return null;
+  if (!store.cases[idx].retainerSentAt) return null;
+  if (store.cases[idx].retainerSigned) return store.cases[idx];
+
+  store.cases[idx] = {
+    ...store.cases[idx],
+    retainerSigned: true,
+    retainerRecord: {
+      signedAt: new Date().toISOString(),
+      signerName: input.signerName,
+      signatureType: input.signatureType,
+      signatureValue: input.signatureValue,
+      acceptedTerms: input.acceptedTerms
+    }
+  };
+  await writeStore(store);
+  return store.cases[idx];
+}
+
+export async function updateCaseRetainerSetup(
+  companyId: string,
+  id: string,
+  patch: {
+    formType?: string;
+    retainerAmount?: number;
+    paymentMethod?: "interac";
+    interacRecipient?: string;
+    interacInstructions?: string;
+    sendRetainer?: boolean;
+    paymentStatus?: "pending" | "paid" | "not_required";
+  }
+): Promise<CaseItem | null> {
+  const store = await readStore();
+  const idx = store.cases.findIndex((c) => c.companyId === companyId && c.id === id);
+  if (idx === -1) return null;
+  const current = store.cases[idx];
+
+  const nextServicePackage = {
+    ...current.servicePackage,
+    retainerAmount:
+      patch.retainerAmount !== undefined && !Number.isNaN(patch.retainerAmount)
+        ? Number(patch.retainerAmount)
+        : current.servicePackage.retainerAmount
+  };
+
+  const nextPaymentStatus = patch.paymentStatus ?? current.paymentStatus ?? "pending";
+  const isSendingRetainer = Boolean(patch.sendRetainer);
+  store.cases[idx] = {
+    ...current,
+    formType: patch.formType !== undefined && patch.formType.trim() ? patch.formType.trim() : current.formType,
+    servicePackage: nextServicePackage,
+    retainerSentAt: isSendingRetainer ? new Date().toISOString() : current.retainerSentAt,
+    retainerSigned: isSendingRetainer ? false : current.retainerSigned,
+    retainerRecord: isSendingRetainer ? undefined : current.retainerRecord,
+    paymentMethod: patch.paymentMethod ?? current.paymentMethod ?? "interac",
+    interacRecipient:
+      patch.interacRecipient !== undefined ? patch.interacRecipient : current.interacRecipient,
+    interacInstructions:
+      patch.interacInstructions !== undefined ? patch.interacInstructions : current.interacInstructions,
+    paymentStatus: nextPaymentStatus,
+    paymentPaidAt:
+      nextPaymentStatus === "paid"
+        ? current.paymentPaidAt ?? new Date().toISOString()
+        : nextPaymentStatus === "pending"
+          ? undefined
+          : current.paymentPaidAt,
+    stage: nextPaymentStatus === "paid" ? "Paid" : current.stage
+  };
+
+  applyCaseAutomation(store, store.cases[idx]);
+
+  await writeStore(store);
+  return store.cases[idx];
+}
+
+export async function updateCaseStage(companyId: string, id: string, stage: Stage): Promise<CaseItem | null> {
+  const store = await readStore();
+  const idx = store.cases.findIndex((c) => c.companyId === companyId && c.id === id);
+  if (idx === -1) return null;
+  store.cases[idx] = { ...store.cases[idx], stage };
+  applyCaseAutomation(store, store.cases[idx]);
+  await writeStore(store);
+  return store.cases[idx];
+}
+
+export async function updateCaseFinancials(
+  companyId: string,
+  id: string,
+  patch: Partial<CaseItem["servicePackage"]>
+): Promise<CaseItem | null> {
+  const store = await readStore();
+  const idx = store.cases.findIndex((c) => c.companyId === companyId && c.id === id);
+  if (idx === -1) return null;
+  const current = store.cases[idx];
+  const nextPackage = {
+    ...current.servicePackage,
+    ...patch
+  };
+  store.cases[idx] = {
+    ...current,
+    servicePackage: nextPackage,
+    balanceAmount: nextPackage.balanceAmount
+  };
+  await writeStore(store);
+  return store.cases[idx];
+}
+
+export async function updateCaseLinks(
+  companyId: string,
+  id: string,
+  patch: Partial<
+    Pick<
+      CaseItem,
+      "questionnaireLink" | "docsUploadLink" | "applicationFormsLink" | "submittedFolderLink" | "correspondenceFolderLink"
+    >
+  >
+): Promise<CaseItem | null> {
+  const store = await readStore();
+  const idx = store.cases.findIndex((c) => c.companyId === companyId && c.id === id);
+  if (idx === -1) return null;
+  const current = store.cases[idx];
+  store.cases[idx] = {
+    ...current,
+    questionnaireLink:
+      patch.questionnaireLink !== undefined ? String(patch.questionnaireLink) : current.questionnaireLink,
+    docsUploadLink: patch.docsUploadLink !== undefined ? String(patch.docsUploadLink) : current.docsUploadLink,
+    applicationFormsLink:
+      patch.applicationFormsLink !== undefined ? String(patch.applicationFormsLink) : current.applicationFormsLink,
+    submittedFolderLink:
+      patch.submittedFolderLink !== undefined ? String(patch.submittedFolderLink) : current.submittedFolderLink,
+    correspondenceFolderLink:
+      patch.correspondenceFolderLink !== undefined
+        ? String(patch.correspondenceFolderLink)
+        : current.correspondenceFolderLink
+  };
+  await writeStore(store);
+  return store.cases[idx];
+}
+
+export async function addCaseMilestone(
+  companyId: string,
+  id: string,
+  title: string
+): Promise<CaseItem | null> {
+  const store = await readStore();
+  const idx = store.cases.findIndex((c) => c.companyId === companyId && c.id === id);
+  if (idx === -1) return null;
+  const current = store.cases[idx];
+  const milestone = {
+    id: `MS-${current.servicePackage.milestones.length + 1}`,
+    title,
+    done: false
+  };
+  store.cases[idx] = {
+    ...current,
+    servicePackage: {
+      ...current.servicePackage,
+      milestones: [...current.servicePackage.milestones, milestone]
+    }
+  };
+  await writeStore(store);
+  return store.cases[idx];
+}
+
+export async function toggleMilestone(
+  companyId: string,
+  id: string,
+  milestoneId: string
+): Promise<CaseItem | null> {
+  const store = await readStore();
+  const idx = store.cases.findIndex((c) => c.companyId === companyId && c.id === id);
+  if (idx === -1) return null;
+  const current = store.cases[idx];
+  store.cases[idx] = {
+    ...current,
+    servicePackage: {
+      ...current.servicePackage,
+      milestones: current.servicePackage.milestones.map((m) =>
+        m.id === milestoneId ? { ...m, done: !m.done } : m
+      )
+    }
+  };
+  await writeStore(store);
+  return store.cases[idx];
+}
+
+export async function addInvoice(
+  companyId: string,
+  id: string,
+  title: string,
+  amount: number
+): Promise<CaseItem | null> {
+  const store = await readStore();
+  const idx = store.cases.findIndex((c) => c.companyId === companyId && c.id === id);
+  if (idx === -1) return null;
+  const current = store.cases[idx];
+  const invoice = {
+    id: `INV-${1000 + current.invoices.length + 1}`,
+    title,
+    amount,
+    status: "sent" as const,
+    createdAt: new Date().toISOString()
+  };
+  store.cases[idx] = {
+    ...current,
+    invoices: [...current.invoices, invoice],
+    servicePackage: {
+      ...current.servicePackage,
+      balanceAmount: current.servicePackage.balanceAmount + amount
+    },
+    balanceAmount: current.balanceAmount + amount
+  };
+  await writeStore(store);
+  return store.cases[idx];
+}
+
+export async function listUsers(companyId: string): Promise<AppUser[]> {
+  const store = await readStore();
+  return store.users.filter((u) => u.companyId === companyId && u.userType === "staff");
+}
+
+export async function inviteUser(input: {
+  companyId: string;
+  name: string;
+  email: string;
+  role: AppUser["role"];
+  password: string;
+}): Promise<AppUser> {
+  const store = await readStore();
+  const existing = store.users.find((u) => u.email.toLowerCase() === input.email.toLowerCase());
+  if (existing) throw new Error("Email already in use");
+
+  const user: AppUser = {
+    id: `USR-${store.users.length + 1}`,
+    companyId: input.companyId,
+    name: input.name,
+    email: input.email,
+    role: input.role,
+    userType: "staff",
+    password: input.password
+  };
+
+  store.users.push(user);
+  await writeStore(store);
+  return user;
+}
+
+export async function resetUserPassword(companyId: string, userId: string, password: string): Promise<AppUser | null> {
+  const store = await readStore();
+  const idx = store.users.findIndex((u) => u.companyId === companyId && u.id === userId);
+  if (idx === -1) return null;
+  store.users[idx] = { ...store.users[idx], password };
+  await writeStore(store);
+  return store.users[idx];
+}
+
+export async function listMessages(companyId: string, caseId: string): Promise<MessageItem[]> {
+  const store = await readStore();
+  return store.messages
+    .filter((m) => m.companyId === companyId && m.caseId === caseId)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+export async function addMessage(input: {
+  companyId: string;
+  caseId: string;
+  senderType: MessageItem["senderType"];
+  senderName: string;
+  text: string;
+}): Promise<MessageItem> {
+  const store = await readStore();
+  const message: MessageItem = {
+    id: `MSG-${store.messages.length + 1}`,
+    companyId: input.companyId,
+    caseId: input.caseId,
+    senderType: input.senderType,
+    senderName: input.senderName,
+    text: input.text,
+    createdAt: new Date().toISOString()
+  };
+  store.messages.push(message);
+  await writeStore(store);
+  return message;
+}
+
+export async function listDocuments(companyId: string, caseId: string): Promise<DocumentItem[]> {
+  const store = await readStore();
+  return store.documents
+    .filter((d) => d.companyId === companyId && d.caseId === caseId)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+export async function addDocument(input: {
+  companyId: string;
+  caseId: string;
+  name: string;
+  status: DocumentItem["status"];
+  link: string;
+}): Promise<DocumentItem> {
+  const store = await readStore();
+  const doc: DocumentItem = {
+    id: `DOC-${store.documents.length + 1}`,
+    companyId: input.companyId,
+    caseId: input.caseId,
+    name: input.name,
+    status: input.status,
+    link: input.link,
+    createdAt: new Date().toISOString()
+  };
+  store.documents.push(doc);
+  const caseItem = store.cases.find((c) => c.companyId === input.companyId && c.id === input.caseId);
+  if (caseItem) {
+    applyCaseAutomation(store, caseItem);
+  }
+  await writeStore(store);
+  return doc;
+}
+
+export async function listTasks(companyId: string, caseId?: string): Promise<TaskItem[]> {
+  const store = await readStore();
+  return store.tasks
+    .filter((t) => t.companyId === companyId && (!caseId || t.caseId === caseId))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export async function addTask(input: {
+  companyId: string;
+  caseId: string;
+  title: string;
+  description?: string;
+  assignedTo?: string;
+  createdBy?: "ai" | "admin";
+  priority?: "low" | "medium" | "high";
+  dueDate?: string;
+}): Promise<TaskItem> {
+  const store = await readStore();
+  const task: TaskItem = {
+    id: `TSK-${store.tasks.length + 1}`,
+    companyId: input.companyId,
+    caseId: input.caseId,
+    title: input.title.trim(),
+    description: String(input.description || "").trim(),
+    assignedTo: String(input.assignedTo || "Unassigned").trim() || "Unassigned",
+    createdBy: input.createdBy || "admin",
+    priority: input.priority || "medium",
+    status: "pending",
+    dueDate: input.dueDate || undefined,
+    createdAt: new Date().toISOString()
+  };
+  store.tasks.unshift(task);
+  await writeStore(store);
+  return task;
+}
+
+export async function updateTaskStatus(
+  companyId: string,
+  taskId: string,
+  status: "pending" | "completed"
+): Promise<TaskItem | null> {
+  const store = await readStore();
+  const idx = store.tasks.findIndex((t) => t.companyId === companyId && t.id === taskId);
+  if (idx === -1) return null;
+  store.tasks[idx] = { ...store.tasks[idx], status };
+
+  if (status === "completed") {
+    const task = store.tasks[idx];
+    const caseIdx = store.cases.findIndex((c) => c.companyId === companyId && c.id === task.caseId);
+    if (caseIdx !== -1) {
+      const currentCase = store.cases[caseIdx];
+      const title = (task.title || "").toLowerCase();
+      if (title.includes("review application") || title.includes("human review gate")) {
+        store.cases[caseIdx] = {
+          ...currentCase,
+          caseStatus: "ready",
+          aiStatus: "completed",
+          stage: mapCaseStatusToStage("ready")
+        };
+
+        const adminUser = store.users.find(
+          (u) => u.companyId === companyId && u.userType === "staff" && u.role === "Admin"
+        );
+        if (adminUser) {
+          addAutomationNotification(store, {
+            companyId,
+            userId: adminUser.id,
+            type: "ai_alert",
+            message: `${currentCase.id} moved to READY after review completion.`
+          });
+        }
+      }
+    }
+  }
+
+  await writeStore(store);
+  return store.tasks[idx];
+}
+
+export async function listNotifications(companyId: string, userId: string): Promise<NotificationItem[]> {
+  const store = await readStore();
+  return store.notifications
+    .filter((n) => n.companyId === companyId && n.userId === userId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export async function markNotificationRead(companyId: string, userId: string, id: string): Promise<NotificationItem | null> {
+  const store = await readStore();
+  const idx = store.notifications.findIndex((n) => n.companyId === companyId && n.userId === userId && n.id === id);
+  if (idx === -1) return null;
+  store.notifications[idx] = { ...store.notifications[idx], read: true };
+  await writeStore(store);
+  return store.notifications[idx];
+}
+
+export async function updateCasePgwpIntake(
+  companyId: string,
+  id: string,
+  patch: Partial<PgwpIntakeData>
+): Promise<CaseItem | null> {
+  const store = await readStore();
+  const idx = store.cases.findIndex((c) => c.companyId === companyId && c.id === id);
+  if (idx === -1) return null;
+
+  const current = store.cases[idx];
+  store.cases[idx] = {
+    ...current,
+    pgwpIntake: {
+      ...(current.pgwpIntake ?? {}),
+      ...patch
+    }
+  };
+  applyCaseAutomation(store, store.cases[idx]);
+  await writeStore(store);
+  return store.cases[idx];
+}
+
+export async function updateCaseImm5710Automation(
+  companyId: string,
+  id: string,
+  patch: Partial<NonNullable<CaseItem["imm5710Automation"]>>
+): Promise<CaseItem | null> {
+  const store = await readStore();
+  const idx = store.cases.findIndex((c) => c.companyId === companyId && c.id === id);
+  if (idx === -1) return null;
+
+  const current = store.cases[idx];
+  store.cases[idx] = {
+    ...current,
+    imm5710Automation: {
+      status: "idle",
+      ...(current.imm5710Automation ?? {}),
+      ...patch
+    }
+  };
+  await writeStore(store);
+  return store.cases[idx];
+}

@@ -1,0 +1,36 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getCurrentUserFromRequest } from "@/lib/auth";
+import { findCompanyById, updateCompanyBranding } from "@/lib/store";
+
+export async function GET(request: NextRequest) {
+  const user = await getCurrentUserFromRequest(request);
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const company = await findCompanyById(user.companyId);
+  if (!company) return NextResponse.json({ error: "Company not found" }, { status: 404 });
+  return NextResponse.json({ company });
+}
+
+export async function PATCH(request: NextRequest) {
+  const user = await getCurrentUserFromRequest(request);
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (user.role !== "Admin" || user.userType !== "staff") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const body = await request.json().catch(() => ({}));
+  const updated = await updateCompanyBranding(user.companyId, {
+    appName: body.appName,
+    logoText: body.logoText,
+    logoUrl: body.logoUrl,
+    driveRootLink: body.driveRootLink,
+    primary: body.primary,
+    secondary: body.secondary,
+    success: body.success,
+    background: body.background,
+    text: body.text
+  });
+
+  if (!updated) return NextResponse.json({ error: "Company not found" }, { status: 404 });
+  return NextResponse.json({ company: updated });
+}

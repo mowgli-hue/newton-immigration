@@ -1,0 +1,263 @@
+export type Role = "Admin" | "Owner" | "Reviewer";
+export type UserType = "staff" | "client";
+export type CaseStatus = "lead" | "active" | "under_review" | "ready" | "submitted";
+export type AiStatus = "idle" | "collecting_docs" | "waiting_client" | "drafting" | "completed";
+export type TaskPriority = "low" | "medium" | "high";
+export type TaskStatus = "pending" | "completed";
+export type NotificationType = "deadline" | "missing_doc" | "ai_alert";
+
+export type PgwpIntakeData = {
+  fullName?: string;
+  applicationType?: string;
+  intendedWorkDetails?: string;
+  usedOtherName?: string;
+  otherNameDetails?: string;
+  travelHistorySixMonths?: string;
+  travelHistoryDetails?: string;
+  currentCountry?: string;
+  currentCountryStatus?: string;
+  currentCountryFromDate?: string;
+  currentCountryToDate?: string;
+  previousCountries?: string;
+  firstName?: string;
+  lastName?: string;
+  dateOfBirth?: string;
+  placeOfBirthCity?: string;
+  passportNumber?: string;
+  passportIssueDate?: string;
+  passportExpiryDate?: string;
+  nationalIdNumber?: string;
+  usGreenCardNumber?: string;
+  countryOfBirth?: string;
+  citizenship?: string;
+  uci?: string;
+  address?: string;
+  city?: string;
+  province?: string;
+  postalCode?: string;
+  email?: string;
+  phone?: string;
+  nativeLanguage?: string;
+  canCommunicateEnglishFrench?: string;
+  preferredLanguage?: string;
+  maritalStatus?: string;
+  spouseName?: string;
+  spouseDob?: string;
+  spouseDateOfMarriage?: string;
+  previousMarriageCommonLaw?: string;
+  previousRelationshipDetails?: string;
+  residentialAddress?: string;
+  education?: string;
+  educationDetails?: string;
+  ieltsDetails?: string;
+  englishTestTaken?: string;
+  originalEntryDate?: string;
+  originalEntryPlacePurpose?: string;
+  originalEntryToCanadaPlace?: string;
+  originalEntryPurpose?: string;
+  recentEntryAny?: string;
+  recentEntryDetails?: string;
+  employmentHistory?: string;
+  dliNameLocation?: string;
+  programNameDuration?: string;
+  completionLetterDate?: string;
+  fullTimeStudentThroughout?: string;
+  gapsOrPartTimeDetails?: string;
+  previousCollegesInCanada?: string;
+  academicProbationOrTransfer?: string;
+  unauthorizedWorkDuringStudies?: string;
+  hasRepresentative?: string;
+  permitDetails?: string;
+  studyPermitExpiryDate?: string;
+  pastStudiesDetails?: string;
+  currentStudyCompletionLetterDetails?: string;
+  restorationNeeded?: string;
+  fundsAvailable?: string;
+  medicalExamCompleted?: string;
+  refusedAnyCountry?: string;
+  refusalDetails?: string;
+  militaryServiceDetails?: string;
+  criminalHistory?: string;
+  medicalHistory?: string;
+  additionalNotes?: string;
+};
+
+export type Stage =
+  | "Lead"
+  | "Paid"
+  | "Intake"
+  | "Assigned"
+  | "Under Review"
+  | "Submitted"
+  | "Decision";
+
+export type Company = {
+  id: string;
+  name: string;
+  slug: string;
+  branding: {
+    appName: string;
+    logoText: string;
+    logoUrl?: string;
+    driveRootLink?: string;
+    primary: string;
+    secondary: string;
+    success: string;
+    background: string;
+    text: string;
+  };
+  createdAt: string;
+};
+
+export type CaseItem = {
+  id: string;
+  companyId: string;
+  clientUserId?: string;
+  client: string;
+  caseStatus?: CaseStatus;
+  aiStatus?: AiStatus;
+  leadPhone?: string;
+  leadEmail?: string;
+  sourceLeadKey?: string;
+  formType: string;
+  owner: string;
+  reviewer: string;
+  stage: Stage;
+  dueInDays: number;
+  unreadClientMessages: number;
+  docsPending: number;
+  balanceAmount: number;
+  retainerSigned: boolean;
+  retainerSentAt?: string;
+  docsUploadLink: string;
+  applicationFormsLink?: string;
+  submittedFolderLink?: string;
+  correspondenceFolderLink?: string;
+  questionnaireLink: string;
+  paymentMethod?: "interac";
+  interacRecipient?: string;
+  interacInstructions?: string;
+  paymentStatus?: "pending" | "paid" | "not_required";
+  paymentPaidAt?: string;
+  imm5710Automation?: {
+    status: "idle" | "started" | "failed";
+    startedAt?: string;
+    pid?: number;
+    logPath?: string;
+    readyPackagePath?: string;
+    lastError?: string;
+    autoTriggered?: boolean;
+  };
+  pgwpIntake?: PgwpIntakeData;
+  retainerRecord?: {
+    signedAt: string;
+    signerName: string;
+    signatureType: "initials" | "signature" | "typed";
+    signatureValue: string;
+    acceptedTerms: boolean;
+  };
+  servicePackage: {
+    name: string;
+    retainerAmount: number;
+    balanceAmount: number;
+    milestones: Array<{
+      id: string;
+      title: string;
+      done: boolean;
+    }>;
+  };
+  invoices: Array<{
+    id: string;
+    title: string;
+    amount: number;
+    status: "draft" | "sent" | "paid";
+    createdAt: string;
+  }>;
+};
+
+export type AppUser = {
+  id: string;
+  companyId: string;
+  name: string;
+  email: string;
+  role: Role;
+  userType: UserType;
+  password: string;
+  caseId?: string;
+};
+
+export type Session = {
+  token: string;
+  userId: string;
+  companyId: string;
+  expiresAt: string;
+};
+
+export type ClientInvite = {
+  token: string;
+  companyId: string;
+  caseId: string;
+  email?: string;
+  createdByUserId: string;
+  usedByUserId?: string;
+  status: "pending" | "accepted" | "expired";
+  expiresAt: string;
+  createdAt: string;
+  acceptedAt?: string;
+};
+
+export type MessageItem = {
+  id: string;
+  companyId: string;
+  caseId: string;
+  senderType: "client" | "staff" | "ai";
+  senderName: string;
+  text: string;
+  createdAt: string;
+};
+
+export type DocumentItem = {
+  id: string;
+  companyId: string;
+  caseId: string;
+  name: string;
+  status: "pending" | "received";
+  link: string;
+  createdAt: string;
+};
+
+export type TaskItem = {
+  id: string;
+  companyId: string;
+  caseId: string;
+  title: string;
+  description: string;
+  assignedTo: string;
+  createdBy: "ai" | "admin";
+  priority: TaskPriority;
+  status: TaskStatus;
+  dueDate?: string;
+  createdAt: string;
+};
+
+export type NotificationItem = {
+  id: string;
+  companyId: string;
+  userId: string;
+  type: NotificationType;
+  message: string;
+  read: boolean;
+  createdAt: string;
+};
+
+export type AppStore = {
+  companies: Company[];
+  users: AppUser[];
+  cases: CaseItem[];
+  messages: MessageItem[];
+  documents: DocumentItem[];
+  tasks: TaskItem[];
+  notifications: NotificationItem[];
+  sessions: Session[];
+  invites: ClientInvite[];
+};
