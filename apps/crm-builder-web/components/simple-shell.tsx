@@ -9,7 +9,6 @@ import {
   Loader2,
   LogOut,
   MessageCircle,
-  PlusCircle,
   Users
 } from "lucide-react";
 import { Header } from "@/components/header";
@@ -19,7 +18,7 @@ import { apiFetch } from "@/lib/api-client";
 import { Company } from "@/lib/models";
 import { getChecklistForFormType } from "@/lib/application-checklists";
 
-type Screen = "dashboard" | "cases" | "communications" | "tasks" | "chat" | "files";
+type Screen = "dashboard" | "cases" | "communications" | "accounting" | "tasks" | "chat" | "files";
 type ClientScreen = "retainer" | "payment" | "overview" | "documents" | "questions" | "chat";
 type SessionUser = {
   id: string;
@@ -65,8 +64,19 @@ type NotificationItem = {
   read: boolean;
   createdAt: string;
 };
+type DocRequestItem = {
+  id: string;
+  title: string;
+  details?: string;
+  status: "open" | "fulfilled";
+  requestedBy: string;
+  requestedAt: string;
+  fulfilledAt?: string;
+  fulfilledBy?: string;
+  documentId?: string;
+};
 type CaseDetailTab = "overview" | "documents" | "tasks" | "communication";
-type CaseBoardView = "home" | "new_cases" | "under_review_cases" | "all_cases";
+type CaseBoardView = "home" | "new_cases" | "under_review_cases" | "urgent_cases" | "all_cases";
 
 type PgwpDraft = {
   applicationType: "PGWP";
@@ -157,6 +167,7 @@ const tabs: { id: Screen; label: string; icon: ReactNode }[] = [
   { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard size={16} /> },
   { id: "cases", label: "Cases", icon: <Users size={16} /> },
   { id: "communications", label: "Communications", icon: <MessageCircle size={16} /> },
+  { id: "accounting", label: "Accounting", icon: <FileText size={16} /> },
   { id: "tasks", label: "Tasks", icon: <CheckSquare size={16} /> },
   { id: "chat", label: "Chat", icon: <MessageCircle size={16} /> },
   { id: "files", label: "Files", icon: <FileText size={16} /> }
@@ -196,6 +207,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [selectedCaseId, setSelectedCaseId] = useState("");
   const [messages, setMessages] = useState<MessageItem[]>([]);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
+  const [docRequests, setDocRequests] = useState<DocRequestItem[]>([]);
   const [clientIntakeDone, setClientIntakeDone] = useState(false);
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -212,14 +224,18 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [retainerSignatureValue, setRetainerSignatureValue] = useState("");
   const [retainerAccepted, setRetainerAccepted] = useState(false);
   const [retainerStatus, setRetainerStatus] = useState("");
-  const [newClientName, setNewClientName] = useState("");
-  const [newFormType, setNewFormType] = useState("IMM5710");
   const [commClientName, setCommClientName] = useState("");
   const [commFormType, setCommFormType] = useState("IMM5710");
   const [commPhone, setCommPhone] = useState("");
   const [commCreateStatus, setCommCreateStatus] = useState("");
+  const [commUrgent, setCommUrgent] = useState(false);
+  const [commUrgentDays, setCommUrgentDays] = useState("5");
   const [commSearch, setCommSearch] = useState("");
   const [commPaymentStatus, setCommPaymentStatus] = useState("");
+  const [caseSearch, setCaseSearch] = useState("");
+  const [accountingSearch, setAccountingSearch] = useState("");
+  const [accountingAmount, setAccountingAmount] = useState<Record<string, string>>({});
+  const [accountingStatus, setAccountingStatus] = useState("");
   const [brandAppName, setBrandAppName] = useState("");
   const [brandLogoText, setBrandLogoText] = useState("");
   const [brandLogoUrl, setBrandLogoUrl] = useState("");
@@ -242,6 +258,11 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [immRunStatus, setImmRunStatus] = useState("");
   const [clientUploadFile, setClientUploadFile] = useState<File | null>(null);
   const [clientUploadStatus, setClientUploadStatus] = useState("");
+  const [requestedUploadFiles, setRequestedUploadFiles] = useState<Record<string, File | null>>({});
+  const [requestedUploadStatus, setRequestedUploadStatus] = useState<Record<string, string>>({});
+  const [staffDocRequestTitle, setStaffDocRequestTitle] = useState("");
+  const [staffDocRequestDetails, setStaffDocRequestDetails] = useState("");
+  const [staffDocRequestStatus, setStaffDocRequestStatus] = useState("");
   const [clientProfileOpen, setClientProfileOpen] = useState(false);
   const [clientWorkOpen, setClientWorkOpen] = useState(false);
   const [interacCopyStatus, setInteracCopyStatus] = useState("");
@@ -323,7 +344,15 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     setIsLocalRuntime(localHosts.has(host));
   }, []);
 
-  const visibleCases = useMemo(() => filterCasesByRole(cases, viewRole), [cases, viewRole]);
+  const visibleCases = useMemo(() => {
+    const byRole = filterCasesByRole(cases, viewRole);
+    const q = caseSearch.trim().toLowerCase();
+    if (!q) return byRole;
+    return byRole.filter((c) => {
+      const candidate = `${c.id} ${c.client} ${c.formType}`.toLowerCase();
+      return candidate.includes(q);
+    });
+  }, [cases, viewRole, caseSearch]);
   const selectedCase = visibleCases.find((c) => c.id === selectedCaseId) ?? visibleCases[0] ?? null;
   const newCasesList = useMemo(
     () => visibleCases.filter((c) => (c.caseStatus || "lead") === "lead"),
@@ -342,6 +371,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const activeCaseBoardList = useMemo(() => {
     if (caseBoardView === "new_cases") return newCasesList;
     if (caseBoardView === "under_review_cases") return underReviewCasesList;
+    if (caseBoardView === "urgent_cases") return visibleCases.filter((c) => Boolean(c.isUrgent));
     return visibleCases;
   }, [caseBoardView, newCasesList, underReviewCasesList, visibleCases]);
   const caseTasks = useMemo(
@@ -362,9 +392,10 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   }, [commSearch, visibleCases]);
 
   async function loadCaseDetail(caseId: string) {
-    const [msgRes, docRes] = await Promise.all([
+    const [msgRes, docRes, reqRes] = await Promise.all([
       apiFetch(`/cases/${caseId}/messages`, { cache: "no-store" }),
-      apiFetch(`/cases/${caseId}/documents`, { cache: "no-store" })
+      apiFetch(`/cases/${caseId}/documents`, { cache: "no-store" }),
+      apiFetch(`/cases/${caseId}/doc-requests`, { cache: "no-store" })
     ]);
 
     if (msgRes.ok) {
@@ -374,6 +405,10 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     if (docRes.ok) {
       const payload = await docRes.json();
       setDocuments(payload.documents as DocumentItem[]);
+    }
+    if (reqRes.ok) {
+      const payload = await reqRes.json();
+      setDocRequests((payload.requests || []) as DocRequestItem[]);
     }
   }
 
@@ -541,27 +576,17 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     setCases([]);
   }
 
-  async function createCase() {
-    if (!newClientName.trim()) return;
-    const res = await apiFetch("/cases", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ client: newClientName.trim(), formType: newFormType })
-    });
-    if (!res.ok) return;
-    const payload = await res.json();
-    const created = payload.case as CaseItem;
-    setCases((prev) => [created, ...prev]);
-    setNewClientName("");
-    setNewFormType("IMM5710");
-    setSelectedCaseId(created.id);
-    setScreen("cases");
-  }
-
   async function createCaseFromCommunications() {
     if (!commClientName.trim() || !commFormType.trim()) {
       setCommCreateStatus("Client name and application type are required.");
       return;
+    }
+    if (commUrgent) {
+      const days = Number(commUrgentDays || 0);
+      if (!Number.isFinite(days) || days <= 0) {
+        setCommCreateStatus("Enter valid urgent deadline days.");
+        return;
+      }
     }
     setCommCreateStatus("Creating case...");
     const res = await apiFetch("/cases", {
@@ -570,7 +595,9 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       body: JSON.stringify({
         client: commClientName.trim(),
         formType: commFormType.trim(),
-        leadPhone: commPhone.trim() || undefined
+        leadPhone: commPhone.trim() || undefined,
+        isUrgent: commUrgent,
+        dueInDays: commUrgent ? Number(commUrgentDays || 0) : undefined
       })
     });
     const payload = await res.json().catch(() => ({}));
@@ -585,6 +612,8 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     setCommCreateStatus(`Case created: ${created.id}. Now create invite/payment link below.`);
     setCommClientName("");
     setCommPhone("");
+    setCommUrgent(false);
+    setCommUrgentDays("5");
   }
 
   async function sendMessage(mode: "human" | "ai") {
@@ -883,6 +912,29 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     setCases((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
     if (source === "communications") setCommPaymentStatus(`Payment confirmed for ${updated.id}.`);
     else setSetupStatus("Interac payment confirmed.");
+  }
+
+  async function recordAccountingPayment(caseId: string) {
+    const amount = Number(accountingAmount[caseId] || 0);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setAccountingStatus("Enter a valid paid amount.");
+      return;
+    }
+    setAccountingStatus("Recording payment...");
+    const res = await apiFetch(`/cases/${caseId}/financials`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "record_payment", amount })
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setAccountingStatus(String(payload.error || "Could not record payment."));
+      return;
+    }
+    const updated = payload.case as CaseItem;
+    setCases((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+    setAccountingAmount((prev) => ({ ...prev, [caseId]: "" }));
+    setAccountingStatus(`Payment recorded for ${updated.id}.`);
   }
 
   async function createDriveFolderForCase() {
@@ -1221,6 +1273,64 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     setChecklistStatus((prev) => ({ ...prev, [item.key]: "Uploaded." }));
   }
 
+  async function createStaffDocRequest() {
+    if (!selectedCase) return;
+    const title = staffDocRequestTitle.trim();
+    const details = staffDocRequestDetails.trim();
+    if (!title) {
+      setStaffDocRequestStatus("Request title is required.");
+      return;
+    }
+    setStaffDocRequestStatus("Sending request...");
+    const res = await apiFetch(`/cases/${selectedCase.id}/doc-requests`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, details })
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setStaffDocRequestStatus(String(payload.error || "Could not create doc request."));
+      return;
+    }
+    const updated = payload.case as CaseItem;
+    setCases((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+    setDocRequests((payload.requests || []) as DocRequestItem[]);
+    setStaffDocRequestTitle("");
+    setStaffDocRequestDetails("");
+    setStaffDocRequestStatus("Request sent to client.");
+  }
+
+  async function uploadRequestedDocument(caseId: string, request: DocRequestItem) {
+    const file = requestedUploadFiles[request.id];
+    if (!file) {
+      setRequestedUploadStatus((prev) => ({ ...prev, [request.id]: "Choose a file first." }));
+      return;
+    }
+    setRequestedUploadStatus((prev) => ({ ...prev, [request.id]: "Uploading..." }));
+    const data = new FormData();
+    data.append("file", file);
+    data.append("name", `Requested - ${request.title}`);
+    data.append("requestId", request.id);
+
+    const res = await apiFetch(`/cases/${caseId}/documents`, {
+      method: "POST",
+      body: data
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setRequestedUploadStatus((prev) => ({ ...prev, [request.id]: String(payload.error || "Upload failed") }));
+      return;
+    }
+    setDocuments((prev) => [...prev, payload.document as DocumentItem]);
+    setRequestedUploadFiles((prev) => ({ ...prev, [request.id]: null }));
+    setRequestedUploadStatus((prev) => ({ ...prev, [request.id]: "Uploaded." }));
+    const reqRes = await apiFetch(`/cases/${caseId}/doc-requests`, { cache: "no-store" });
+    if (reqRes.ok) {
+      const reqPayload = await reqRes.json().catch(() => ({}));
+      setDocRequests((reqPayload.requests || []) as DocRequestItem[]);
+    }
+  }
+
   async function copyInteracDetails(caseItem: CaseItem) {
     const amount = Number(caseItem.servicePackage.retainerAmount || 0);
     const text = [
@@ -1306,6 +1416,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       if (requiredItems.length === 0) return documents.length > 0;
       return requiredItems.every((item) => isChecklistDocUploaded(item));
     })();
+    const openDocRequests = (docRequests || []).filter((r) => r.status === "open");
     const paymentSupportPhone = "6046535031";
     const processingSupportPhone = "6049024500";
     return (
@@ -1544,6 +1655,40 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                   <a href={clientReadyForDocs ? questionnaireUrl(c.questionnaireLink, c.id) : "#"} target="_blank" className={`block rounded-lg border-2 border-slate-300 px-3 py-2 text-sm font-semibold ${clientReadyForDocs ? "" : "pointer-events-none opacity-50"}`}>Fill Question Form</a>
                 </div>
                 {!clientReadyForDocs ? <p className="mt-2 text-xs text-amber-700">Complete retainer e-sign and Interac payment to unlock actions.</p> : null}
+                {clientReadyForDocs && openDocRequests.length > 0 ? (
+                  <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3">
+                    <p className="text-sm font-semibold text-amber-900">Additional documents requested by processing team</p>
+                    <div className="mt-2 space-y-2">
+                      {openDocRequests.map((req) => (
+                        <div key={req.id} className="rounded border border-amber-200 bg-white p-2">
+                          <p className="text-xs font-semibold text-slate-800">{req.title}</p>
+                          {req.details ? <p className="mt-1 text-xs text-slate-600">{req.details}</p> : null}
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <input
+                              type="file"
+                              onChange={(e) =>
+                                setRequestedUploadFiles((prev) => ({
+                                  ...prev,
+                                  [req.id]: e.target.files?.[0] ?? null
+                                }))
+                              }
+                              className="text-xs"
+                            />
+                            <button
+                              onClick={() => void uploadRequestedDocument(c.id, req)}
+                              className="rounded bg-slate-900 px-3 py-2 text-xs font-semibold text-white"
+                            >
+                              Upload Requested File
+                            </button>
+                          </div>
+                          {requestedUploadStatus[req.id] ? (
+                            <p className="mt-1 text-xs text-slate-600">{requestedUploadStatus[req.id]}</p>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
                 {clientReadyForDocs ? (
                   <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
                     <p className="text-sm font-semibold text-slate-800">{c.formType} Document Checklist</p>
@@ -1645,6 +1790,17 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
           <h3 className="font-semibold">Contact Us</h3>
           <p className="mt-1 text-sm text-slate-700">For payment assistance call at <span className="font-semibold">{paymentSupportPhone}</span>.</p>
           <p className="mt-1 text-sm text-slate-700">For case processing call at <span className="font-semibold">{processingSupportPhone}</span>.</p>
+          <a
+            href="https://www.franco.app"
+            target="_blank"
+            rel="noreferrer"
+            className="mt-3 inline-flex items-center gap-2 rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-xs text-slate-700"
+          >
+            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-[10px] font-bold text-white">
+              F
+            </span>
+            Want to learn French to smoothen your immigration journey? Visit franco.app
+          </a>
         </section>
       </main>
     );
@@ -1722,18 +1878,13 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
           </div>
 
           <div className="mt-4 border-t border-slate-200 pt-3">
-            <p className="mb-2 text-xs font-semibold uppercase text-slate-500">Quick New Case</p>
-            <input value={newClientName} onChange={(e) => setNewClientName(e.target.value)} className="mb-2 w-full rounded-lg border-2 border-slate-300 px-2 py-2 text-sm" placeholder="Client name" />
-            <select value={newFormType} onChange={(e) => setNewFormType(e.target.value)} className="mb-2 w-full rounded-lg border-2 border-slate-300 px-2 py-2 text-sm">
-              {APPLICATION_TYPES.map((appType) => (
-                <option key={appType} value={appType}>
-                  {appType}
-                </option>
-              ))}
-            </select>
-            <button onClick={() => void createCase()} className="w-full rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white">
-              <PlusCircle size={14} className="inline mr-1" /> Create
-            </button>
+            <p className="mb-2 text-xs font-semibold uppercase text-slate-500">Search Case</p>
+            <input
+              value={caseSearch}
+              onChange={(e) => setCaseSearch(e.target.value)}
+              className="w-full rounded-lg border-2 border-slate-300 px-2 py-2 text-sm"
+              placeholder="Search by case id, client, or application"
+            />
           </div>
         </aside>
 
@@ -1744,7 +1895,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                 <article className="rounded-xl border-2 border-slate-300 bg-white p-4">
                   <p className="text-xs text-slate-500">Urgent</p>
                   <p className="mt-1 text-2xl font-bold text-slate-900">
-                    {tasks.filter((t) => t.status === "pending" && t.priority === "high").length}
+                    {visibleCases.filter((c) => Boolean(c.isUrgent)).length}
                   </p>
                 </article>
                 <article className="rounded-xl border-2 border-slate-300 bg-white p-4">
@@ -1781,7 +1932,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                   />
                   <div className="mt-2 flex flex-wrap gap-2">
                     <button onClick={() => setScreen("cases")} className="rounded border border-slate-300 px-3 py-2 text-xs font-semibold">Open Cases</button>
-                    <button onClick={() => void createCase()} className="rounded bg-emerald-600 px-3 py-2 text-xs font-semibold text-white">Create Case</button>
+                    <button onClick={() => setScreen("communications")} className="rounded bg-emerald-600 px-3 py-2 text-xs font-semibold text-white">Create Case</button>
                     <button onClick={() => void syncLeadsFromSheet()} className="rounded bg-slate-900 px-3 py-2 text-xs font-semibold text-white">Sync Leads</button>
                   </div>
                   <p className="mt-2 text-xs text-slate-500">System drives stages automatically from payment, intake and task completion.</p>
@@ -1823,7 +1974,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
               {caseBoardView === "home" ? (
                 <>
                   <h3 className="text-base font-semibold">Case Screens</h3>
-                  <div className="mt-3 grid gap-3 md:grid-cols-3">
+                  <div className="mt-3 grid gap-3 md:grid-cols-4">
                     <button onClick={() => setCaseBoardView("new_cases")} className="rounded-xl border-2 border-slate-300 bg-white p-4 text-left">
                       <p className="text-xs text-slate-500">Queue</p>
                       <p className="mt-1 text-lg font-semibold">New Cases</p>
@@ -1839,6 +1990,11 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                       <p className="mt-1 text-lg font-semibold">All Cases</p>
                       <p className="text-xs text-slate-500">{visibleCases.length} case(s)</p>
                     </button>
+                    <button onClick={() => setCaseBoardView("urgent_cases")} className="rounded-xl border-2 border-red-300 bg-red-50 p-4 text-left">
+                      <p className="text-xs text-red-700">Queue</p>
+                      <p className="mt-1 text-lg font-semibold text-red-800">Urgent Cases</p>
+                      <p className="text-xs text-red-700">{visibleCases.filter((c) => Boolean(c.isUrgent)).length} case(s)</p>
+                    </button>
                   </div>
                 </>
               ) : (
@@ -1849,6 +2005,8 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                         ? "New Cases"
                         : caseBoardView === "under_review_cases"
                           ? "Under Review Cases"
+                          : caseBoardView === "urgent_cases"
+                            ? "Urgent Cases"
                           : "All Cases"}
                     </h3>
                     <button onClick={() => setCaseBoardView("home")} className="rounded border border-slate-300 px-3 py-1 text-xs font-semibold">
@@ -1971,6 +2129,46 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
 
                     {caseDetailTab === "documents" ? (
                       <div className="mt-3 space-y-2 text-xs">
+                        <div className="rounded border border-slate-300 bg-slate-50 p-2">
+                          <p className="font-semibold">Request More Documents</p>
+                          <div className="mt-2 grid gap-2 md:grid-cols-2">
+                            <input
+                              value={staffDocRequestTitle}
+                              onChange={(e) => setStaffDocRequestTitle(e.target.value)}
+                              className="rounded border border-slate-300 px-2 py-2"
+                              placeholder="Document name (e.g. Updated bank statement)"
+                            />
+                            <input
+                              value={staffDocRequestDetails}
+                              onChange={(e) => setStaffDocRequestDetails(e.target.value)}
+                              className="rounded border border-slate-300 px-2 py-2"
+                              placeholder="Details/instructions for client"
+                            />
+                          </div>
+                          <button
+                            onClick={() => void createStaffDocRequest()}
+                            className="mt-2 rounded bg-slate-900 px-3 py-2 text-xs font-semibold text-white"
+                          >
+                            Send Request to Client Portal
+                          </button>
+                          {staffDocRequestStatus ? <p className="mt-1 text-slate-700">{staffDocRequestStatus}</p> : null}
+                        </div>
+                        <div className="rounded border border-slate-200 p-2">
+                          <p className="font-semibold">Requested Documents Status</p>
+                          <div className="mt-2 space-y-2">
+                            {docRequests.map((r) => (
+                              <div key={r.id} className="rounded border border-slate-200 p-2">
+                                <p className="font-semibold">{r.title}</p>
+                                {r.details ? <p className="text-slate-600">{r.details}</p> : null}
+                                <p className="text-slate-500">
+                                  {r.status} • requested by {r.requestedBy}
+                                  {r.fulfilledAt ? ` • fulfilled ${new Date(r.fulfilledAt).toLocaleString()}` : ""}
+                                </p>
+                              </div>
+                            ))}
+                            {docRequests.length === 0 ? <p className="text-slate-500">No extra requests yet.</p> : null}
+                          </div>
+                        </div>
                         {documents.map((d) => (
                           <div key={d.id} className="rounded border border-slate-200 p-2">
                             <p className="font-semibold">{d.name}</p>
@@ -2155,6 +2353,24 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                       className="rounded border border-slate-300 px-2 py-2 text-xs"
                     />
                   </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-3">
+                    <label className="inline-flex items-center gap-2 text-xs text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={commUrgent}
+                        onChange={(e) => setCommUrgent(e.target.checked)}
+                      />
+                      Urgent basis
+                    </label>
+                    {commUrgent ? (
+                      <input
+                        value={commUrgentDays}
+                        onChange={(e) => setCommUrgentDays(e.target.value)}
+                        placeholder="Deadline days"
+                        className="w-36 rounded border border-slate-300 px-2 py-2 text-xs"
+                      />
+                    ) : null}
+                  </div>
                   <button onClick={() => void createCaseFromCommunications()} className="mt-2 rounded bg-slate-900 px-3 py-2 text-xs font-semibold text-white">
                     Create Case
                   </button>
@@ -2213,6 +2429,83 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                   <p className="mt-1 text-xs text-slate-500">Create or select a case to generate the invite link.</p>
                 )}
               </div>
+            </section>
+          ) : null}
+
+          {screen === "accounting" ? (
+            <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
+              <h3 className="text-base font-semibold">Accounting</h3>
+              <p className="mt-1 text-xs text-slate-500">Track paid amount and pending fees for each client.</p>
+              <input
+                value={accountingSearch}
+                onChange={(e) => setAccountingSearch(e.target.value)}
+                className="mt-3 w-full rounded border border-slate-300 px-2 py-2 text-xs"
+                placeholder="Search by case id, client, or application"
+              />
+              <div className="mt-3 space-y-2">
+                {visibleCases
+                  .filter((c) => {
+                    const q = accountingSearch.trim().toLowerCase();
+                    if (!q) return true;
+                    return `${c.id} ${c.client} ${c.formType}`.toLowerCase().includes(q);
+                  })
+                  .map((c) => {
+                    const total = Number(c.servicePackage.retainerAmount || 0);
+                    const paid = Number(c.amountPaid || 0);
+                    const remaining = Math.max(0, total - paid);
+                    return (
+                      <article key={c.id} className="rounded border border-slate-200 p-3 text-xs">
+                        <div className="grid gap-2 md:grid-cols-6">
+                          <div>
+                            <p className="text-slate-500">Case</p>
+                            <p className="font-semibold">{c.id}</p>
+                          </div>
+                          <div>
+                            <p className="text-slate-500">Client</p>
+                            <p className="font-semibold">{c.client}</p>
+                          </div>
+                          <div>
+                            <p className="text-slate-500">Application</p>
+                            <p className="font-semibold">{c.formType}</p>
+                          </div>
+                          <div>
+                            <p className="text-slate-500">Total Fee</p>
+                            <p className="font-semibold">${total}</p>
+                          </div>
+                          <div>
+                            <p className="text-slate-500">Paid</p>
+                            <p className="font-semibold">${paid}</p>
+                          </div>
+                          <div>
+                            <p className="text-slate-500">Pending</p>
+                            <p className="font-semibold">${remaining}</p>
+                          </div>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <input
+                            value={accountingAmount[c.id] || ""}
+                            onChange={(e) =>
+                              setAccountingAmount((prev) => ({
+                                ...prev,
+                                [c.id]: e.target.value
+                              }))
+                            }
+                            className="w-44 rounded border border-slate-300 px-2 py-2 text-xs"
+                            placeholder="Amount received now"
+                          />
+                          <button
+                            onClick={() => void recordAccountingPayment(c.id)}
+                            className="rounded bg-emerald-600 px-3 py-2 text-xs font-semibold text-white"
+                          >
+                            Record Payment
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                {visibleCases.length === 0 ? <p className="text-xs text-slate-500">No cases found.</p> : null}
+              </div>
+              {accountingStatus ? <p className="mt-2 text-xs text-slate-700">{accountingStatus}</p> : null}
             </section>
           ) : null}
 
