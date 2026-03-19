@@ -182,6 +182,10 @@ type SimpleShellProps = {
 export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const fixedInteracRecipient =
     process.env.NEXT_PUBLIC_INTERAC_RECIPIENT || "payments@newtonimmigration.ca";
+  const normalizeInteracInstructions = (value?: string) =>
+    (value || "Use your case number in message and upload proof.")
+      .replace(/payments@newtonimmigration\.com/gi, fixedInteracRecipient)
+      .replace(/payments@newtonimmigration\.ca/gi, fixedInteracRecipient);
   const [screen, setScreen] = useState<Screen>("dashboard");
   const [caseBoardView, setCaseBoardView] = useState<CaseBoardView>("home");
   const [clientScreen, setClientScreen] = useState<ClientScreen>("retainer");
@@ -238,6 +242,9 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [immRunStatus, setImmRunStatus] = useState("");
   const [clientUploadFile, setClientUploadFile] = useState<File | null>(null);
   const [clientUploadStatus, setClientUploadStatus] = useState("");
+  const [clientProfileOpen, setClientProfileOpen] = useState(false);
+  const [clientWorkOpen, setClientWorkOpen] = useState(false);
+  const [interacCopyStatus, setInteracCopyStatus] = useState("");
   const [checklistFiles, setChecklistFiles] = useState<Record<string, File | null>>({});
   const [checklistStatus, setChecklistStatus] = useState<Record<string, string>>({});
   const [internalIntake, setInternalIntake] = useState<InternalExtractionIntake>({});
@@ -480,7 +487,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     if (!selectedCase) return;
     setSetupFormType(selectedCase.formType || "");
     setSetupRetainerAmount(String(selectedCase.servicePackage.retainerAmount ?? ""));
-    setSetupInteracRecipient(selectedCase.interacRecipient || fixedInteracRecipient);
+    setSetupInteracRecipient(fixedInteracRecipient);
     setSetupInteracInstructions(selectedCase.interacInstructions || "");
     setRetainerConfirm(false);
     setSetupStatus("");
@@ -1214,6 +1221,22 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     setChecklistStatus((prev) => ({ ...prev, [item.key]: "Uploaded." }));
   }
 
+  async function copyInteracDetails(caseItem: CaseItem) {
+    const amount = Number(caseItem.servicePackage.retainerAmount || 0);
+    const text = [
+      `Interac recipient: ${fixedInteracRecipient}`,
+      `Amount: $${amount} CAD`,
+      `Reference message: ${caseItem.id}`,
+      normalizeInteracInstructions(caseItem.interacInstructions)
+    ].join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      setInteracCopyStatus("Payment details copied.");
+    } catch {
+      setInteracCopyStatus("Could not copy automatically. Please copy manually.");
+    }
+  }
+
   const caseCounts = useMemo(
     () => ({
       all: visibleCases.length,
@@ -1283,48 +1306,40 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       if (requiredItems.length === 0) return documents.length > 0;
       return requiredItems.every((item) => isChecklistDocUploaded(item));
     })();
-    const contactPhone = "6049024500";
+    const paymentSupportPhone = "6046535031";
+    const processingSupportPhone = "6049024500";
     return (
       <main className="mx-auto flex max-w-5xl flex-col gap-5 px-4 py-6 md:px-6 md:py-8">
         <Header {...headerProps} />
 
-        <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
+        <section className="rounded-2xl border-2 border-slate-500 bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-slate-500">Client Portal</p>
               <h2 className="text-xl font-semibold text-slate-900">{sessionUser.name}</h2>
               <p className="text-xs text-slate-500">{company ? `/portal/${company.slug}` : ""}</p>
             </div>
-            <button onClick={logout} className="rounded-lg border-2 border-slate-300 bg-white px-3 py-2 text-sm font-semibold">
-              <LogOut size={14} className="inline mr-1" /> Logout
-            </button>
           </div>
         </section>
 
         {c ? (
           <>
-            <section className="rounded-2xl border-2 border-blue-300 bg-blue-50 p-4 text-blue-900">
-              <p className="text-xs font-semibold uppercase tracking-wide">Notification from {companyName}</p>
-              {c.retainerSentAt ? (
-                <p className="mt-1 text-sm">
-                  Your retainer is ready for <span className="font-semibold">{c.formType}</span>. Amount:{" "}
-                  <span className="font-semibold">${c.servicePackage.retainerAmount} CAD</span>. Please sign retainer,
-                  then complete Interac payment.
-                </p>
-              ) : (
-                <p className="mt-1 text-sm">Your team is preparing your retainer. You will see it here once sent.</p>
-              )}
-            </section>
-
-            <section className="rounded-2xl border-2 border-slate-300 bg-white p-3">
+            <section className="rounded-2xl border-2 border-slate-500 bg-white p-3 shadow-sm">
               <div className="grid gap-2 sm:grid-cols-4">
                 <button onClick={() => setClientScreen("overview")} className={`rounded-lg border-2 px-3 py-2 text-sm font-semibold ${clientScreen !== "chat" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-700"}`}>Tasks</button>
                 <button onClick={() => setClientScreen("chat")} className={`rounded-lg border-2 px-3 py-2 text-sm font-semibold ${clientScreen === "chat" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-700"}`}>Chat</button>
               </div>
             </section>
 
-            <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
-              <h3 className="font-semibold">Profile</h3>
+            <section className="rounded-2xl border-2 border-slate-500 bg-white p-4 shadow-sm">
+              <button
+                onClick={() => setClientProfileOpen((prev) => !prev)}
+                className="flex w-full items-center justify-between rounded-lg border-2 border-slate-700 bg-slate-50 px-3 py-2 text-left text-sm font-semibold"
+              >
+                <span>Profile</span>
+                <span>{clientProfileOpen ? "Hide" : "Show"}</span>
+              </button>
+              {clientProfileOpen ? (
               <div className="mt-2 grid gap-2 md:grid-cols-4 text-sm">
                 <article className="rounded-lg border border-slate-200 p-2">
                   <p className="text-xs text-slate-500">Case</p>
@@ -1349,6 +1364,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                   </p>
                 </article>
               </div>
+              ) : null}
             </section>
 
             {clientScreen === "retainer" ? (
@@ -1412,7 +1428,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
             ) : null}
 
             {clientScreen === "payment" ? (
-              <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
+              <section className="rounded-2xl border-2 border-slate-500 bg-white p-4 shadow-sm">
                 <button onClick={() => setClientScreen("overview")} className="mb-2 rounded border border-slate-300 px-2 py-1 text-xs font-semibold">Back to Tasks</button>
                 <h3 className="font-semibold">Interac Payment</h3>
                 {!c.retainerSigned ? (
@@ -1428,21 +1444,28 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                     </p>
                     <div className="rounded border border-slate-200 bg-slate-50 p-3 text-sm">
                       <p>
-                        Send Interac to:{" "}
-                        <span className="font-semibold">{c.interacRecipient || "Team will provide recipient"}</span>
+                        Send Interac to: <span className="font-semibold">{fixedInteracRecipient}</span>
                       </p>
                       <p className="mt-1">
                         Reference message: <span className="font-semibold">{c.id}</span>
                       </p>
-                      <p className="mt-1">{c.interacInstructions || "Use your case number in message and upload proof."}</p>
+                      <p className="mt-1">{normalizeInteracInstructions(c.interacInstructions)}</p>
                     </div>
                     <a
                       href="https://www.interac.ca/en/consumers/products/interac-e-transfer/"
                       target="_blank"
                       className="inline-block rounded border border-slate-300 px-3 py-2 text-xs font-semibold"
                     >
-                      Open Bank / Interac
+                      Open Bank
                     </a>
+                    <button
+                      onClick={() => void copyInteracDetails(c)}
+                      className="ml-2 inline-block rounded border border-slate-300 px-3 py-2 text-xs font-semibold"
+                    >
+                      Copy Payment Details
+                    </button>
+                    {interacCopyStatus ? <p className="text-xs text-slate-600">{interacCopyStatus}</p> : null}
+                    <p className="text-xs text-slate-500">Your bank app cannot be prefilled directly. Use Copy Payment Details, then paste in your bank transfer screen.</p>
                     <p className="text-xs text-slate-500">After payment, {companyName} team will verify and unlock documents/forms.</p>
                   </div>
                 )}
@@ -1453,7 +1476,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
               <>
                 <section className="grid gap-3 md:grid-cols-2">
                   {!c.retainerSigned ? (
-                    <button onClick={() => setClientScreen("retainer")} className="rounded-xl border-2 border-slate-300 bg-white p-4 text-left">
+                    <button onClick={() => setClientScreen("retainer")} className="rounded-xl border-2 border-slate-500 bg-white p-4 text-left shadow-sm">
                       <p className="text-xs text-slate-500">Task</p>
                       <p className="mt-1 text-lg font-semibold">Sign Retainer</p>
                       <p className="text-xs text-slate-500">Pending</p>
@@ -1461,31 +1484,44 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                     </button>
                   ) : null}
                   {c.paymentStatus !== "paid" ? (
-                    <button onClick={() => setClientScreen("payment")} className="rounded-xl border-2 border-slate-300 bg-white p-4 text-left">
+                    <button onClick={() => setClientScreen("payment")} className="rounded-xl border-2 border-slate-500 bg-white p-4 text-left shadow-sm">
                       <p className="text-xs text-slate-500">Task</p>
                       <p className="mt-1 text-lg font-semibold">Complete Payment</p>
                       <p className="text-xs text-slate-500">Pending</p>
                       <p className="mt-2 text-xs font-semibold">[ ] To Do</p>
                     </button>
                   ) : null}
-                  <button onClick={() => setClientScreen("documents")} className="rounded-xl border-2 border-slate-300 bg-white p-4 text-left">
-                    <p className="text-xs text-slate-500">Task</p>
-                    <p className="mt-1 text-lg font-semibold">Upload Documents</p>
-                    <p className="text-xs text-slate-500">{docsChecklistComplete ? "Completed" : "Pending"}</p>
-                    <p className="mt-2 text-xs font-semibold">{docsChecklistComplete ? "[✓] Done" : "[ ] To Do"}</p>
-                  </button>
-                  <button onClick={() => setClientScreen("questions")} className="rounded-xl border-2 border-slate-300 bg-white p-4 text-left">
-                    <p className="text-xs text-slate-500">Task</p>
-                    <p className="mt-1 text-lg font-semibold">Fill Questions</p>
-                    <p className="text-xs text-slate-500">{clientIntakeDone ? "Completed" : "Pending"}</p>
-                    <p className="mt-2 text-xs font-semibold">{clientIntakeDone ? "[✓] Done" : "[ ] To Do"}</p>
-                  </button>
+                  <article className="rounded-xl border-2 border-slate-500 bg-white p-4 text-left shadow-sm">
+                    <button
+                      onClick={() => setClientWorkOpen((prev) => !prev)}
+                      className="flex w-full items-center justify-between text-left"
+                    >
+                      <div>
+                        <p className="text-xs text-slate-500">Workflow</p>
+                        <p className="mt-1 text-lg font-semibold">Questions and Documents</p>
+                        <p className="text-xs text-slate-500">
+                          Questions: {clientIntakeDone ? "Completed" : "Pending"} | Documents: {docsChecklistComplete ? "Completed" : "Pending"}
+                        </p>
+                      </div>
+                      <span className="text-xs font-semibold text-slate-700">{clientWorkOpen ? "Hide" : "Open"}</span>
+                    </button>
+                    {clientWorkOpen ? (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button onClick={() => setClientScreen("questions")} className="rounded border border-slate-400 px-3 py-2 text-xs font-semibold">
+                          Open Questions
+                        </button>
+                        <button onClick={() => setClientScreen("documents")} className="rounded border border-slate-400 px-3 py-2 text-xs font-semibold">
+                          Open Documents
+                        </button>
+                      </div>
+                    ) : null}
+                  </article>
                 </section>
               </>
             ) : null}
 
             {clientScreen === "questions" ? (
-              <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
+              <section className="rounded-2xl border-2 border-slate-500 bg-white p-4 shadow-sm">
                 <button onClick={() => setClientScreen("overview")} className="mb-2 rounded border border-slate-300 px-2 py-1 text-xs font-semibold">Back to Tasks</button>
                 <h3 className="font-semibold">Questions</h3>
                 <p className="mt-2 text-sm text-slate-700">Complete your questionnaire. System marks this task done automatically when required fields are filled.</p>
@@ -1501,7 +1537,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
             ) : null}
 
             {clientScreen === "documents" ? (
-              <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
+              <section className="rounded-2xl border-2 border-slate-500 bg-white p-4 shadow-sm">
                 <button onClick={() => setClientScreen("overview")} className="mb-2 rounded border border-slate-300 px-2 py-1 text-xs font-semibold">Back to Tasks</button>
                 <h3 className="font-semibold">Documents</h3>
                 <div className="mt-3 space-y-2">
@@ -1584,8 +1620,9 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
             ) : null}
 
             {clientScreen === "chat" ? (
-              <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
+              <section className="rounded-2xl border-2 border-slate-500 bg-white p-4 shadow-sm">
                 <h3 className="font-semibold">Chat</h3>
+                <p className="mt-1 text-xs text-slate-500">All messages are saved to your case and visible to Newton team.</p>
                 <div className="mt-3 max-h-60 space-y-2 overflow-auto rounded border border-slate-200 p-2 text-sm">
                   {messages.map((m) => (
                     <div key={m.id} className="rounded bg-slate-50 p-2">
@@ -1604,9 +1641,10 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
             ) : null}
           </>
         ) : null}
-        <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
+        <section className="rounded-2xl border-2 border-slate-500 bg-white p-4 shadow-sm">
           <h3 className="font-semibold">Contact Us</h3>
-          <p className="mt-1 text-sm text-slate-700">For assistance call at <span className="font-semibold">{contactPhone}</span>.</p>
+          <p className="mt-1 text-sm text-slate-700">For payment assistance call at <span className="font-semibold">{paymentSupportPhone}</span>.</p>
+          <p className="mt-1 text-sm text-slate-700">For case processing call at <span className="font-semibold">{processingSupportPhone}</span>.</p>
         </section>
       </main>
     );
