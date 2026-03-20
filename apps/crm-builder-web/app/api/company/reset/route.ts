@@ -8,6 +8,10 @@ export async function POST(request: NextRequest) {
   if (user.userType !== "staff" || user.role !== "Admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  const allowDataDelete = String(process.env.ALLOW_DATA_DELETE || "").toLowerCase() === "true";
+  if (!allowDataDelete) {
+    return NextResponse.json({ error: "Data deletion is disabled in production." }, { status: 403 });
+  }
 
   const body = await request.json().catch(() => ({}));
   const clientName = String(body?.clientName ?? "").trim() || "Nirmaljeet Kaur";
