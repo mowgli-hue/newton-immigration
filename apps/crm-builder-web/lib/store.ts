@@ -1025,8 +1025,12 @@ export async function recordCasePayment(companyId: string, id: string, amount: n
   const total = Number(currentPackage.retainerAmount || 0);
   const paidNow = Number.isFinite(Number(amount)) ? Math.max(0, Number(amount)) : 0;
   const prevPaid = Number(current.amountPaid || 0);
-  const nextPaid = Math.max(0, Math.min(total, prevPaid + paidNow));
-  const remaining = Math.max(0, total - nextPaid);
+  // If total fee is not configured yet, still record payment and treat remaining as 0.
+  // This prevents "payment not recording" for legacy/incomplete cases.
+  const nextPaid =
+    total > 0 ? Math.max(0, Math.min(total, prevPaid + paidNow)) : Math.max(0, prevPaid + paidNow);
+  const remaining = total > 0 ? Math.max(0, total - nextPaid) : 0;
+  const nextTotal = total > 0 ? total : nextPaid;
 
   store.cases[idx] = {
     ...current,
@@ -1036,6 +1040,7 @@ export async function recordCasePayment(companyId: string, id: string, amount: n
     paymentPaidAt: remaining <= 0 ? current.paymentPaidAt ?? new Date().toISOString() : current.paymentPaidAt,
     servicePackage: {
       ...currentPackage,
+      retainerAmount: nextTotal,
       balanceAmount: remaining
     }
   };
