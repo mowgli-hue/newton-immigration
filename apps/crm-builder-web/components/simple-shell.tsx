@@ -2510,7 +2510,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                   })
                   .map((c) => {
                     const total = Number(c.servicePackage.retainerAmount || 0);
-                    const paid = Number(c.amountPaid || 0);
+                    const paid = Number((c as CaseItem & { amountPaid?: number }).amountPaid || 0);
                     const remaining = Math.max(0, total - paid);
                     return (
                       <article key={c.id} className="rounded border border-slate-200 p-3 text-xs">
