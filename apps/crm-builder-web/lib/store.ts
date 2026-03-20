@@ -559,6 +559,69 @@ export async function resetCompanyDataToSingleCase(input: {
   return freshCase;
 }
 
+export async function pruneCompanyDataToCaseIds(input: {
+  companyId: string;
+  keepCaseIds: string[];
+  keepStaffSessions?: boolean;
+}): Promise<{ keptCases: CaseItem[]; deletedCount: number }> {
+  const store = await readStore();
+  const keepSet = new Set(
+    (input.keepCaseIds || [])
+      .map((id) => String(id || "").trim().toUpperCase())
+      .filter((id) => /^CASE-\d+$/.test(id))
+  );
+  if (keepSet.size === 0) {
+    throw new Error("At least one valid case ID is required");
+  }
+
+  const allCompanyCases = store.cases.filter((c) => c.companyId === input.companyId);
+  const keptCases = allCompanyCases.filter((c) => keepSet.has(String(c.id).toUpperCase()));
+  if (keptCases.length === 0) {
+    throw new Error("None of the requested case IDs were found");
+  }
+
+  const keepIds = new Set(keptCases.map((c) => c.id));
+  const keepSessions = input.keepStaffSessions !== false;
+  const staffUserIds = new Set(
+    store.users.filter((u) => u.companyId === input.companyId && u.userType === "staff").map((u) => u.id)
+  );
+
+  const beforeCount = allCompanyCases.length;
+
+  store.cases = [
+    ...store.cases.filter((c) => c.companyId !== input.companyId),
+    ...keptCases
+  ];
+  store.messages = store.messages.filter(
+    (m) => m.companyId !== input.companyId || keepIds.has(m.caseId)
+  );
+  store.documents = store.documents.filter(
+    (d) => d.companyId !== input.companyId || keepIds.has(d.caseId)
+  );
+  store.tasks = store.tasks.filter(
+    (t) => t.companyId !== input.companyId || keepIds.has(t.caseId)
+  );
+  store.invites = store.invites.filter(
+    (i) => i.companyId !== input.companyId || keepIds.has(i.caseId)
+  );
+  store.users = store.users.filter((u) => {
+    if (u.companyId !== input.companyId) return true;
+    if (u.userType === "staff") return true;
+    if (!u.caseId) return false;
+    return keepIds.has(u.caseId);
+  });
+  store.notifications = store.notifications.filter((n) => n.companyId !== input.companyId);
+  store.sessions = keepSessions
+    ? store.sessions.filter((s) => s.companyId !== input.companyId || staffUserIds.has(s.userId))
+    : store.sessions.filter((s) => s.companyId !== input.companyId);
+
+  await writeStore(store);
+  return {
+    keptCases,
+    deletedCount: Math.max(0, beforeCount - keptCases.length)
+  };
+}
+
 function inferCaseStatusFromStage(stage: Stage): CaseStatus {
   if (stage === "Lead") return "lead";
   if (stage === "Under Review") return "under_review";

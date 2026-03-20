@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
-import { findCompanyById, resetCompanyDataToSingleCase, updateCompanyBranding } from "@/lib/store";
+import {
+  findCompanyById,
+  pruneCompanyDataToCaseIds,
+  resetCompanyDataToSingleCase,
+  updateCompanyBranding
+} from "@/lib/store";
 
 export async function GET(request: NextRequest) {
   const user = await getCurrentUserFromRequest(request);
@@ -19,6 +24,29 @@ export async function PATCH(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => ({}));
+
+  if (Boolean(body?.pruneCases)) {
+    const confirmText = String(body?.confirmText ?? "").trim().toUpperCase();
+    if (confirmText !== "PRUNE") {
+      return NextResponse.json(
+        { error: 'Set "confirmText" to "PRUNE" to confirm deleting other case records.' },
+        { status: 400 }
+      );
+    }
+
+    const keepCaseIds = Array.isArray(body?.keepCaseIds) ? body.keepCaseIds.map(String) : [];
+    const result = await pruneCompanyDataToCaseIds({
+      companyId: user.companyId,
+      keepCaseIds,
+      keepStaffSessions: true
+    });
+    return NextResponse.json({
+      ok: true,
+      message: "Pruned company data to selected cases",
+      deletedCount: result.deletedCount,
+      keptCaseIds: result.keptCases.map((c) => c.id)
+    });
+  }
 
   if (Boolean(body?.resetCompanyData)) {
     const confirmText = String(body?.confirmText ?? "").trim().toUpperCase();
