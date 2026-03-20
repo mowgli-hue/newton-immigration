@@ -24,8 +24,15 @@ export async function PATCH(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => ({}));
+  const allowDataDelete = String(process.env.ALLOW_DATA_DELETE || "").toLowerCase() === "true";
 
   if (Boolean(body?.pruneCases)) {
+    if (!allowDataDelete) {
+      return NextResponse.json(
+        { error: "Data deletion is disabled in production." },
+        { status: 403 }
+      );
+    }
     const confirmText = String(body?.confirmText ?? "").trim().toUpperCase();
     if (confirmText !== "PRUNE") {
       return NextResponse.json(
@@ -54,6 +61,12 @@ export async function PATCH(request: NextRequest) {
   }
 
   if (Boolean(body?.resetCompanyData)) {
+    if (!allowDataDelete) {
+      return NextResponse.json(
+        { error: "Data deletion is disabled in production." },
+        { status: 403 }
+      );
+    }
     const confirmText = String(body?.confirmText ?? "").trim().toUpperCase();
     if (confirmText !== "RESET") {
       return NextResponse.json(

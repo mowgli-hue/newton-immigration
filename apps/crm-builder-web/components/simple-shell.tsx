@@ -193,6 +193,7 @@ type SimpleShellProps = {
 export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const fixedInteracRecipient =
     process.env.NEXT_PUBLIC_INTERAC_RECIPIENT || "payments@newtonimmigration.ca";
+  const allowDataDelete = process.env.NEXT_PUBLIC_ALLOW_DATA_DELETE === "true";
   const normalizeInteracInstructions = (value?: string) =>
     (value || "Use your case number in message and upload proof.")
       .replace(/payments@newtonimmigration\.com/gi, fixedInteracRecipient)
@@ -2414,7 +2415,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                   {commCreateStatus ? <p className="mt-1 text-xs text-slate-700">{commCreateStatus}</p> : null}
                 </article>
 
-                {sessionUser?.role === "Admin" && sessionUser?.userType === "staff" ? (
+                {allowDataDelete && sessionUser?.role === "Admin" && sessionUser?.userType === "staff" ? (
                   <article className="rounded-lg border-2 border-rose-300 bg-rose-50 p-3">
                     <p className="text-sm font-semibold text-rose-900">Admin Cleanup: Keep Only Real Cases</p>
                     <p className="mt-1 text-xs text-rose-800">

@@ -909,13 +909,19 @@ export async function updateCaseRetainerSetup(
   const idx = store.cases.findIndex((c) => c.companyId === companyId && c.id === id);
   if (idx === -1) return null;
   const current = store.cases[idx];
+  const currentPackage = current.servicePackage ?? {
+    name: "Standard Service",
+    retainerAmount: 0,
+    balanceAmount: Number(current.balanceAmount || 0),
+    milestones: []
+  };
 
   const nextServicePackage = {
-    ...current.servicePackage,
+    ...currentPackage,
     retainerAmount:
       patch.retainerAmount !== undefined && !Number.isNaN(patch.retainerAmount)
         ? Number(patch.retainerAmount)
-        : current.servicePackage.retainerAmount
+        : currentPackage.retainerAmount
   };
 
   const nextPaymentStatus = patch.paymentStatus ?? current.paymentStatus ?? "pending";
@@ -980,8 +986,14 @@ export async function updateCaseFinancials(
   const idx = store.cases.findIndex((c) => c.companyId === companyId && c.id === id);
   if (idx === -1) return null;
   const current = store.cases[idx];
+  const currentPackage = current.servicePackage ?? {
+    name: "Standard Service",
+    retainerAmount: 0,
+    balanceAmount: Number(current.balanceAmount || 0),
+    milestones: []
+  };
   const nextPackage = {
-    ...current.servicePackage,
+    ...currentPackage,
     ...patch
   };
   const paid = Number(current.amountPaid || 0);
@@ -1004,7 +1016,13 @@ export async function recordCasePayment(companyId: string, id: string, amount: n
   const idx = store.cases.findIndex((c) => c.companyId === companyId && c.id === id);
   if (idx === -1) return null;
   const current = store.cases[idx];
-  const total = Number(current.servicePackage.retainerAmount || 0);
+  const currentPackage = current.servicePackage ?? {
+    name: "Standard Service",
+    retainerAmount: 0,
+    balanceAmount: Number(current.balanceAmount || 0),
+    milestones: []
+  };
+  const total = Number(currentPackage.retainerAmount || 0);
   const paidNow = Number.isFinite(Number(amount)) ? Math.max(0, Number(amount)) : 0;
   const prevPaid = Number(current.amountPaid || 0);
   const nextPaid = Math.max(0, Math.min(total, prevPaid + paidNow));
@@ -1017,7 +1035,7 @@ export async function recordCasePayment(companyId: string, id: string, amount: n
     paymentStatus: remaining <= 0 ? "paid" : "pending",
     paymentPaidAt: remaining <= 0 ? current.paymentPaidAt ?? new Date().toISOString() : current.paymentPaidAt,
     servicePackage: {
-      ...current.servicePackage,
+      ...currentPackage,
       balanceAmount: remaining
     }
   };
@@ -1066,16 +1084,22 @@ export async function addCaseMilestone(
   const idx = store.cases.findIndex((c) => c.companyId === companyId && c.id === id);
   if (idx === -1) return null;
   const current = store.cases[idx];
+  const currentPackage = current.servicePackage ?? {
+    name: "Standard Service",
+    retainerAmount: 0,
+    balanceAmount: Number(current.balanceAmount || 0),
+    milestones: []
+  };
   const milestone = {
-    id: `MS-${current.servicePackage.milestones.length + 1}`,
+    id: `MS-${currentPackage.milestones.length + 1}`,
     title,
     done: false
   };
   store.cases[idx] = {
     ...current,
     servicePackage: {
-      ...current.servicePackage,
-      milestones: [...current.servicePackage.milestones, milestone]
+      ...currentPackage,
+      milestones: [...currentPackage.milestones, milestone]
     }
   };
   await writeStore(store);
@@ -1091,11 +1115,17 @@ export async function toggleMilestone(
   const idx = store.cases.findIndex((c) => c.companyId === companyId && c.id === id);
   if (idx === -1) return null;
   const current = store.cases[idx];
+  const currentPackage = current.servicePackage ?? {
+    name: "Standard Service",
+    retainerAmount: 0,
+    balanceAmount: Number(current.balanceAmount || 0),
+    milestones: []
+  };
   store.cases[idx] = {
     ...current,
     servicePackage: {
-      ...current.servicePackage,
-      milestones: current.servicePackage.milestones.map((m) =>
+      ...currentPackage,
+      milestones: currentPackage.milestones.map((m) =>
         m.id === milestoneId ? { ...m, done: !m.done } : m
       )
     }
@@ -1114,8 +1144,15 @@ export async function addInvoice(
   const idx = store.cases.findIndex((c) => c.companyId === companyId && c.id === id);
   if (idx === -1) return null;
   const current = store.cases[idx];
+  const currentPackage = current.servicePackage ?? {
+    name: "Standard Service",
+    retainerAmount: 0,
+    balanceAmount: Number(current.balanceAmount || 0),
+    milestones: []
+  };
+  const currentInvoices = current.invoices ?? [];
   const invoice = {
-    id: `INV-${1000 + current.invoices.length + 1}`,
+    id: `INV-${1000 + currentInvoices.length + 1}`,
     title,
     amount,
     status: "sent" as const,
@@ -1123,12 +1160,12 @@ export async function addInvoice(
   };
   store.cases[idx] = {
     ...current,
-    invoices: [...current.invoices, invoice],
+    invoices: [...currentInvoices, invoice],
     servicePackage: {
-      ...current.servicePackage,
-      balanceAmount: current.servicePackage.balanceAmount + amount
+      ...currentPackage,
+      balanceAmount: Number(currentPackage.balanceAmount || 0) + amount
     },
-    balanceAmount: current.balanceAmount + amount
+    balanceAmount: Number(current.balanceAmount || 0) + amount
   };
   await writeStore(store);
   return store.cases[idx];
