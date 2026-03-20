@@ -90,6 +90,8 @@ function migrateStore(raw: Partial<AppStore>): AppStore {
     leadPhone: c.leadPhone ?? undefined,
     leadEmail: c.leadEmail ?? undefined,
     sourceLeadKey: c.sourceLeadKey ?? undefined,
+    isUrgent: Boolean(c.isUrgent),
+    deadlineDate: c.deadlineDate ?? undefined,
     balanceAmount: c.balanceAmount ?? 0,
     retainerSigned: c.retainerSigned ?? false,
     retainerSentAt: c.retainerSentAt ?? undefined,
@@ -107,8 +109,15 @@ function migrateStore(raw: Partial<AppStore>): AppStore {
         : "Send Interac e-Transfer with case number."),
     paymentStatus: c.paymentStatus ?? (c.retainerSigned ? "paid" : "pending"),
     paymentPaidAt: c.paymentPaidAt ?? undefined,
+    amountPaid:
+      Number.isFinite(Number(c.amountPaid))
+        ? Number(c.amountPaid)
+        : c.paymentStatus === "paid"
+          ? Number(c.servicePackage?.retainerAmount || 0)
+          : 0,
     imm5710Automation: c.imm5710Automation ?? { status: "idle" },
     pgwpIntake: c.pgwpIntake ?? undefined,
+    docRequests: Array.isArray(c.docRequests) ? c.docRequests : [],
     retainerRecord: c.retainerRecord ?? undefined,
     servicePackage: c.servicePackage ?? {
       name: "Standard Service",
@@ -358,7 +367,15 @@ export async function resolveUserFromSession(token: string): Promise<AppUser | n
 
 export async function listCases(companyId: string): Promise<CaseItem[]> {
   const store = await readStore();
-  return store.cases.filter((c) => c.companyId === companyId);
+  const now = Date.now();
+  return store.cases
+    .filter((c) => c.companyId === companyId)
+    .map((c) => {
+      if (!c.deadlineDate) return c;
+      const diffMs = new Date(String(c.deadlineDate)).getTime() - now;
+      const dueInDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+      return { ...c, dueInDays: Number.isFinite(dueInDays) ? dueInDays : c.dueInDays };
+    });
 }
 
 export async function findCompanyById(companyId: string): Promise<Company | null> {
@@ -401,11 +418,19 @@ export async function createCase(input: {
   leadPhone?: string;
   leadEmail?: string;
   sourceLeadKey?: string;
+  isUrgent?: boolean;
+  dueInDays?: number;
 }): Promise<CaseItem> {
   const store = await readStore();
   const company = store.companies.find((c) => c.id === input.companyId);
   const companyCases = store.cases.filter((c) => c.companyId === input.companyId);
-  const nextId = `CASE-${1000 + companyCases.length + 1}`;
+  const highestCaseNumber = companyCases.reduce((max, c) => {
+    const parsed = Number(String(c.id || "").replace(/^CASE-/, ""));
+    return Number.isFinite(parsed) ? Math.max(max, parsed) : max;
+  }, 1000);
+  const nextId = `CASE-${highestCaseNumber + 1}`;
+  const dueInDays = Number.isFinite(Number(input.dueInDays)) && Number(input.dueInDays) > 0 ? Number(input.dueInDays) : 7;
+  const deadlineDate = new Date(Date.now() + dueInDays * 24 * 60 * 60 * 1000).toISOString();
   const item: CaseItem = {
     id: nextId,
     companyId: input.companyId,
@@ -416,10 +441,12 @@ export async function createCase(input: {
     leadEmail: input.leadEmail?.trim() || undefined,
     sourceLeadKey: input.sourceLeadKey?.trim() || undefined,
     formType: input.formType,
+    isUrgent: Boolean(input.isUrgent),
+    deadlineDate,
     owner: "N/A",
     reviewer: "N/A",
     stage: "Lead",
-    dueInDays: 7,
+    dueInDays,
     unreadClientMessages: 0,
     docsPending: 5,
     balanceAmount: 0,
@@ -435,8 +462,10 @@ export async function createCase(input: {
     interacInstructions: "",
     paymentStatus: "pending",
     paymentPaidAt: undefined,
+    amountPaid: 0,
     imm5710Automation: { status: "idle" },
     pgwpIntake: undefined,
+    docRequests: [],
     retainerRecord: undefined,
     servicePackage: {
       name: "Standard Service",
@@ -449,6 +478,85 @@ export async function createCase(input: {
   store.cases = [item, ...store.cases];
   await writeStore(store);
   return item;
+}
+
+export async function resetCompanyDataToSingleCase(input: {
+  companyId: string;
+  clientName: string;
+  caseNumber: number;
+  formType?: string;
+  keepStaffSessions?: boolean;
+}): Promise<CaseItem> {
+  const store = await readStore();
+  const company = store.companies.find((c) => c.id === input.companyId);
+  if (!company) {
+    throw new Error("Company not found");
+  }
+
+  const normalizedClient = String(input.clientName || "").trim();
+  if (!normalizedClient) {
+    throw new Error("Client name is required");
+  }
+  const caseNumber = Number(input.caseNumber);
+  if (!Number.isFinite(caseNumber) || caseNumber < 1000) {
+    throw new Error("Case number must be 1000 or greater");
+  }
+  const caseId = `CASE-${Math.floor(caseNumber)}`;
+  const formType = String(input.formType || "PGWP").trim() || "PGWP";
+  const keepSessions = input.keepStaffSessions !== false;
+
+  const staffUserIds = new Set(
+    store.users.filter((u) => u.companyId === input.companyId && u.userType === "staff").map((u) => u.id)
+  );
+
+  const freshCase: CaseItem = {
+    id: caseId,
+    companyId: input.companyId,
+    client: normalizedClient,
+    formType,
+    caseStatus: "lead",
+    aiStatus: "idle",
+    owner: "N/A",
+    reviewer: "N/A",
+    stage: "Lead",
+    dueInDays: 7,
+    isUrgent: false,
+    deadlineDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    unreadClientMessages: 0,
+    docsPending: 0,
+    balanceAmount: 0,
+    retainerSigned: false,
+    docsUploadLink: company.branding.driveRootLink || "",
+    questionnaireLink: "",
+    paymentMethod: "interac",
+    interacRecipient: process.env.NEXT_PUBLIC_INTERAC_RECIPIENT || "newtonimmigration@gmail.com",
+    interacInstructions: "Send Interac e-Transfer with case number.",
+    paymentStatus: "pending",
+    amountPaid: 0,
+    imm5710Automation: { status: "idle" },
+    docRequests: [],
+    servicePackage: {
+      name: "Standard Service",
+      retainerAmount: 0,
+      balanceAmount: 0,
+      milestones: []
+    },
+    invoices: []
+  };
+
+  store.cases = [freshCase, ...store.cases.filter((c) => c.companyId !== input.companyId)];
+  store.messages = store.messages.filter((m) => m.companyId !== input.companyId);
+  store.documents = store.documents.filter((d) => d.companyId !== input.companyId);
+  store.tasks = store.tasks.filter((t) => t.companyId !== input.companyId);
+  store.notifications = store.notifications.filter((n) => n.companyId !== input.companyId);
+  store.invites = store.invites.filter((i) => i.companyId !== input.companyId);
+  store.users = store.users.filter((u) => u.companyId !== input.companyId || u.userType === "staff");
+  store.sessions = keepSessions
+    ? store.sessions.filter((s) => s.companyId !== input.companyId || staffUserIds.has(s.userId))
+    : store.sessions.filter((s) => s.companyId !== input.companyId);
+
+  await writeStore(store);
+  return freshCase;
 }
 
 function inferCaseStatusFromStage(stage: Stage): CaseStatus {
@@ -749,6 +857,7 @@ export async function updateCaseRetainerSetup(
 
   const nextPaymentStatus = patch.paymentStatus ?? current.paymentStatus ?? "pending";
   const isSendingRetainer = Boolean(patch.sendRetainer);
+  const fullAmount = Number(nextServicePackage.retainerAmount || 0);
   store.cases[idx] = {
     ...current,
     formType: patch.formType !== undefined && patch.formType.trim() ? patch.formType.trim() : current.formType,
@@ -768,6 +877,18 @@ export async function updateCaseRetainerSetup(
         : nextPaymentStatus === "pending"
           ? undefined
           : current.paymentPaidAt,
+    amountPaid:
+      nextPaymentStatus === "paid"
+        ? fullAmount
+        : nextPaymentStatus === "pending" && isSendingRetainer
+          ? 0
+          : current.amountPaid ?? 0,
+    balanceAmount:
+      nextPaymentStatus === "paid"
+        ? 0
+        : nextPaymentStatus === "pending" && isSendingRetainer
+          ? fullAmount
+          : current.balanceAmount,
     stage: nextPaymentStatus === "paid" ? "Paid" : current.stage
   };
 
@@ -800,10 +921,42 @@ export async function updateCaseFinancials(
     ...current.servicePackage,
     ...patch
   };
+  const paid = Number(current.amountPaid || 0);
+  const total = Number(nextPackage.retainerAmount || 0);
+  const remaining = Math.max(0, total - paid);
   store.cases[idx] = {
     ...current,
-    servicePackage: nextPackage,
-    balanceAmount: nextPackage.balanceAmount
+    servicePackage: {
+      ...nextPackage,
+      balanceAmount: remaining
+    },
+    balanceAmount: remaining
+  };
+  await writeStore(store);
+  return store.cases[idx];
+}
+
+export async function recordCasePayment(companyId: string, id: string, amount: number): Promise<CaseItem | null> {
+  const store = await readStore();
+  const idx = store.cases.findIndex((c) => c.companyId === companyId && c.id === id);
+  if (idx === -1) return null;
+  const current = store.cases[idx];
+  const total = Number(current.servicePackage.retainerAmount || 0);
+  const paidNow = Number.isFinite(Number(amount)) ? Math.max(0, Number(amount)) : 0;
+  const prevPaid = Number(current.amountPaid || 0);
+  const nextPaid = Math.max(0, Math.min(total, prevPaid + paidNow));
+  const remaining = Math.max(0, total - nextPaid);
+
+  store.cases[idx] = {
+    ...current,
+    amountPaid: nextPaid,
+    balanceAmount: remaining,
+    paymentStatus: remaining <= 0 ? "paid" : "pending",
+    paymentPaidAt: remaining <= 0 ? current.paymentPaidAt ?? new Date().toISOString() : current.paymentPaidAt,
+    servicePackage: {
+      ...current.servicePackage,
+      balanceAmount: remaining
+    }
   };
   await writeStore(store);
   return store.cases[idx];
@@ -1020,6 +1173,70 @@ export async function addDocument(input: {
   return doc;
 }
 
+export async function listCaseDocRequests(companyId: string, caseId: string): Promise<NonNullable<CaseItem["docRequests"]>> {
+  const store = await readStore();
+  const found = store.cases.find((c) => c.companyId === companyId && c.id === caseId);
+  if (!found) return [];
+  return (found.docRequests ?? []).slice().sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
+}
+
+export async function addCaseDocRequest(input: {
+  companyId: string;
+  caseId: string;
+  title: string;
+  details?: string;
+  requestedBy: string;
+}): Promise<CaseItem | null> {
+  const store = await readStore();
+  const idx = store.cases.findIndex((c) => c.companyId === input.companyId && c.id === input.caseId);
+  if (idx === -1) return null;
+  const current = store.cases[idx];
+  const request = {
+    id: `DRQ-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    title: input.title.trim(),
+    details: String(input.details || "").trim() || undefined,
+    status: "open" as const,
+    requestedBy: input.requestedBy,
+    requestedAt: new Date().toISOString()
+  };
+  store.cases[idx] = {
+    ...current,
+    docRequests: [request, ...(current.docRequests ?? [])]
+  };
+  await writeStore(store);
+  return store.cases[idx];
+}
+
+export async function fulfillCaseDocRequest(input: {
+  companyId: string;
+  caseId: string;
+  requestId: string;
+  fulfilledBy: string;
+  documentId?: string;
+}): Promise<CaseItem | null> {
+  const store = await readStore();
+  const idx = store.cases.findIndex((c) => c.companyId === input.companyId && c.id === input.caseId);
+  if (idx === -1) return null;
+  const current = store.cases[idx];
+  const nextRequests = (current.docRequests ?? []).map((req) =>
+    req.id === input.requestId
+      ? {
+          ...req,
+          status: "fulfilled" as const,
+          fulfilledAt: new Date().toISOString(),
+          fulfilledBy: input.fulfilledBy,
+          documentId: input.documentId ?? req.documentId
+        }
+      : req
+  );
+  store.cases[idx] = {
+    ...current,
+    docRequests: nextRequests
+  };
+  await writeStore(store);
+  return store.cases[idx];
+}
+
 export async function listTasks(companyId: string, caseId?: string): Promise<TaskItem[]> {
   const store = await readStore();
   return store.tasks
@@ -1101,9 +1318,28 @@ export async function updateTaskStatus(
 
 export async function listNotifications(companyId: string, userId: string): Promise<NotificationItem[]> {
   const store = await readStore();
-  return store.notifications
+  const saved = store.notifications
     .filter((n) => n.companyId === companyId && n.userId === userId)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const now = Date.now();
+  const urgent = store.cases
+    .filter((c) => c.companyId === companyId && c.isUrgent && c.deadlineDate)
+    .map((c) => {
+      const diffMs = new Date(String(c.deadlineDate)).getTime() - now;
+      const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+      const dueText = days < 0 ? `${Math.abs(days)} day(s) overdue` : `${days} day(s) left`;
+      return {
+        id: `URG-${c.id}-${days}`,
+        companyId,
+        userId,
+        type: "deadline" as const,
+        message: `Urgent case ${c.id} (${c.client}) deadline: ${dueText}.`,
+        read: false,
+        createdAt: new Date().toISOString()
+      } satisfies NotificationItem;
+    })
+    .filter((n) => !n.message.includes("NaN"));
+  return [...urgent, ...saved];
 }
 
 export async function markNotificationRead(companyId: string, userId: string, id: string): Promise<NotificationItem | null> {
