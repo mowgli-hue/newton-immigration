@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
-import { findCompanyById, updateCompanyBranding } from "@/lib/store";
+import { findCompanyById, resetCompanyDataToSingleCase, updateCompanyBranding } from "@/lib/store";
 
 export async function GET(request: NextRequest) {
   const user = await getCurrentUserFromRequest(request);
@@ -19,6 +19,31 @@ export async function PATCH(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => ({}));
+
+  if (Boolean(body?.resetCompanyData)) {
+    const confirmText = String(body?.confirmText ?? "").trim().toUpperCase();
+    if (confirmText !== "RESET") {
+      return NextResponse.json(
+        { error: 'Set "confirmText" to "RESET" to confirm deleting test records.' },
+        { status: 400 }
+      );
+    }
+
+    const freshCase = await resetCompanyDataToSingleCase({
+      companyId: user.companyId,
+      clientName: String(body?.clientName ?? "Nirmaljeet Kaur"),
+      caseNumber: Number(body?.caseNumber ?? 1006),
+      formType: String(body?.formType ?? "PGWP"),
+      keepStaffSessions: true
+    });
+
+    return NextResponse.json({
+      ok: true,
+      message: "Company data reset complete",
+      case: freshCase
+    });
+  }
+
   const updated = await updateCompanyBranding(user.companyId, {
     appName: body.appName,
     logoText: body.logoText,
