@@ -232,6 +232,8 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [commUrgentDays, setCommUrgentDays] = useState("5");
   const [commSearch, setCommSearch] = useState("");
   const [commPaymentStatus, setCommPaymentStatus] = useState("");
+  const [commPruneCaseIds, setCommPruneCaseIds] = useState("CASE-1006, CASE-1007");
+  const [commPruneStatus, setCommPruneStatus] = useState("");
   const [caseSearch, setCaseSearch] = useState("");
   const [accountingSearch, setAccountingSearch] = useState("");
   const [accountingAmount, setAccountingAmount] = useState<Record<string, string>>({});
@@ -614,6 +616,40 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     setCommPhone("");
     setCommUrgent(false);
     setCommUrgentDays("5");
+  }
+
+  async function pruneToRealCases() {
+    if (sessionUser?.role !== "Admin" || sessionUser?.userType !== "staff") {
+      setCommPruneStatus("Only Admin can run this action.");
+      return;
+    }
+    const keepCaseIds = commPruneCaseIds
+      .split(/[\n, ]+/g)
+      .map((s) => s.trim().toUpperCase())
+      .filter(Boolean);
+    if (keepCaseIds.length === 0) {
+      setCommPruneStatus("Enter at least one case ID, e.g. CASE-1006.");
+      return;
+    }
+
+    setCommPruneStatus("Pruning test cases...");
+    const res = await apiFetch("/company", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        pruneCases: true,
+        confirmText: "PRUNE",
+        keepCaseIds
+      })
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setCommPruneStatus(String(payload.error || "Could not prune cases."));
+      return;
+    }
+    const deletedCount = Number(payload.deletedCount || 0);
+    setCommPruneStatus(`Done. Removed ${deletedCount} non-selected case(s).`);
+    await loadSession();
   }
 
   async function sendMessage(mode: "human" | "ai") {
@@ -2376,6 +2412,28 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                   </button>
                   {commCreateStatus ? <p className="mt-1 text-xs text-slate-700">{commCreateStatus}</p> : null}
                 </article>
+
+                {sessionUser?.role === "Admin" && sessionUser?.userType === "staff" ? (
+                  <article className="rounded-lg border-2 border-rose-300 bg-rose-50 p-3">
+                    <p className="text-sm font-semibold text-rose-900">Admin Cleanup: Keep Only Real Cases</p>
+                    <p className="mt-1 text-xs text-rose-800">
+                      This removes all other test/demo cases and keeps only the IDs you enter.
+                    </p>
+                    <input
+                      value={commPruneCaseIds}
+                      onChange={(e) => setCommPruneCaseIds(e.target.value)}
+                      placeholder="CASE-1006, CASE-1007"
+                      className="mt-2 w-full rounded border border-rose-300 px-2 py-2 text-xs"
+                    />
+                    <button
+                      onClick={() => void pruneToRealCases()}
+                      className="mt-2 rounded bg-rose-700 px-3 py-2 text-xs font-semibold text-white"
+                    >
+                      Keep Only These Cases
+                    </button>
+                    {commPruneStatus ? <p className="mt-2 text-xs text-rose-900">{commPruneStatus}</p> : null}
+                  </article>
+                ) : null}
 
                 {selectedCase ? (
                   <article className="rounded-lg border-2 border-slate-300 p-3">
