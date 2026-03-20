@@ -260,6 +260,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [immRunStatus, setImmRunStatus] = useState("");
   const [clientUploadFile, setClientUploadFile] = useState<File | null>(null);
   const [clientUploadStatus, setClientUploadStatus] = useState("");
+  const isUrgentCase = (c: CaseItem) => Boolean((c as CaseItem & { isUrgent?: boolean }).isUrgent);
   const [requestedUploadFiles, setRequestedUploadFiles] = useState<Record<string, File | null>>({});
   const [requestedUploadStatus, setRequestedUploadStatus] = useState<Record<string, string>>({});
   const [staffDocRequestTitle, setStaffDocRequestTitle] = useState("");
@@ -373,7 +374,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const activeCaseBoardList = useMemo(() => {
     if (caseBoardView === "new_cases") return newCasesList;
     if (caseBoardView === "under_review_cases") return underReviewCasesList;
-    if (caseBoardView === "urgent_cases") return visibleCases.filter((c) => Boolean(c.isUrgent));
+    if (caseBoardView === "urgent_cases") return visibleCases.filter((c) => isUrgentCase(c));
     return visibleCases;
   }, [caseBoardView, newCasesList, underReviewCasesList, visibleCases]);
   const caseTasks = useMemo(
@@ -1931,7 +1932,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                 <article className="rounded-xl border-2 border-slate-300 bg-white p-4">
                   <p className="text-xs text-slate-500">Urgent</p>
                   <p className="mt-1 text-2xl font-bold text-slate-900">
-                    {visibleCases.filter((c) => Boolean(c.isUrgent)).length}
+                    {visibleCases.filter((c) => isUrgentCase(c)).length}
                   </p>
                 </article>
                 <article className="rounded-xl border-2 border-slate-300 bg-white p-4">
@@ -2029,7 +2030,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                     <button onClick={() => setCaseBoardView("urgent_cases")} className="rounded-xl border-2 border-red-300 bg-red-50 p-4 text-left">
                       <p className="text-xs text-red-700">Queue</p>
                       <p className="mt-1 text-lg font-semibold text-red-800">Urgent Cases</p>
-                      <p className="text-xs text-red-700">{visibleCases.filter((c) => Boolean(c.isUrgent)).length} case(s)</p>
+                      <p className="text-xs text-red-700">{visibleCases.filter((c) => isUrgentCase(c)).length} case(s)</p>
                     </button>
                   </div>
                 </>
