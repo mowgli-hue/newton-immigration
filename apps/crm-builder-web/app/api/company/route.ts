@@ -35,17 +35,22 @@ export async function PATCH(request: NextRequest) {
     }
 
     const keepCaseIds = Array.isArray(body?.keepCaseIds) ? body.keepCaseIds.map(String) : [];
-    const result = await pruneCompanyDataToCaseIds({
-      companyId: user.companyId,
-      keepCaseIds,
-      keepStaffSessions: true
-    });
-    return NextResponse.json({
-      ok: true,
-      message: "Pruned company data to selected cases",
-      deletedCount: result.deletedCount,
-      keptCaseIds: result.keptCases.map((c) => c.id)
-    });
+    try {
+      const result = await pruneCompanyDataToCaseIds({
+        companyId: user.companyId,
+        keepCaseIds,
+        keepStaffSessions: true
+      });
+      return NextResponse.json({
+        ok: true,
+        message: "Pruned company data to selected cases",
+        deletedCount: result.deletedCount,
+        keptCaseIds: result.keptCases.map((c) => c.id)
+      });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Could not prune cases.";
+      return NextResponse.json({ error: msg }, { status: 400 });
+    }
   }
 
   if (Boolean(body?.resetCompanyData)) {
@@ -57,19 +62,24 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const freshCase = await resetCompanyDataToSingleCase({
-      companyId: user.companyId,
-      clientName: String(body?.clientName ?? "Nirmaljeet Kaur"),
-      caseNumber: Number(body?.caseNumber ?? 1006),
-      formType: String(body?.formType ?? "PGWP"),
-      keepStaffSessions: true
-    });
+    try {
+      const freshCase = await resetCompanyDataToSingleCase({
+        companyId: user.companyId,
+        clientName: String(body?.clientName ?? "Nirmaljeet Kaur"),
+        caseNumber: Number(body?.caseNumber ?? 1006),
+        formType: String(body?.formType ?? "PGWP"),
+        keepStaffSessions: true
+      });
 
-    return NextResponse.json({
-      ok: true,
-      message: "Company data reset complete",
-      case: freshCase
-    });
+      return NextResponse.json({
+        ok: true,
+        message: "Company data reset complete",
+        case: freshCase
+      });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Could not reset company data.";
+      return NextResponse.json({ error: msg }, { status: 400 });
+    }
   }
 
   const updated = await updateCompanyBranding(user.companyId, {
