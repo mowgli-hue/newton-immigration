@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
-import { getUserById, setUserActive } from "@/lib/store";
+import { addAuditLog, getUserById, updateUserMfa } from "@/lib/store";
 
-export async function PATCH(
+export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -14,17 +14,29 @@ export async function PATCH(
 
   const target = await getUserById(user.companyId, params.id);
   if (!target) return NextResponse.json({ error: "User not found" }, { status: 404 });
-  if (target.userType !== "staff") return NextResponse.json({ error: "Invalid target user" }, { status: 400 });
-  const body = await request.json().catch(() => ({}));
-  if (typeof body.active !== "boolean") {
-    return NextResponse.json({ error: "active boolean is required" }, { status: 400 });
-  }
-  if (target.id === user.id && body.active === false) {
-    return NextResponse.json({ error: "You cannot deactivate your own account." }, { status: 400 });
+  if (target.userType !== "staff") {
+    return NextResponse.json({ error: "Invalid target user" }, { status: 400 });
   }
 
-  const updated = await setUserActive(user.companyId, params.id, body.active);
-  if (!updated) return NextResponse.json({ error: "User not found" }, { status: 404 });
+  const updated = await updateUserMfa(user.companyId, target.id, {
+    mfaEnabled: false,
+    mfaSecret: undefined,
+    mfaLastVerifiedAt: undefined
+  });
+  if (!updated) return NextResponse.json({ error: "Could not reset MFA." }, { status: 500 });
+
+  await addAuditLog({
+    companyId: user.companyId,
+    actorUserId: user.id,
+    actorName: user.name,
+    action: "admin.mfa.reset",
+    resourceType: "user",
+    resourceId: updated.id,
+    metadata: {
+      targetEmail: updated.email
+    }
+  });
+
   return NextResponse.json({
     user: {
       id: updated.id,

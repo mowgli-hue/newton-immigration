@@ -192,3 +192,10 @@ create table if not exists invites (
   created_at timestamptz not null default now(),
   accepted_at timestamptz
 );
+
+create table if not exists auth_rate_limits (
+  key text primary key,
+  attempts integer not null default 0,
+  window_started_at timestamptz not null default now(),
+  blocked_until timestamptz
+);

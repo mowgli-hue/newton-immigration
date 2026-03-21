@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { applySessionCookie } from "@/lib/auth";
 import { addAuditLog, createSessionWithContext, findCompanyById, findUserByCredentials } from "@/lib/store";
 import { createPreAuthToken, verifyTotp } from "@/lib/mfa";
+import { clearAuthRateLimit, consumeAuthRateLimit } from "@/lib/auth-rate-limit";
 import { isValidEmail, normalizeEmail } from "@/lib/validation";
 
 export async function POST(request: Request) {
@@ -18,6 +19,23 @@ export async function POST(request: Request) {
   }
   if (!isValidEmail(email)) {
     return NextResponse.json({ error: "Invalid email format." }, { status: 400 });
+  }
+
+  const limiterKey = `auth:login:${email}:${ipAddress || "unknown"}`;
+  const limitCheck = await consumeAuthRateLimit({
+    key: limiterKey,
+    maxAttempts: Number(process.env.AUTH_LOGIN_MAX_ATTEMPTS || 8),
+    windowSeconds: Number(process.env.AUTH_LOGIN_WINDOW_SECONDS || 300)
+  });
+  if (!limitCheck.allowed) {
+    const response = NextResponse.json(
+      { error: "Too many login attempts. Please retry shortly." },
+      { status: 429 }
+    );
+    if (limitCheck.retryAfterSeconds) {
+      response.headers.set("Retry-After", String(limitCheck.retryAfterSeconds));
+    }
+    return response;
   }
 
   const user = await findUserByCredentials(email, password);
@@ -83,6 +101,7 @@ export async function POST(request: Request) {
   }
 
   const session = await createSessionWithContext(user, { ipAddress, userAgent });
+  await clearAuthRateLimit(limiterKey);
   const company = await findCompanyById(user.companyId);
   const response = NextResponse.json({
     user: {

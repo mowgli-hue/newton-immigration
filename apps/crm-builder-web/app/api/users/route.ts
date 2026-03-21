@@ -15,6 +15,7 @@ export async function GET(request: NextRequest) {
       email: u.email,
       role: u.role,
       active: u.active !== false,
+      mfaEnabled: Boolean(u.mfaEnabled),
       workspaceDriveLink: u.workspaceDriveLink || "",
       workspaceDriveFolderId: u.workspaceDriveFolderId || ""
     }))

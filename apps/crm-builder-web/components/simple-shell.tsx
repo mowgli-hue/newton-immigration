@@ -94,6 +94,7 @@ type TeamUserItem = {
   email: string;
   role: Role;
   active?: boolean;
+  mfaEnabled?: boolean;
   workspaceDriveLink?: string;
   workspaceDriveFolderId?: string;
 };
@@ -1661,6 +1662,31 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     setTeamStatus("Password reset complete.");
   }
 
+  async function resetTeamMemberMfa(userId: string) {
+    setTeamStatus("Resetting MFA...");
+    const res = await apiFetch(`/users/${userId}/mfa/reset`, {
+      method: "POST"
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setTeamStatus(String(payload.error || "Could not reset MFA."));
+      return;
+    }
+    const updated = payload.user as TeamUserItem;
+    setTeamUsers((prev) =>
+      prev.map((u) =>
+        u.id === updated.id
+          ? {
+              ...u,
+              active: updated.active,
+              mfaEnabled: updated.mfaEnabled
+            }
+          : u
+      )
+    );
+    setTeamStatus(`MFA reset complete for ${updated.name}.`);
+  }
+
   function buildInteracEmailTemplate() {
     if (!selectedCase || !company) return;
     const recipient = setupInteracRecipient.trim() || "your Interac autodeposit email";
@@ -2690,9 +2716,16 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                             >
                               {u.active === false ? "Inactive" : "Active"}
                             </span>
+                            <span
+                              className={`rounded px-2 py-1 font-semibold ${
+                                u.mfaEnabled ? "bg-blue-100 text-blue-800" : "bg-slate-100 text-slate-700"
+                              }`}
+                            >
+                              {u.mfaEnabled ? "MFA On" : "MFA Off"}
+                            </span>
                           </div>
                         </div>
-                        <div className="mt-2 grid gap-2 md:grid-cols-[1fr_auto_auto]">
+                        <div className="mt-2 grid gap-2 md:grid-cols-[1fr_auto_auto_auto]">
                           <input
                             value={teamPasswordDrafts[u.id] || ""}
                             onChange={(e) =>
@@ -2707,6 +2740,13 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                             className="rounded border border-slate-300 px-2 py-1 font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             Reset Password
+                          </button>
+                          <button
+                            onClick={() => void resetTeamMemberMfa(u.id)}
+                            disabled={ownerBlocked}
+                            className="rounded border border-slate-300 px-2 py-1 font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Reset MFA
                           </button>
                           <button
                             onClick={() => void setTeamMemberActive(u.id, u.active === false)}
