@@ -152,7 +152,7 @@ export type CaseItem = {
   amountPaid?: number;
   submittedAt?: string;
   decisionDate?: string;
-  finalOutcome?: "approved" | "refused" | "withdrawn";
+  finalOutcome?: "approved" | "refused" | "request_letter" | "withdrawn";
   remarks?: string;
   imm5710Automation?: {
     status: "idle" | "started" | "failed";

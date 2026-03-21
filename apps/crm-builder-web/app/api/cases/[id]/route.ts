@@ -34,12 +34,32 @@ export async function PATCH(
   ) as "docs_pending" | "under_review" | "submitted" | "other" | undefined;
   const processingStatusOther =
     body?.processingStatusOther !== undefined ? String(body.processingStatusOther) : undefined;
+  const finalOutcomeRaw = body?.finalOutcome !== undefined ? String(body.finalOutcome).trim().toLowerCase() : undefined;
+  const finalOutcome = (
+    finalOutcomeRaw &&
+    ["approved", "refused", "request_letter", "withdrawn"].includes(finalOutcomeRaw)
+      ? finalOutcomeRaw
+      : undefined
+  ) as "approved" | "refused" | "request_letter" | "withdrawn" | undefined;
+  const decisionDate =
+    body?.decisionDate !== undefined ? String(body.decisionDate) : undefined;
+  const remarks = body?.remarks !== undefined ? String(body.remarks) : undefined;
 
-  if (assignedTo !== undefined || processingStatus !== undefined || processingStatusOther !== undefined) {
+  if (
+    assignedTo !== undefined ||
+    processingStatus !== undefined ||
+    processingStatusOther !== undefined ||
+    finalOutcome !== undefined ||
+    decisionDate !== undefined ||
+    remarks !== undefined
+  ) {
     const updated = await updateCaseProcessing(user.companyId, params.id, {
       assignedTo,
       processingStatus,
-      processingStatusOther
+      processingStatusOther,
+      finalOutcome,
+      decisionDate,
+      remarks
     });
     if (!updated) {
       return NextResponse.json({ error: "Case not found" }, { status: 404 });

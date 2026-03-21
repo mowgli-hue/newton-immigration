@@ -263,6 +263,11 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [resultUploadFile, setResultUploadFile] = useState<File | null>(null);
   const [resultUploadName, setResultUploadName] = useState("");
   const [resultUploadStatus, setResultUploadStatus] = useState("");
+  const [resultSearch, setResultSearch] = useState("");
+  const [resultOutcome, setResultOutcome] = useState<"" | "approved" | "refused" | "request_letter">("");
+  const [resultDecisionDate, setResultDecisionDate] = useState("");
+  const [resultRemarks, setResultRemarks] = useState("");
+  const [resultDecisionStatus, setResultDecisionStatus] = useState("");
   const [docRequests, setDocRequests] = useState<DocRequestItem[]>([]);
   const [clientIntakeDone, setClientIntakeDone] = useState(false);
   const [tasks, setTasks] = useState<TaskItem[]>([]);
@@ -502,6 +507,19 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     () => documents.filter((d) => (d.category || "general") === "result"),
     [documents]
   );
+  const resultCaseOptions = useMemo(() => {
+    const query = resultSearch.trim().toLowerCase();
+    return visibleCases
+      .filter((c) => {
+        if (!query) return true;
+        return `${c.id} ${c.client} ${c.formType}`.toLowerCase().includes(query);
+      })
+      .sort((a, b) => {
+        const aTs = new Date(a.updatedAt || a.createdAt || 0).getTime();
+        const bTs = new Date(b.updatedAt || b.createdAt || 0).getTime();
+        return bTs - aTs;
+      });
+  }, [visibleCases, resultSearch]);
   const communicationSearchList = useMemo(() => {
     const query = commSearch.trim().toLowerCase();
     const byPayment =
@@ -682,6 +700,10 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     setImmRunStatus("");
     setInternalIntake({});
     setInternalIntakeStatus("");
+    setResultOutcome((selectedCase.finalOutcome as "" | "approved" | "refused" | "request_letter") || "");
+    setResultDecisionDate(selectedCase.decisionDate || "");
+    setResultRemarks(selectedCase.remarks || "");
+    setResultDecisionStatus("");
   }, [selectedCase?.id]);
 
   useEffect(() => {
@@ -891,6 +913,32 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     setResultUploadFile(null);
     setResultUploadName("");
     setResultUploadStatus("Result uploaded and available in client portal.");
+  }
+
+  async function saveCaseResultDecision() {
+    if (!selectedCase) return;
+    if (!resultOutcome) {
+      setResultDecisionStatus("Select a decision first.");
+      return;
+    }
+    setResultDecisionStatus("Saving decision...");
+    const res = await apiFetch(`/cases/${selectedCase.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        finalOutcome: resultOutcome,
+        decisionDate: resultDecisionDate.trim() || undefined,
+        remarks: resultRemarks.trim() || undefined
+      })
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setResultDecisionStatus(String(payload.error || "Could not save result decision."));
+      return;
+    }
+    const updated = payload.case as CaseItem;
+    setCases((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+    setResultDecisionStatus(`Saved result for ${updated.id}.`);
   }
 
   async function syncLeadsFromSheet() {
@@ -1121,7 +1169,15 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     await loadCaseDetail(caseItem.id);
   }
 
-  async function updateCaseProcessing(caseId: string, patch: Partial<Pick<CaseItem, "assignedTo" | "processingStatus" | "processingStatusOther">>) {
+  async function updateCaseProcessing(
+    caseId: string,
+    patch: Partial<
+      Pick<
+        CaseItem,
+        "assignedTo" | "processingStatus" | "processingStatusOther" | "finalOutcome" | "decisionDate" | "remarks"
+      >
+    >
+  ) {
     setCaseActionStatus("Saving case updates...");
     const res = await apiFetch(`/cases/${caseId}`, {
       method: "PATCH",
@@ -2436,6 +2492,27 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                 <button onClick={() => setClientScreen("overview")} className="mb-2 rounded border border-slate-300 px-2 py-1 text-xs font-semibold">Back to Tasks</button>
                 <h3 className="text-base font-semibold">Your Results</h3>
                 <p className="mt-1 text-xs text-slate-500">Any completed result shared by Newton Immigration will appear here.</p>
+                {selectedCase?.finalOutcome === "approved" ? (
+                  <div className="mt-3 rounded border border-emerald-300 bg-emerald-50 p-3 text-xs text-emerald-900">
+                    <p className="font-semibold">Congratulations, we got your permit approved.</p>
+                    <p className="mt-1">If you found our service helpful, we would be grateful for your review.</p>
+                    <a href="https://g.page/r/CYTdpFJ-nDr7EAE/review" target="_blank" className="mt-1 inline-block font-semibold underline">
+                      Leave a Review
+                    </a>
+                  </div>
+                ) : null}
+                {selectedCase?.finalOutcome === "refused" ? (
+                  <div className="mt-3 rounded border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+                    <p className="font-semibold">We have received your refusal update.</p>
+                    <p className="mt-1">Our team will guide you on next steps and options.</p>
+                  </div>
+                ) : null}
+                {selectedCase?.finalOutcome === "request_letter" ? (
+                  <div className="mt-3 rounded border border-blue-300 bg-blue-50 p-3 text-xs text-blue-900">
+                    <p className="font-semibold">A request letter was issued for your case.</p>
+                    <p className="mt-1">Please review the result files and follow instructions from your case team.</p>
+                  </div>
+                ) : null}
                 <div className="mt-3 space-y-2">
                   {resultDocuments.map((d) => (
                     <article key={d.id} className="rounded border border-slate-200 p-2">
@@ -2689,7 +2766,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                                 </div>
                                 <p className="text-slate-600">
                                   {c.finalOutcome
-                                    ? `${c.finalOutcome === "approved" ? "Approved" : c.finalOutcome === "refused" ? "Refused" : "Withdrawn"}${c.decisionDate ? ` on ${new Date(c.decisionDate).toLocaleDateString()}` : ""}`
+                                    ? `${c.finalOutcome === "approved" ? "Approved" : c.finalOutcome === "refused" ? "Refused" : c.finalOutcome === "request_letter" ? "Request Letter" : "Withdrawn"}${c.decisionDate ? ` on ${new Date(c.decisionDate).toLocaleDateString()}` : ""}`
                                     : "Outcome pending"}
                                 </p>
                                 {c.remarks ? <p className="mt-1 text-slate-600">Notes: {c.remarks}</p> : null}
@@ -2792,6 +2869,12 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                               placeholder="Client email (optional)"
                               className="rounded border border-slate-300 px-2 py-2 text-xs"
                             />
+                            <input
+                              value={invitePhone}
+                              onChange={(e) => setInvitePhone(e.target.value)}
+                              placeholder="Client phone (optional)"
+                              className="rounded border border-slate-300 px-2 py-2 text-xs"
+                            />
                             <button
                               onClick={() => void createClientInvite()}
                               className="rounded bg-slate-900 px-3 py-2 text-xs font-semibold text-white"
@@ -2805,6 +2888,21 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                             ) : null}
                           </div>
                           {inviteStatus ? <p className="mt-1 text-xs text-slate-700">{inviteStatus}</p> : null}
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <button onClick={() => void shareInvite("copy")} className="rounded border border-slate-300 px-2 py-1 text-xs font-semibold">
+                              Copy Message
+                            </button>
+                            <button onClick={() => void shareInvite("email")} className="rounded border border-slate-300 px-2 py-1 text-xs font-semibold">
+                              Send Email
+                            </button>
+                            <button onClick={() => void shareInvite("whatsapp")} className="rounded border border-slate-300 px-2 py-1 text-xs font-semibold">
+                              Send WhatsApp
+                            </button>
+                            <button onClick={() => void shareInvite("sms")} className="rounded border border-slate-300 px-2 py-1 text-xs font-semibold">
+                              Send SMS
+                            </button>
+                          </div>
+                          {inviteShareStatus ? <p className="mt-1 text-xs text-slate-700">{inviteShareStatus}</p> : null}
                           <p className="mt-2 text-slate-500">Processing Links</p>
                           <div className="mt-1 flex flex-wrap gap-2">
                             {selectedCase.questionnaireLink ? (
@@ -3191,17 +3289,57 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
             <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
               <h3 className="text-base font-semibold">Results</h3>
               <p className="mt-1 text-xs text-slate-500">Upload and send final results directly to the client portal.</p>
+              <input
+                value={resultSearch}
+                onChange={(e) => setResultSearch(e.target.value)}
+                className="mt-2 w-full rounded border border-slate-300 px-2 py-2 text-xs"
+                placeholder="Search case by ID, name, or application type"
+              />
               <select
                 value={selectedCase?.id ?? ""}
                 onChange={(e) => setSelectedCaseId(e.target.value)}
                 className="mt-2 w-full rounded-lg border-2 border-slate-300 px-2 py-2 text-sm"
               >
-                {visibleCases.map((c) => (
+                {resultCaseOptions.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.id} - {c.client}
+                    {c.id} - {c.client} - {c.formType}
                   </option>
                 ))}
               </select>
+              <div className="mt-3 rounded border border-slate-200 p-3 text-xs">
+                <p className="font-semibold">Decision Update</p>
+                <div className="mt-2 grid gap-2 md:grid-cols-4">
+                  <select
+                    value={resultOutcome}
+                    onChange={(e) => setResultOutcome(e.target.value as "" | "approved" | "refused" | "request_letter")}
+                    className="rounded border border-slate-300 px-2 py-2"
+                  >
+                    <option value="">Select decision</option>
+                    <option value="approved">Approved</option>
+                    <option value="refused">Refused</option>
+                    <option value="request_letter">Request Letter</option>
+                  </select>
+                  <input
+                    type="date"
+                    value={resultDecisionDate}
+                    onChange={(e) => setResultDecisionDate(e.target.value)}
+                    className="rounded border border-slate-300 px-2 py-2"
+                  />
+                  <input
+                    value={resultRemarks}
+                    onChange={(e) => setResultRemarks(e.target.value)}
+                    className="rounded border border-slate-300 px-2 py-2"
+                    placeholder="Remarks (optional)"
+                  />
+                  <button
+                    onClick={() => void saveCaseResultDecision()}
+                    className="rounded bg-slate-900 px-3 py-2 font-semibold text-white"
+                  >
+                    Save Decision
+                  </button>
+                </div>
+                {resultDecisionStatus ? <p className="mt-2 text-slate-700">{resultDecisionStatus}</p> : null}
+              </div>
               <div className="mt-3 rounded border border-slate-200 p-3 text-xs">
                 <p className="font-semibold">Upload Result File</p>
                 <div className="mt-2 grid gap-2 md:grid-cols-3">

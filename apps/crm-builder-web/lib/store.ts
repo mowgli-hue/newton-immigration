@@ -1246,6 +1246,9 @@ export async function updateCaseProcessing(
     assignedTo?: string;
     processingStatus?: "docs_pending" | "under_review" | "submitted" | "other";
     processingStatusOther?: string;
+    finalOutcome?: "approved" | "refused" | "request_letter" | "withdrawn";
+    decisionDate?: string;
+    remarks?: string;
   }
 ): Promise<CaseItem | null> {
   const store = await readStore();
@@ -1265,6 +1268,15 @@ export async function updateCaseProcessing(
       patch.assignedTo !== undefined ? patch.assignedTo.trim() || "Unassigned" : current.assignedTo,
     processingStatus: nextStatus,
     processingStatusOther: nextOther,
+    finalOutcome: patch.finalOutcome !== undefined ? patch.finalOutcome : current.finalOutcome,
+    decisionDate:
+      patch.decisionDate !== undefined
+        ? (patch.decisionDate.trim() || undefined)
+        : current.decisionDate,
+    remarks:
+      patch.remarks !== undefined
+        ? (patch.remarks.trim() || undefined)
+        : current.remarks,
     updatedAt: new Date().toISOString()
   };
 
