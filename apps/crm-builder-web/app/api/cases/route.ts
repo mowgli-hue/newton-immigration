@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
 import { canCreateCase, canStaffAccessCase } from "@/lib/rbac";
-import { createCase, listCases, resolveCaseDriveRootLink, updateCaseLinks } from "@/lib/store";
+import { addAuditLog, createCase, listCases, resolveCaseDriveRootLink, updateCaseLinks } from "@/lib/store";
 import { buildCaseFolderNameWithApp, createCaseDriveStructure, extractDriveFolderId } from "@/lib/google-drive";
+import { boundedText, isReasonablePhone, isValidEmail, normalizeEmail, normalizePhone } from "@/lib/validation";
 
 export async function GET(request: NextRequest) {
   const user = await getCurrentUserFromRequest(request);
@@ -43,10 +44,10 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => ({}));
-  const client = String(body.client ?? "").trim();
-  const formType = String(body.formType ?? "").trim();
-  const leadPhone = body?.leadPhone !== undefined ? String(body.leadPhone).trim() : undefined;
-  const leadEmail = body?.leadEmail !== undefined ? String(body.leadEmail).trim() : undefined;
+  const client = boundedText(body.client, 120);
+  const formType = boundedText(body.formType, 120);
+  const leadPhone = body?.leadPhone !== undefined ? normalizePhone(body.leadPhone) : undefined;
+  const leadEmail = body?.leadEmail !== undefined ? normalizeEmail(body.leadEmail) : undefined;
   const isUrgent = Boolean(body?.isUrgent);
   const dueInDays =
     body?.dueInDays !== undefined && Number.isFinite(Number(body.dueInDays))
@@ -55,6 +56,12 @@ export async function POST(request: NextRequest) {
 
   if (!client || !formType) {
     return NextResponse.json({ error: "client and formType are required" }, { status: 400 });
+  }
+  if (leadEmail && !isValidEmail(leadEmail)) {
+    return NextResponse.json({ error: "Invalid leadEmail format" }, { status: 400 });
+  }
+  if (leadPhone && !isReasonablePhone(leadPhone)) {
+    return NextResponse.json({ error: "Invalid leadPhone format" }, { status: 400 });
   }
 
   const created = await createCase({
@@ -65,6 +72,18 @@ export async function POST(request: NextRequest) {
     leadEmail,
     isUrgent,
     dueInDays
+  });
+  await addAuditLog({
+    companyId: user.companyId,
+    actorUserId: user.id,
+    actorName: user.name,
+    action: "case.create",
+    resourceType: "case",
+    resourceId: created.id,
+    metadata: {
+      formType: created.formType,
+      client: created.client
+    }
   });
   const driveRootChoice = await resolveCaseDriveRootLink(user.companyId, created.id);
   const driveRoot = driveRootChoice.link || "";

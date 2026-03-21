@@ -80,6 +80,14 @@ type NotificationItem = {
   read: boolean;
   createdAt: string;
 };
+type AuditItem = {
+  id: string;
+  action: string;
+  actorName: string;
+  resourceId: string;
+  createdAt: string;
+  metadata?: Record<string, string>;
+};
 type TeamUserItem = {
   id: string;
   name: string;
@@ -283,6 +291,8 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [clientIntakeDone, setClientIntakeDone] = useState(false);
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditItem[]>([]);
+  const [auditStatus, setAuditStatus] = useState("");
   const [teamUsers, setTeamUsers] = useState<TeamUserItem[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [caseDetailTab, setCaseDetailTab] = useState<CaseDetailTab>("overview");
@@ -424,6 +434,15 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
         if (usersRes.ok) {
           const usersPayload = await usersRes.json().catch(() => ({}));
           setTeamUsers((usersPayload.users || []) as TeamUserItem[]);
+        }
+        if (user.role === "Admin") {
+          const auditRes = await apiFetch("/audit?limit=100", { cache: "no-store" });
+          if (auditRes.ok) {
+            const auditPayload = await auditRes.json().catch(() => ({}));
+            setAuditLogs((auditPayload.logs || []) as AuditItem[]);
+          } else {
+            setAuditStatus("Could not load audit logs.");
+          }
         }
       }
     } catch {
@@ -752,6 +771,37 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     }, 4000);
     return () => clearInterval(timer);
   }, [screen, selectedCase?.id, sessionUser?.userType]);
+
+  useEffect(() => {
+    if (!sessionUser) return;
+    const minutes = Math.max(
+      5,
+      Number(process.env.NEXT_PUBLIC_INACTIVITY_LOGOUT_MINUTES || 30)
+    );
+    const timeoutMs = minutes * 60 * 1000;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const reset = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        void logout();
+      }, timeoutMs);
+    };
+
+    const events: Array<keyof WindowEventMap> = [
+      "mousemove",
+      "keydown",
+      "click",
+      "scroll",
+      "touchstart"
+    ];
+    events.forEach((ev) => window.addEventListener(ev, reset, { passive: true }));
+    reset();
+    return () => {
+      if (timer) clearTimeout(timer);
+      events.forEach((ev) => window.removeEventListener(ev, reset));
+    };
+  }, [sessionUser?.id]);
 
   async function logout() {
     await apiFetch("/auth/logout", { method: "POST" });
@@ -2496,6 +2546,25 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                 </button>
                 {brandStatus ? <p className="mt-2 text-xs text-slate-600">{brandStatus}</p> : null}
               </section>
+
+              {sessionUser?.userType === "staff" && sessionUser.role === "Admin" ? (
+                <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
+                  <h3 className="text-base font-semibold">Audit Trail</h3>
+                  <p className="mt-1 text-xs text-slate-500">Immutable latest security and data-change events.</p>
+                  <div className="mt-2 max-h-52 space-y-2 overflow-auto rounded border border-slate-200 p-2 text-xs">
+                    {auditLogs.map((log) => (
+                      <div key={log.id} className="rounded border border-slate-200 p-2">
+                        <p className="font-semibold">{log.action}</p>
+                        <p className="text-slate-500">
+                          {new Date(log.createdAt).toLocaleString()} • {log.actorName} • {log.resourceId}
+                        </p>
+                      </div>
+                    ))}
+                    {auditLogs.length === 0 ? <p className="text-slate-500">No audit entries found.</p> : null}
+                  </div>
+                  {auditStatus ? <p className="mt-2 text-xs text-slate-700">{auditStatus}</p> : null}
+                </section>
+              ) : null}
 
               {sessionUser?.userType === "staff" && canManageUsers(sessionUser.role) ? (
                 <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">

@@ -1,14 +1,18 @@
 import { NextResponse } from "next/server";
 import { applySessionCookie } from "@/lib/auth";
-import { createSession, findCompanyById, findUserByCredentials } from "@/lib/store";
+import { addAuditLog, createSession, findCompanyById, findUserByCredentials } from "@/lib/store";
+import { isValidEmail, normalizeEmail } from "@/lib/validation";
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
-  const email = String(body.email ?? "").trim();
+  const email = normalizeEmail(body.email);
   const password = String(body.password ?? "");
 
   if (!email || !password) {
     return NextResponse.json({ error: "Email and password are required." }, { status: 400 });
+  }
+  if (!isValidEmail(email)) {
+    return NextResponse.json({ error: "Invalid email format." }, { status: 400 });
   }
 
   const user = await findUserByCredentials(email, password);
@@ -30,6 +34,18 @@ export async function POST(request: Request) {
   });
 
   applySessionCookie(response, session.token);
+  await addAuditLog({
+    companyId: user.companyId,
+    actorUserId: user.id,
+    actorName: user.name,
+    action: "auth.login",
+    resourceType: "case",
+    resourceId: user.id,
+    metadata: {
+      email: user.email,
+      userType: user.userType
+    }
+  });
 
   return response;
 }

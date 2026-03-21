@@ -3,7 +3,8 @@ import { getCurrentUserFromRequest } from "@/lib/auth";
 import { stageOrder } from "@/lib/data";
 import { canStaffAccessCase } from "@/lib/rbac";
 import { buildCaseFolderNameWithApp, createCaseDriveStructure, extractDriveFolderId } from "@/lib/google-drive";
-import { getCase, resolveCaseDriveRootLink, updateCaseLinks, updateCaseProcessing, updateCaseStage } from "@/lib/store";
+import { addAuditLog, getCase, resolveCaseDriveRootLink, updateCaseLinks, updateCaseProcessing, updateCaseStage } from "@/lib/store";
+import { boundedText } from "@/lib/validation";
 
 export async function PATCH(
   request: NextRequest,
@@ -33,7 +34,7 @@ export async function PATCH(
       : undefined
   ) as "docs_pending" | "under_review" | "submitted" | "other" | undefined;
   const processingStatusOther =
-    body?.processingStatusOther !== undefined ? String(body.processingStatusOther) : undefined;
+    body?.processingStatusOther !== undefined ? boundedText(body.processingStatusOther, 200) : undefined;
   const finalOutcomeRaw = body?.finalOutcome !== undefined ? String(body.finalOutcome).trim().toLowerCase() : undefined;
   const finalOutcome = (
     finalOutcomeRaw &&
@@ -43,7 +44,7 @@ export async function PATCH(
   ) as "approved" | "refused" | "request_letter" | "withdrawn" | undefined;
   const decisionDate =
     body?.decisionDate !== undefined ? String(body.decisionDate) : undefined;
-  const remarks = body?.remarks !== undefined ? String(body.remarks) : undefined;
+  const remarks = body?.remarks !== undefined ? boundedText(body.remarks, 1000) : undefined;
 
   if (
     assignedTo !== undefined ||
@@ -64,6 +65,18 @@ export async function PATCH(
     if (!updated) {
       return NextResponse.json({ error: "Case not found" }, { status: 404 });
     }
+    await addAuditLog({
+      companyId: user.companyId,
+      actorUserId: user.id,
+      actorName: user.name,
+      action: "case.update.processing",
+      resourceType: "case",
+      resourceId: updated.id,
+      metadata: {
+        assignedTo: String(updated.assignedTo || ""),
+        processingStatus: String(updated.processingStatus || "")
+      }
+    });
     let driveReroute: { updated: boolean; reason?: string; error?: string } = { updated: false };
     if (assignedTo !== undefined) {
       try {
@@ -99,6 +112,15 @@ export async function PATCH(
   if (!updated) {
     return NextResponse.json({ error: "Case not found" }, { status: 404 });
   }
+  await addAuditLog({
+    companyId: user.companyId,
+    actorUserId: user.id,
+    actorName: user.name,
+    action: "case.update.stage",
+    resourceType: "case",
+    resourceId: updated.id,
+    metadata: { stage: updated.stage }
+  });
 
   return NextResponse.json({ case: updated });
 }

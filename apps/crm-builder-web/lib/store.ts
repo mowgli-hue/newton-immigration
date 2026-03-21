@@ -1882,6 +1882,40 @@ export async function markNotificationRead(companyId: string, userId: string, id
   return store.notifications[idx];
 }
 
+export async function addAuditLog(input: {
+  companyId: string;
+  actorUserId: string;
+  actorName: string;
+  action: string;
+  resourceType: AuditLog["resourceType"];
+  resourceId: string;
+  metadata?: Record<string, string>;
+}): Promise<AuditLog> {
+  const store = await readStore();
+  const item: AuditLog = {
+    id: `AUD-${store.auditLogs.length + 1}`,
+    companyId: input.companyId,
+    actorUserId: input.actorUserId,
+    actorName: input.actorName,
+    action: input.action,
+    resourceType: input.resourceType,
+    resourceId: input.resourceId,
+    metadata: input.metadata,
+    createdAt: new Date().toISOString()
+  };
+  store.auditLogs.push(item);
+  await writeStore(store);
+  return item;
+}
+
+export async function listAuditLogs(companyId: string, limit = 200): Promise<AuditLog[]> {
+  const store = await readStore();
+  return store.auditLogs
+    .filter((l) => l.companyId === companyId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, Math.max(1, Math.min(1000, Number(limit) || 200)));
+}
+
 export async function updateCasePgwpIntake(
   companyId: string,
   id: string,
