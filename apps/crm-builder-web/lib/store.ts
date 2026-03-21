@@ -28,6 +28,7 @@ import { NEWTON_TEAM_MEMBERS } from "@/lib/newton-team";
 import { generatePgwpDraft } from "@/lib/pgwp";
 import { getStorePath } from "@/lib/storage-paths";
 import { hashPassword, isPasswordHash, verifyPassword } from "@/lib/security";
+import { isPostgresBackendEnabled, readStoreFromPostgres, writeStoreToPostgres } from "@/lib/postgres-store";
 
 const STORE_PATH = getStorePath();
 const SESSION_MAX_AGE_SECONDS = Math.max(
@@ -285,9 +286,19 @@ async function ensureStoreFile() {
 }
 
 export async function readStore(): Promise<AppStore> {
-  await ensureStoreFile();
-  const raw = await readFile(STORE_PATH, "utf8");
-  const store = migrateStore(JSON.parse(raw) as Partial<AppStore>);
+  const source = isPostgresBackendEnabled()
+    ? await readStoreFromPostgres()
+    : (() => {
+        // file mode fallback
+        return null;
+      })();
+  const store = isPostgresBackendEnabled()
+    ? migrateStore(source as Partial<AppStore>)
+    : await (async () => {
+        await ensureStoreFile();
+        const raw = await readFile(STORE_PATH, "utf8");
+        return migrateStore(JSON.parse(raw) as Partial<AppStore>);
+      })();
   let changed = false;
   for (let i = 0; i < store.users.length; i += 1) {
     const current = String(store.users[i].password || "");
@@ -303,6 +314,10 @@ export async function readStore(): Promise<AppStore> {
 }
 
 export async function writeStore(next: AppStore): Promise<void> {
+  if (isPostgresBackendEnabled()) {
+    await writeStoreToPostgres(migrateStore(next));
+    return;
+  }
   await ensureStoreFile();
   await writeFile(STORE_PATH, JSON.stringify(next, null, 2), "utf8");
 }
