@@ -2826,7 +2826,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                       </select>
                     </div>
                   </div>
-                  <div className="mt-2 grid gap-2">
+                  <div className="mt-2 grid max-h-[58vh] gap-2 overflow-auto pr-1">
                     {activeCaseBoardList.map((c) => (
                       <article
                         key={c.id}

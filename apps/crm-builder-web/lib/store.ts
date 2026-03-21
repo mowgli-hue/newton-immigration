@@ -516,7 +516,7 @@ export async function acceptClientInvite(input: {
   if (caseIdx === -1) throw new Error("Case not found");
 
   const allowReuse =
-    String(process.env.INVITE_ALLOW_REUSE || "false").toLowerCase() === "true";
+    String(process.env.INVITE_ALLOW_REUSE || "true").toLowerCase() === "true";
   if (invite.status === "accepted" && invite.usedByUserId) {
     if (!allowReuse) {
       throw new Error("Invite is no longer valid. Please request a new secure link.");
