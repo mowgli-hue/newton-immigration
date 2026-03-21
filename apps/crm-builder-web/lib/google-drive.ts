@@ -106,6 +106,16 @@ export function buildCaseFolderName(caseId: string, client: string) {
   return sanitizeFolderName(`${caseId} - ${client || "Client"}`);
 }
 
+function sanitizeAppType(input: string): string {
+  return sanitizeFolderName(String(input || "").replace(/\s+/g, " ").trim());
+}
+
+export function buildCaseFolderNameWithApp(caseId: string, client: string, formType: string) {
+  const app = sanitizeAppType(formType);
+  if (!app) return buildCaseFolderName(caseId, client);
+  return sanitizeFolderName(`${caseId} - ${client || "Client"} - ${app}`);
+}
+
 const CASE_SUBFOLDER_NAMES = {
   clientDocuments: "Client Documents",
   applicationForms: "Application Forms",
@@ -143,16 +153,56 @@ export async function createDriveSubfolder(parentFolderId: string, folderName: s
   };
 }
 
+async function findDriveSubfolderByName(parentFolderId: string, folderName: string): Promise<DriveFolderResult | null> {
+  const accessToken = await getDriveAccessToken();
+  const safeName = String(folderName || "").replace(/'/g, "\\'");
+  const q = [
+    "mimeType='application/vnd.google-apps.folder'",
+    "trashed=false",
+    `'${parentFolderId}' in parents`,
+    `name='${safeName}'`
+  ].join(" and ");
+  const url =
+    "https://www.googleapis.com/drive/v3/files?" +
+    new URLSearchParams({
+      q,
+      fields: "files(id,name,webViewLink,createdTime)",
+      pageSize: "1",
+      supportsAllDrives: "true",
+      includeItemsFromAllDrives: "true",
+      orderBy: "createdTime desc"
+    }).toString();
+  const res = await fetch(url, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: "no-store"
+  });
+  if (!res.ok) return null;
+  const data = (await res.json()) as { files?: Array<{ id: string; webViewLink?: string }> };
+  const match = data.files?.[0];
+  if (!match?.id) return null;
+  return {
+    id: match.id,
+    webViewLink: match.webViewLink || `https://drive.google.com/drive/folders/${match.id}`
+  };
+}
+
+export async function getOrCreateDriveSubfolder(parentFolderId: string, folderName: string): Promise<DriveFolderResult> {
+  const existing = await findDriveSubfolderByName(parentFolderId, folderName);
+  if (existing) return existing;
+  return createDriveSubfolder(parentFolderId, folderName);
+}
+
 export async function createCaseDriveStructure(
   rootFolderId: string,
   caseFolderName: string
 ): Promise<CaseDriveStructureResult> {
-  const caseFolder = await createDriveSubfolder(rootFolderId, caseFolderName);
+  const caseFolder = await getOrCreateDriveSubfolder(rootFolderId, caseFolderName);
   const [clientDocuments, applicationForms, submitted, correspondence] = await Promise.all([
-    createDriveSubfolder(caseFolder.id, CASE_SUBFOLDER_NAMES.clientDocuments),
-    createDriveSubfolder(caseFolder.id, CASE_SUBFOLDER_NAMES.applicationForms),
-    createDriveSubfolder(caseFolder.id, CASE_SUBFOLDER_NAMES.submitted),
-    createDriveSubfolder(caseFolder.id, CASE_SUBFOLDER_NAMES.correspondence)
+    getOrCreateDriveSubfolder(caseFolder.id, CASE_SUBFOLDER_NAMES.clientDocuments),
+    getOrCreateDriveSubfolder(caseFolder.id, CASE_SUBFOLDER_NAMES.applicationForms),
+    getOrCreateDriveSubfolder(caseFolder.id, CASE_SUBFOLDER_NAMES.submitted),
+    getOrCreateDriveSubfolder(caseFolder.id, CASE_SUBFOLDER_NAMES.correspondence)
   ]);
 
   return {

@@ -6,6 +6,7 @@ import { maybeAutoRunImm5710 } from "@/lib/imm5710-runner";
 import { buildReadyPackage, writeReadyPackageToDisk } from "@/lib/ready-package";
 import {
   addDocument,
+  fulfillCaseDocRequest,
   findCompanyById,
   getCase,
   listDocuments,
@@ -14,7 +15,7 @@ import {
   updateCaseLinks
 } from "@/lib/store";
 import {
-  buildCaseFolderName,
+  buildCaseFolderNameWithApp,
   createCaseDriveStructure,
   extractDriveFolderId,
   uploadFileToDriveFolder
@@ -44,7 +45,10 @@ async function ensureCaseDriveFolders(companyId: string, caseId: string) {
   const rootId = extractDriveFolderId(driveRoot);
   if (!rootId) return { created: false, skipped: "drive_root_invalid" as const };
 
-  const structure = await createCaseDriveStructure(rootId, buildCaseFolderName(caseItem.id, caseItem.client));
+  const structure = await createCaseDriveStructure(
+    rootId,
+    buildCaseFolderNameWithApp(caseItem.id, caseItem.client, caseItem.formType)
+  );
   await updateCaseLinks(companyId, caseItem.id, {
     docsUploadLink: structure.subfolders.clientDocuments.webViewLink,
     applicationFormsLink: structure.subfolders.applicationForms.webViewLink,
@@ -89,6 +93,7 @@ export async function POST(
     const formData = await request.formData();
     const maybeFile = formData.get("file");
     const customName = String(formData.get("name") ?? "").trim();
+    const requestId = String(formData.get("requestId") ?? "").trim();
 
     if (!(maybeFile instanceof File)) {
       return NextResponse.json({ error: "file is required" }, { status: 400 });
@@ -110,6 +115,10 @@ export async function POST(
 
     const publicLink = `/uploads/cases/${params.id}/${finalName}`;
     let finalLink = publicLink;
+    let driveUpload: { success: boolean; reason?: string; error?: string; link?: string } = {
+      success: false,
+      reason: "not_attempted"
+    };
     let targetCase = caseItem;
     if (!extractDriveFolderId(caseItem.docsUploadLink || "")) {
       try {
@@ -118,6 +127,7 @@ export async function POST(
         if (refreshed) targetCase = refreshed;
       } catch {
         // Keep local upload working even if Drive folder setup fails.
+        driveUpload = { success: false, reason: "drive_folder_setup_failed" };
       }
     }
     const driveFolderId = extractDriveFolderId(targetCase.docsUploadLink || "");
@@ -130,9 +140,13 @@ export async function POST(
           mimeType: maybeFile.type || "application/octet-stream"
         });
         finalLink = driveFile.webViewLink;
+        driveUpload = { success: true, link: driveFile.webViewLink };
       } catch {
         // Keep local public link as fallback.
+        driveUpload = { success: false, reason: "drive_upload_failed" };
       }
+    } else if (!driveUpload.success) {
+      driveUpload = { success: false, reason: "drive_folder_missing" };
     }
 
     const doc = await addDocument({
@@ -142,6 +156,15 @@ export async function POST(
       link: finalLink,
       status: "received"
     });
+    if (requestId) {
+      await fulfillCaseDocRequest({
+        companyId: user.companyId,
+        caseId: params.id,
+        requestId,
+        fulfilledBy: user.name,
+        documentId: doc.id
+      });
+    }
     const synced = await syncCaseAutomation(user.companyId, params.id);
     let automation: { started: boolean; skippedReason?: string; error?: string } | null = null;
     let readyPackagePath = "";
@@ -179,13 +202,14 @@ export async function POST(
       }
     }
 
-    return NextResponse.json({ document: doc, readyPackagePath, automation, drive }, { status: 201 });
+    return NextResponse.json({ document: doc, driveUpload, readyPackagePath, automation, drive }, { status: 201 });
   }
 
   const body = await request.json().catch(() => ({}));
   const name = String(body.name ?? "").trim();
   const link = String(body.link ?? "").trim();
   const status = String(body.status ?? "pending") as "pending" | "received";
+  const requestId = String(body.requestId ?? "").trim();
 
   if (!name) {
     return NextResponse.json({ error: "name is required" }, { status: 400 });
@@ -198,6 +222,15 @@ export async function POST(
     link,
     status
   });
+  if (requestId) {
+    await fulfillCaseDocRequest({
+      companyId: user.companyId,
+      caseId: params.id,
+      requestId,
+      fulfilledBy: user.name,
+      documentId: doc.id
+    });
+  }
   const synced = await syncCaseAutomation(user.companyId, params.id);
   let automation: { started: boolean; skippedReason?: string; error?: string } | null = null;
   let readyPackagePath = "";

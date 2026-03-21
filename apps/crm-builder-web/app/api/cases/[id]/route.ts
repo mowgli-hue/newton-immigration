@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
 import { stageOrder } from "@/lib/data";
-import { getCase, updateCaseStage } from "@/lib/store";
+import { getCase, updateCaseProcessing, updateCaseStage } from "@/lib/store";
 
 export async function PATCH(
   request: NextRequest,
@@ -17,6 +17,28 @@ export async function PATCH(
 
   const body = await request.json().catch(() => ({}));
   const stage = String(body.stage ?? "");
+  const assignedTo = body?.assignedTo !== undefined ? String(body.assignedTo) : undefined;
+  const processingStatusRaw = body?.processingStatus !== undefined ? String(body.processingStatus) : undefined;
+  const processingStatus = (
+    processingStatusRaw &&
+    ["docs_pending", "under_review", "submitted", "other"].includes(processingStatusRaw)
+      ? processingStatusRaw
+      : undefined
+  ) as "docs_pending" | "under_review" | "submitted" | "other" | undefined;
+  const processingStatusOther =
+    body?.processingStatusOther !== undefined ? String(body.processingStatusOther) : undefined;
+
+  if (assignedTo !== undefined || processingStatus !== undefined || processingStatusOther !== undefined) {
+    const updated = await updateCaseProcessing(user.companyId, params.id, {
+      assignedTo,
+      processingStatus,
+      processingStatusOther
+    });
+    if (!updated) {
+      return NextResponse.json({ error: "Case not found" }, { status: 404 });
+    }
+    return NextResponse.json({ case: updated });
+  }
 
   if (!stageOrder.includes(stage as (typeof stageOrder)[number])) {
     return NextResponse.json({ error: "Invalid stage" }, { status: 400 });

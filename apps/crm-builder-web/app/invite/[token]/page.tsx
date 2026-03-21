@@ -16,6 +16,8 @@ export default function InvitePage({ params }: { params: { token: string } }) {
   const [error, setError] = useState("");
   const [payload, setPayload] = useState<InvitePayload | null>(null);
   const [name, setName] = useState("");
+  const supportPhone = "6049024500";
+  const supportEmail = "newtonimmigration@gmail.com";
 
   useEffect(() => {
     let mounted = true;
@@ -26,7 +28,7 @@ export default function InvitePage({ params }: { params: { token: string } }) {
       const body = await res.json().catch(() => ({}));
       if (!mounted) return;
       if (!res.ok) {
-        setError(String(body.error || "Invite not found"));
+        setError(String(body.error || "This invite link is no longer available."));
         setLoading(false);
         return;
       }
@@ -78,7 +80,7 @@ export default function InvitePage({ params }: { params: { token: string } }) {
 
             <div className="mt-4 grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
               <p>1. Open secure portal link (no login required)</p>
-              <p>2. Review and e-sign retainer, complete Interac payment</p>
+              <p>2. Review and e-sign retainer agreement</p>
               <p>3. Upload documents and complete questions</p>
             </div>
 
@@ -105,7 +107,39 @@ export default function InvitePage({ params }: { params: { token: string } }) {
           </>
         ) : null}
 
-        {!loading && !payload ? <p className="text-sm text-red-600">{error || "Invalid invite link"}</p> : null}
+        {!loading && !payload ? (
+          <div className="space-y-3">
+            <p className="text-base font-semibold text-red-700">This invite link is no longer available.</p>
+            <p className="text-sm text-slate-600">
+              Please request a new secure link from Newton Immigration.
+            </p>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+              <p>Support phone: {supportPhone}</p>
+              <p>Support email: {supportEmail}</p>
+              {error ? <p className="mt-1 text-red-600">Details: {error}</p> : null}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <a
+                href={`tel:${supportPhone}`}
+                className="rounded bg-slate-900 px-3 py-2 text-xs font-semibold text-white"
+              >
+                Call Support
+              </a>
+              <a
+                href={`mailto:${supportEmail}?subject=Request%20New%20Client%20Portal%20Link`}
+                className="rounded border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
+              >
+                Request New Link
+              </a>
+              <a
+                href="/"
+                className="rounded border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
+              >
+                Go to Portal Home
+              </a>
+            </div>
+          </div>
+        ) : null}
       </section>
     </main>
   );

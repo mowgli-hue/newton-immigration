@@ -16,10 +16,12 @@ function normalize(text: string): string {
 
 export function resolveApplicationChecklistKey(formType: string):
   | "pgwp"
-  | "trv"
+  | "trv_inside"
+  | "visitor_visa"
   | "visitor_record"
   | "work_permit"
   | "study_permit"
+  | "study_permit_extension"
   | "super_visa"
   | "us_b1b2"
   | "uk_visitor"
@@ -28,7 +30,8 @@ export function resolveApplicationChecklistKey(formType: string):
   | "generic" {
   const ft = normalize(formType);
   if (ft.includes("pgwp") || ft.includes("post graduation") || ft.includes("imm5710")) return "pgwp";
-  if (ft.includes("trv") || ft.includes("visitor visa")) return "trv";
+  if (ft.includes("trv inside")) return "trv_inside";
+  if (ft.includes("visitor visa") || ft.includes("trv outside") || ft === "trv") return "visitor_visa";
   if (ft.includes("visitor record")) return "visitor_record";
   if (
     ft.includes("work permit") ||
@@ -38,6 +41,7 @@ export function resolveApplicationChecklistKey(formType: string):
   )
     return "work_permit";
   if (ft.includes("study permit")) return "study_permit";
+  if (ft.includes("study permit extension") || ft.includes("college change") || ft.includes("spe")) return "study_permit_extension";
   if (ft.includes("super visa") || ft.includes("supervisa")) return "super_visa";
   if (ft.includes("ds 160") || ft.includes("b1") || ft.includes("b2") || ft.includes("usa")) return "us_b1b2";
   if (ft.includes("uk visa") || ft.includes("uk visitor")) return "uk_visitor";
@@ -56,17 +60,27 @@ const CHECKLISTS: Record<string, ApplicationChecklistItem[]> = {
     { key: "language_test", label: "Language Test (IELTS/CELPIP/PTE)", required: false, keywords: ["ielts", "celpip", "pte", "language"] },
     { key: "old_studies", label: "Old/Past College Documents (if transfer)", required: false, keywords: ["old college", "past stud", "previous college"] }
   ],
-  trv: [
+  trv_inside: [
+    { key: "passport", label: "Passport", required: true, keywords: ["passport"] },
+    { key: "proof_funds", label: "Proof of Funds (bank statements/certificate/ITR/CA report)", required: true, keywords: ["fund", "bank", "statement", "itr", "ca report"] },
+    { key: "employment_docs", label: "Employment Docs (job letter + payslips if working)", required: false, keywords: ["job letter", "payslip", "employment"] },
+    { key: "study_docs", label: "Study Docs (if studying)", required: false, keywords: ["enrollment", "loa", "transcript", "school"] },
+    { key: "visit_docs", label: "Visit Purpose/Host Docs", required: false, keywords: ["invitation", "host", "relationship", "visit reason"] },
+    { key: "sponsor_docs", label: "Sponsor Docs (passport/permit/LOA/T4 etc.)", required: false, keywords: ["sponsor", "t4", "permit", "noa", "passport"] }
+  ],
+  visitor_visa: [
     { key: "passport", label: "Passport", required: true, keywords: ["passport"] },
     { key: "proof_funds", label: "Proof of Funds", required: true, keywords: ["fund", "bank", "statement", "itr", "ca report"] },
-    { key: "employment_docs", label: "Employment Docs (Job letter + payslips, if working)", required: false, keywords: ["job letter", "payslip", "employment"] },
-    { key: "study_docs", label: "Study Docs (if studying)", required: false, keywords: ["enrollment", "loa", "transcript", "school"] },
-    { key: "sponsor_docs", label: "Sponsor Documents", required: false, keywords: ["sponsor", "t4", "permit", "noa"] }
+    { key: "employment_or_study", label: "Employment/Study Docs", required: false, keywords: ["job letter", "payslip", "enrollment", "school", "loa"] },
+    { key: "travel_history", label: "Travel History + Refusal Details", required: false, keywords: ["travel", "refusal", "visa refusal"] },
+    { key: "family_info", label: "Parents/Children/Family Details", required: false, keywords: ["parents", "children", "family"] },
+    { key: "sponsor_docs", label: "Sponsor Docs (if applicable)", required: false, keywords: ["sponsor", "permit", "t4", "noa"] }
   ],
   visitor_record: [
     { key: "passport", label: "Passport", required: true, keywords: ["passport"] },
     { key: "current_status", label: "Current Permit/Status Documents", required: true, keywords: ["permit", "visa", "status"] },
-    { key: "funds", label: "Proof of Funds", required: true, keywords: ["fund", "bank", "statement"] }
+    { key: "funds", label: "Proof of Funds", required: true, keywords: ["fund", "bank", "statement"] },
+    { key: "reason_letter", label: "Extension/Stay Reason Letter", required: false, keywords: ["letter", "explanation", "visitor record"] }
   ],
   work_permit: [
     { key: "passport", label: "Passport", required: true, keywords: ["passport"] },
@@ -84,19 +98,33 @@ const CHECKLISTS: Record<string, ApplicationChecklistItem[]> = {
     { key: "language", label: "English Proficiency", required: false, keywords: ["ielts", "toefl", "pte"] },
     { key: "medical", label: "Medical Exam", required: false, keywords: ["medical"] }
   ],
+  study_permit_extension: [
+    { key: "passport", label: "Passport (front/back clear copies)", required: true, keywords: ["passport"] },
+    { key: "permits", label: "All current permits", required: true, keywords: ["permit"] },
+    { key: "photo", label: "Recent digital photograph", required: true, keywords: ["photo", "digital"] },
+    { key: "enrollment", label: "Enrollment letter", required: true, keywords: ["enrollment"] },
+    { key: "transcripts", label: "Unofficial transcripts", required: true, keywords: ["transcript"] },
+    { key: "tuition", label: "Tuition fee receipts", required: true, keywords: ["tuition", "fee receipt"] },
+    { key: "loa", label: "LOA + PAL (if applicable)", required: true, keywords: ["loa", "pal"] },
+    { key: "previous_college", label: "Previous college docs (if transfer)", required: false, keywords: ["previous", "old college", "transfer"] }
+  ],
   super_visa: [
-    { key: "passport", label: "Applicant Passport", required: true, keywords: ["passport"] },
+    { key: "passport", label: "Applicant Passport(s)", required: true, keywords: ["passport"] },
     { key: "digital_photo", label: "Digital Photo", required: true, keywords: ["photo"] },
     { key: "medical", label: "Proof of Upfront Medical", required: true, keywords: ["medical"] },
     { key: "insurance", label: "Medical Insurance", required: true, keywords: ["insurance"] },
     { key: "applicant_funds", label: "Applicant Proof of Funds", required: true, keywords: ["fund", "bank", "certificate", "statement"] },
+    { key: "marriage", label: "Marriage Certificate (if applicable)", required: false, keywords: ["marriage certificate"] },
     { key: "sponsor_status", label: "Sponsor Status Proof (PR/Citizenship)", required: true, keywords: ["pr card", "canadian passport", "certificate"] },
-    { key: "sponsor_income", label: "Sponsor Income Docs (NOA/T4/Job/Paystubs)", required: true, keywords: ["noa", "t4", "job letter", "paystub"] }
+    { key: "sponsor_income", label: "Sponsor Income Docs (NOA/T4/Job/Paystubs)", required: true, keywords: ["noa", "t4", "job letter", "paystub"] },
+    { key: "sponsor_birth", label: "Sponsor Birth Certificate (if available)", required: false, keywords: ["birth certificate"] }
   ],
   us_b1b2: [
     { key: "passport", label: "Passport", required: true, keywords: ["passport"] },
     { key: "photo", label: "Digital Photo (DS-160 specs)", required: true, keywords: ["photo"] },
-    { key: "travel_history", label: "Travel History / Visa Refusal Details", required: false, keywords: ["travel", "refusal"] }
+    { key: "travel_history", label: "Travel History / Visa Refusal Details", required: false, keywords: ["travel", "refusal"] },
+    { key: "employment_education", label: "Employment/Education history details", required: false, keywords: ["employment", "education", "school"] },
+    { key: "social_media", label: "Social media handles (last 5 years)", required: false, keywords: ["social media", "handle"] }
   ],
   uk_visitor: [
     { key: "passport", label: "Passport", required: true, keywords: ["passport"] },
@@ -110,7 +138,8 @@ const CHECKLISTS: Record<string, ApplicationChecklistItem[]> = {
     { key: "id_docs", label: "National/Civil ID + Birth Certificate", required: true, keywords: ["id", "birth certificate"] },
     { key: "entry_proof", label: "Entry Proof (stamp/eGate/tickets)", required: true, keywords: ["entry", "stamp", "ticket", "boarding"] },
     { key: "canada_status", label: "Current/Past Canadian Permit Docs", required: false, keywords: ["permit", "visa"] },
-    { key: "legal_evidence", label: "Legal/Threat Supporting Evidence", required: false, keywords: ["court", "police", "threat", "evidence"] }
+    { key: "legal_evidence", label: "Legal/Threat Supporting Evidence", required: false, keywords: ["court", "police", "threat", "evidence"] },
+    { key: "narrative", label: "Detailed claim narrative/explanation", required: true, keywords: ["explanation", "claim", "incident"] }
   ],
   canadian_passport_doc: [
     { key: "citizenship_certificate", label: "Citizenship Certificate", required: true, keywords: ["citizenship certificate"] },

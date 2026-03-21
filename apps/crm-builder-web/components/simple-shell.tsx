@@ -19,7 +19,7 @@ import { Company } from "@/lib/models";
 import { getChecklistForFormType } from "@/lib/application-checklists";
 
 type Screen = "dashboard" | "cases" | "communications" | "accounting" | "tasks" | "chat" | "files";
-type ClientScreen = "retainer" | "payment" | "overview" | "documents" | "questions" | "chat";
+type ClientScreen = "retainer" | "overview" | "documents" | "questions" | "chat";
 type SessionUser = {
   id: string;
   name: string;
@@ -64,6 +64,13 @@ type NotificationItem = {
   read: boolean;
   createdAt: string;
 };
+type TeamUserItem = {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  active?: boolean;
+};
 type DocRequestItem = {
   id: string;
   title: string;
@@ -100,6 +107,7 @@ type RequiredDocItem = {
 const APPLICATION_TYPES: string[] = [
   "PGWP",
   "Post-Graduation Work Permit (PGWP)",
+  "Webform Submission",
   "Visitor Visa (TRV - Outside Canada)",
   "TRV (Inside Canada)",
   "Visitor Record (Extension)",
@@ -148,8 +156,25 @@ const APPLICATION_TYPES: string[] = [
   "PNP + PR",
   "LMIA + Work Permit",
   "PR Sponsorship + Open Work Permit",
-  "Study Permit + SOWP",
-  "IMM5710"
+  "Study Permit + SOWP"
+];
+
+const PROCESSING_TEAM_MEMBERS: string[] = [
+  "Unassigned",
+  "sarbleen",
+  "rapneet",
+  "eknoor",
+  "simi",
+  "ramandeep",
+  "rajwinder",
+  "avneet"
+];
+
+const PROCESSING_STATUS_OPTIONS: Array<{ value: "docs_pending" | "under_review" | "submitted" | "other"; label: string }> = [
+  { value: "docs_pending", label: "Docs Pending" },
+  { value: "under_review", label: "Under Review" },
+  { value: "submitted", label: "Submitted" },
+  { value: "other", label: "Other" }
 ];
 
 type InternalExtractionIntake = {
@@ -161,6 +186,25 @@ type InternalExtractionIntake = {
   currentCountryStatus?: string;
   studyPermitExpiryDate?: string;
   permitDetails?: string;
+};
+
+type DiagnosticsCheck = {
+  id: string;
+  title: string;
+  status: "pass" | "warn" | "fail";
+  detail: string;
+};
+
+type DiagnosticsReport = {
+  generatedAt: string;
+  summary: {
+    overall: "pass" | "warn" | "fail";
+    failCount: number;
+    warnCount: number;
+    passCount: number;
+    total: number;
+  };
+  checks: DiagnosticsCheck[];
 };
 
 const tabs: { id: Screen; label: string; icon: ReactNode }[] = [
@@ -212,6 +256,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [clientIntakeDone, setClientIntakeDone] = useState(false);
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [teamUsers, setTeamUsers] = useState<TeamUserItem[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [caseDetailTab, setCaseDetailTab] = useState<CaseDetailTab>("overview");
   const [newTaskTitle, setNewTaskTitle] = useState("");
@@ -226,7 +271,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [retainerAccepted, setRetainerAccepted] = useState(false);
   const [retainerStatus, setRetainerStatus] = useState("");
   const [commClientName, setCommClientName] = useState("");
-  const [commFormType, setCommFormType] = useState("IMM5710");
+  const [commFormType, setCommFormType] = useState("PGWP");
   const [commPhone, setCommPhone] = useState("");
   const [commCreateStatus, setCommCreateStatus] = useState("");
   const [commUrgent, setCommUrgent] = useState(false);
@@ -235,6 +280,9 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [commPaymentStatus, setCommPaymentStatus] = useState("");
   const [commPruneCaseIds, setCommPruneCaseIds] = useState("CASE-1006, CASE-1007");
   const [commPruneStatus, setCommPruneStatus] = useState("");
+  const [caseActionStatus, setCaseActionStatus] = useState("");
+  const [diagnosticsStatus, setDiagnosticsStatus] = useState("");
+  const [diagnosticsReport, setDiagnosticsReport] = useState<DiagnosticsReport | null>(null);
   const [caseSearch, setCaseSearch] = useState("");
   const [accountingSearch, setAccountingSearch] = useState("");
   const [accountingAmount, setAccountingAmount] = useState<Record<string, string>>({});
@@ -244,6 +292,12 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [brandLogoUrl, setBrandLogoUrl] = useState("");
   const [brandDriveRootLink, setBrandDriveRootLink] = useState("");
   const [brandStatus, setBrandStatus] = useState("");
+  const [teamName, setTeamName] = useState("");
+  const [teamEmail, setTeamEmail] = useState("");
+  const [teamRole, setTeamRole] = useState<Role>("Owner");
+  const [teamPassword, setTeamPassword] = useState("");
+  const [teamStatus, setTeamStatus] = useState("");
+  const [teamPasswordDrafts, setTeamPasswordDrafts] = useState<Record<string, string>>({});
   const [setupFormType, setSetupFormType] = useState("");
   const [setupRetainerAmount, setSetupRetainerAmount] = useState("");
   const [setupInteracRecipient, setSetupInteracRecipient] = useState("");
@@ -330,6 +384,14 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
         const n = await noticeRes.json();
         setNotifications((n.notifications || []) as NotificationItem[]);
       }
+
+      if (user.userType === "staff") {
+        const usersRes = await apiFetch("/users", { cache: "no-store" });
+        if (usersRes.ok) {
+          const usersPayload = await usersRes.json().catch(() => ({}));
+          setTeamUsers((usersPayload.users || []) as TeamUserItem[]);
+        }
+      }
     } catch {
       setError("Could not load workspace");
     } finally {
@@ -353,13 +415,17 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     const q = caseSearch.trim().toLowerCase();
     if (!q) return byRole;
     return byRole.filter((c) => {
-      const candidate = `${c.id} ${c.client} ${c.formType}`.toLowerCase();
+      const candidate = `${c.id} ${c.client} ${c.formType} ${c.assignedTo || ""} ${c.processingStatus || ""} ${c.processingStatusOther || ""}`.toLowerCase();
       return candidate.includes(q);
     });
   }, [cases, viewRole, caseSearch]);
   const selectedCase = visibleCases.find((c) => c.id === selectedCaseId) ?? visibleCases[0] ?? null;
   const newCasesList = useMemo(
-    () => visibleCases.filter((c) => (c.caseStatus || "lead") === "lead"),
+    () =>
+      visibleCases.filter((c) => {
+        const status = c.caseStatus || "lead";
+        return status === "active" || status === "lead";
+      }),
     [visibleCases]
   );
   const underReviewCasesList = useMemo(
@@ -367,6 +433,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       visibleCases.filter(
         (c) =>
           (c.caseStatus || "lead") === "under_review" ||
+          c.processingStatus === "under_review" ||
           c.stage === "Under Review" ||
           (c.aiStatus || "idle") === "drafting"
       ),
@@ -554,9 +621,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     const clientCase = cases[0];
     if (!clientCase) return;
     if (!clientCase.retainerSigned) return;
-    if (clientCase.paymentStatus !== "paid" && clientCase.paymentStatus !== "not_required") return;
-
-    // Auto-guide the client to the next required step after payment confirmation.
+    // Auto-guide the client once retainer is signed.
     if (!clientIntakeDone) {
       setClientScreen("questions");
       return;
@@ -613,7 +678,15 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     setCases((prev) => [created, ...prev]);
     setSelectedCaseId(created.id);
     setSetupFormType(created.formType || commFormType.trim());
-    setCommCreateStatus(`Case created: ${created.id}. Now create invite/payment link below.`);
+    const driveLinked = Boolean(payload?.drive?.linked);
+    const driveReason = String(payload?.drive?.reason || "");
+    if (driveLinked) {
+      setCommCreateStatus(`Case created: ${created.id}. Drive folder linked. Now create invite link below.`);
+    } else {
+      setCommCreateStatus(
+        `Case created: ${created.id}. Drive link pending (${driveReason || "not configured"}). Please check Company Branding Drive root.`
+      );
+    }
     setCommClientName("");
     setCommPhone("");
     setCommUrgent(false);
@@ -652,6 +725,19 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     const deletedCount = Number(payload.deletedCount || 0);
     setCommPruneStatus(`Done. Removed ${deletedCount} non-selected case(s).`);
     await loadSession();
+  }
+
+  async function runDiagnosticsBot() {
+    setDiagnosticsStatus("Running QA/Security bot checks...");
+    const res = await apiFetch("/testing/bot", { cache: "no-store" });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setDiagnosticsReport(null);
+      setDiagnosticsStatus(String(payload.error || "Could not run diagnostics bot."));
+      return;
+    }
+    setDiagnosticsReport(payload as DiagnosticsReport);
+    setDiagnosticsStatus("Diagnostics completed.");
   }
 
   async function sendMessage(mode: "human" | "ai") {
@@ -810,10 +896,10 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   function getCaseNextAction(caseItem: CaseItem): {
     label: string;
     hint: string;
-    type: "payment" | "documents" | "tasks" | "communication" | "open";
+    type: "documents" | "tasks" | "communication" | "open";
   } {
     if ((caseItem.paymentStatus || "pending") === "pending") {
-      return { label: "Send Payment Link", hint: "Payment pending", type: "payment" };
+      return { label: "Pending Payment", hint: "Handle in Communications", type: "communication" };
     }
     if ((caseItem.aiStatus || "idle") === "waiting_client") {
       return { label: "Collect Missing Docs", hint: "Waiting on client", type: "documents" };
@@ -832,11 +918,6 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     setScreen("cases");
     const action = getCaseNextAction(caseItem);
 
-    if (action.type === "payment") {
-      setCaseDetailTab("overview");
-      await sendPaymentLinkForCase(caseItem);
-      return;
-    }
     if (action.type === "documents") {
       setCaseDetailTab("documents");
       await loadCaseDetail(caseItem.id);
@@ -855,6 +936,23 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
 
     setCaseDetailTab("overview");
     await loadCaseDetail(caseItem.id);
+  }
+
+  async function updateCaseProcessing(caseId: string, patch: Partial<Pick<CaseItem, "assignedTo" | "processingStatus" | "processingStatusOther">>) {
+    setCaseActionStatus("Saving case updates...");
+    const res = await apiFetch(`/cases/${caseId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch)
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setCaseActionStatus(String(payload.error || "Could not save case updates."));
+      return;
+    }
+    const updated = payload.case as CaseItem;
+    setCases((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+    setCaseActionStatus(`Updated ${updated.id}.`);
   }
 
   async function sendRetainerToClient() {
@@ -953,7 +1051,9 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   }
 
   async function recordAccountingPayment(caseId: string) {
-    const amount = Number(accountingAmount[caseId] || 0);
+    const raw = String(accountingAmount[caseId] || "").trim();
+    const cleaned = raw.replace(/[^0-9.]/g, "");
+    const amount = Number(cleaned || 0);
     if (!Number.isFinite(amount) || amount <= 0) {
       setAccountingStatus("Enter a valid paid amount.");
       return;
@@ -1009,6 +1109,76 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     const nextCompany = payload.company as Company;
     setCompany(nextCompany);
     setBrandStatus("Branding updated.");
+  }
+
+  async function addTeamMember() {
+    if (!teamName.trim() || !teamEmail.trim() || !teamPassword.trim()) {
+      setTeamStatus("Name, email and temporary password are required.");
+      return;
+    }
+    setTeamStatus("Adding team member...");
+    const res = await apiFetch("/users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: teamName.trim(),
+        email: teamEmail.trim(),
+        role: teamRole,
+        password: teamPassword.trim()
+      })
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setTeamStatus(String(payload.error || "Could not add team member."));
+      return;
+    }
+    setTeamStatus(`Team member added: ${String(payload?.user?.name || teamName.trim())}`);
+    setTeamName("");
+    setTeamEmail("");
+    setTeamPassword("");
+    const usersRes = await apiFetch("/users", { cache: "no-store" });
+    if (usersRes.ok) {
+      const usersPayload = await usersRes.json().catch(() => ({}));
+      setTeamUsers((usersPayload.users || []) as TeamUserItem[]);
+    }
+  }
+
+  async function setTeamMemberActive(userId: string, active: boolean) {
+    setTeamStatus(active ? "Reactivating team member..." : "Deactivating team member...");
+    const res = await apiFetch(`/users/${userId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ active })
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setTeamStatus(String(payload.error || "Could not update member status."));
+      return;
+    }
+    const updated = payload.user as TeamUserItem;
+    setTeamUsers((prev) => prev.map((u) => (u.id === updated.id ? { ...u, active: updated.active } : u)));
+    setTeamStatus(`${updated.name} is now ${updated.active === false ? "inactive" : "active"}.`);
+  }
+
+  async function resetTeamMemberPassword(userId: string) {
+    const nextPassword = String(teamPasswordDrafts[userId] || "").trim();
+    if (!nextPassword) {
+      setTeamStatus("Enter a new password before reset.");
+      return;
+    }
+    setTeamStatus("Resetting password...");
+    const res = await apiFetch(`/users/${userId}/password`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: nextPassword })
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setTeamStatus(String(payload.error || "Could not reset password."));
+      return;
+    }
+    setTeamPasswordDrafts((prev) => ({ ...prev, [userId]: "" }));
+    setTeamStatus("Password reset complete.");
   }
 
   function buildInteracEmailTemplate() {
@@ -1251,7 +1421,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     const updated = payload.case as CaseItem;
     setCases((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
     setRetainerStatus("Retainer signed successfully.");
-    setClientScreen("payment");
+    setClientScreen("overview");
   }
 
   async function uploadClientDocument(caseId: string) {
@@ -1275,7 +1445,11 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     }
     setDocuments((prev) => [...prev, payload.document as DocumentItem]);
     setClientUploadFile(null);
-    setClientUploadStatus("Upload complete.");
+    if (payload?.driveUpload?.success) {
+      setClientUploadStatus("Upload complete (saved to Google Drive).");
+    } else {
+      setClientUploadStatus("Upload complete (saved locally). Ask team to check Google Drive integration.");
+    }
   }
 
   function isChecklistDocUploaded(item: RequiredDocItem): boolean {
@@ -1308,7 +1482,11 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     }
     setDocuments((prev) => [...prev, payload.document as DocumentItem]);
     setChecklistFiles((prev) => ({ ...prev, [item.key]: null }));
-    setChecklistStatus((prev) => ({ ...prev, [item.key]: "Uploaded." }));
+    const uploadedToDrive = Boolean(payload?.driveUpload?.success);
+    setChecklistStatus((prev) => ({
+      ...prev,
+      [item.key]: uploadedToDrive ? "Uploaded to Google Drive." : "Uploaded locally (Drive not linked)."
+    }));
   }
 
   async function createStaffDocRequest() {
@@ -1445,9 +1623,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     const c = cases[0];
     const companyName = company?.name || "Your Company";
     const caseChecklist: RequiredDocItem[] = c ? getChecklistForFormType(c.formType) : [];
-    const clientReadyForDocs = Boolean(
-      c && c.retainerSigned && (c.paymentStatus === "paid" || c.paymentStatus === "not_required")
-    );
+    const clientReadyForDocs = Boolean(c && c.retainerSigned);
     const docsChecklistComplete = (() => {
       if (!c) return false;
       const requiredItems = caseChecklist.filter((item) => item.required !== false);
@@ -1455,7 +1631,6 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       return requiredItems.every((item) => isChecklistDocUploaded(item));
     })();
     const openDocRequests = (docRequests || []).filter((r) => r.status === "open");
-    const paymentSupportPhone = "6046535031";
     const processingSupportPhone = "6049024500";
     return (
       <main className="mx-auto flex max-w-5xl flex-col gap-5 px-4 py-6 md:px-6 md:py-8">
@@ -1489,7 +1664,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                 <span>{clientProfileOpen ? "Hide" : "Show"}</span>
               </button>
               {clientProfileOpen ? (
-              <div className="mt-2 grid gap-2 md:grid-cols-4 text-sm">
+              <div className="mt-2 grid gap-2 md:grid-cols-2 text-sm">
                 <article className="rounded-lg border border-slate-200 p-2">
                   <p className="text-xs text-slate-500">Case</p>
                   <p className="font-semibold">{c.id}</p>
@@ -1497,20 +1672,6 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                 <article className="rounded-lg border border-slate-200 p-2">
                   <p className="text-xs text-slate-500">Application</p>
                   <p className="font-semibold">{c.formType}</p>
-                </article>
-                <article className="rounded-lg border border-slate-200 p-2">
-                  <p className="text-xs text-slate-500">Payment Status</p>
-                  <p className="font-semibold">{c.paymentStatus || "pending"}</p>
-                </article>
-                <article className="rounded-lg border border-slate-200 p-2">
-                  <p className="text-xs text-slate-500">Pending Fees</p>
-                  <p className="font-semibold">
-                    $
-                    {c.paymentStatus === "paid"
-                      ? Number(c.servicePackage.balanceAmount || 0)
-                      : Number(c.servicePackage.retainerAmount || 0)}
-                    {" "}CAD
-                  </p>
                 </article>
               </div>
               ) : null}
@@ -1576,51 +1737,6 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
               </section>
             ) : null}
 
-            {clientScreen === "payment" ? (
-              <section className="rounded-2xl border-2 border-slate-500 bg-white p-4 shadow-sm">
-                <button onClick={() => setClientScreen("overview")} className="mb-2 rounded border border-slate-300 px-2 py-1 text-xs font-semibold">Back to Tasks</button>
-                <h3 className="font-semibold">Interac Payment</h3>
-                {!c.retainerSigned ? (
-                  <p className="mt-2 text-sm text-amber-700">Please sign the retainer first.</p>
-                ) : c.paymentStatus === "paid" ? (
-                  <div className="mt-3 rounded border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-800">
-                    Payment confirmed {c.paymentPaidAt ? `on ${new Date(c.paymentPaidAt).toLocaleString()}` : ""}.
-                  </div>
-                ) : (
-                  <div className="mt-3 space-y-2">
-                    <p className="text-sm text-slate-700">
-                      Amount due: <span className="font-semibold">${c.servicePackage.retainerAmount} CAD</span>
-                    </p>
-                    <div className="rounded border border-slate-200 bg-slate-50 p-3 text-sm">
-                      <p>
-                        Send Interac to: <span className="font-semibold">{fixedInteracRecipient}</span>
-                      </p>
-                      <p className="mt-1">
-                        Reference message: <span className="font-semibold">{c.id}</span>
-                      </p>
-                      <p className="mt-1">{normalizeInteracInstructions(c.interacInstructions)}</p>
-                    </div>
-                    <a
-                      href="https://www.interac.ca/en/consumers/products/interac-e-transfer/"
-                      target="_blank"
-                      className="inline-block rounded border border-slate-300 px-3 py-2 text-xs font-semibold"
-                    >
-                      Open Bank
-                    </a>
-                    <button
-                      onClick={() => void copyInteracDetails(c)}
-                      className="ml-2 inline-block rounded border border-slate-300 px-3 py-2 text-xs font-semibold"
-                    >
-                      Copy Payment Details
-                    </button>
-                    {interacCopyStatus ? <p className="text-xs text-slate-600">{interacCopyStatus}</p> : null}
-                    <p className="text-xs text-slate-500">Your bank app cannot be prefilled directly. Use Copy Payment Details, then paste in your bank transfer screen.</p>
-                    <p className="text-xs text-slate-500">After payment, {companyName} team will verify and unlock documents/forms.</p>
-                  </div>
-                )}
-              </section>
-            ) : null}
-
             {clientScreen === "overview" ? (
               <>
                 <section className="grid gap-3 md:grid-cols-2">
@@ -1628,14 +1744,6 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                     <button onClick={() => setClientScreen("retainer")} className="rounded-xl border-2 border-slate-500 bg-white p-4 text-left shadow-sm">
                       <p className="text-xs text-slate-500">Task</p>
                       <p className="mt-1 text-lg font-semibold">Sign Retainer</p>
-                      <p className="text-xs text-slate-500">Pending</p>
-                      <p className="mt-2 text-xs font-semibold">[ ] To Do</p>
-                    </button>
-                  ) : null}
-                  {c.paymentStatus !== "paid" ? (
-                    <button onClick={() => setClientScreen("payment")} className="rounded-xl border-2 border-slate-500 bg-white p-4 text-left shadow-sm">
-                      <p className="text-xs text-slate-500">Task</p>
-                      <p className="mt-1 text-lg font-semibold">Complete Payment</p>
                       <p className="text-xs text-slate-500">Pending</p>
                       <p className="mt-2 text-xs font-semibold">[ ] To Do</p>
                     </button>
@@ -1692,7 +1800,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                 <div className="mt-3 space-y-2">
                   <a href={clientReadyForDocs ? questionnaireUrl(c.questionnaireLink, c.id) : "#"} target="_blank" className={`block rounded-lg border-2 border-slate-300 px-3 py-2 text-sm font-semibold ${clientReadyForDocs ? "" : "pointer-events-none opacity-50"}`}>Fill Question Form</a>
                 </div>
-                {!clientReadyForDocs ? <p className="mt-2 text-xs text-amber-700">Complete retainer e-sign and Interac payment to unlock actions.</p> : null}
+                {!clientReadyForDocs ? <p className="mt-2 text-xs text-amber-700">Complete retainer e-sign to unlock actions.</p> : null}
                 {clientReadyForDocs && openDocRequests.length > 0 ? (
                   <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3">
                     <p className="text-sm font-semibold text-amber-900">Additional documents requested by processing team</p>
@@ -1826,7 +1934,6 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
         ) : null}
         <section className="rounded-2xl border-2 border-slate-500 bg-white p-4 shadow-sm">
           <h3 className="font-semibold">Contact Us</h3>
-          <p className="mt-1 text-sm text-slate-700">For payment assistance call at <span className="font-semibold">{paymentSupportPhone}</span>.</p>
           <p className="mt-1 text-sm text-slate-700">For case processing call at <span className="font-semibold">{processingSupportPhone}</span>.</p>
           <a
             href="https://www.franco.app"
@@ -2004,6 +2111,107 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                 </button>
                 {brandStatus ? <p className="mt-2 text-xs text-slate-600">{brandStatus}</p> : null}
               </section>
+
+              {sessionUser?.userType === "staff" && (sessionUser.role === "Admin" || sessionUser.role === "Owner") ? (
+                <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
+                  <h3 className="text-base font-semibold">Team Management</h3>
+                  <p className="mt-1 text-xs text-slate-500">Owner/Admin can add processing team members here.</p>
+                  <div className="mt-3 grid gap-2 md:grid-cols-4">
+                    <input
+                      value={teamName}
+                      onChange={(e) => setTeamName(e.target.value)}
+                      className="rounded-lg border-2 border-slate-300 px-3 py-2 text-sm"
+                      placeholder="Full name"
+                    />
+                    <input
+                      value={teamEmail}
+                      onChange={(e) => setTeamEmail(e.target.value)}
+                      className="rounded-lg border-2 border-slate-300 px-3 py-2 text-sm"
+                      placeholder="Email"
+                    />
+                    <select
+                      value={teamRole}
+                      onChange={(e) => setTeamRole(e.target.value as Role)}
+                      className="rounded-lg border-2 border-slate-300 px-3 py-2 text-sm"
+                    >
+                      <option value="Owner">Owner</option>
+                      <option value="Reviewer">Reviewer</option>
+                      {sessionUser.role === "Admin" ? <option value="Admin">Admin</option> : null}
+                    </select>
+                    <input
+                      value={teamPassword}
+                      onChange={(e) => setTeamPassword(e.target.value)}
+                      className="rounded-lg border-2 border-slate-300 px-3 py-2 text-sm"
+                      placeholder="Temporary password"
+                    />
+                  </div>
+                  <button
+                    onClick={() => void addTeamMember()}
+                    className="mt-2 rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white"
+                  >
+                    Add Team Member
+                  </button>
+                  {teamStatus ? <p className="mt-2 text-xs text-slate-600">{teamStatus}</p> : null}
+
+                  <div className="mt-3 max-h-52 overflow-auto rounded border border-slate-200">
+                    {teamUsers.map((u) => (
+                      <div key={u.id} className="border-b border-slate-100 px-3 py-2 text-xs">
+                        {(() => {
+                          const ownerBlocked = sessionUser.role === "Owner" && u.role === "Admin";
+                          return (
+                            <>
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="font-semibold">{u.name}</p>
+                            <p className="text-slate-500">{u.email}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="rounded bg-slate-100 px-2 py-1 font-semibold text-slate-700">{u.role}</span>
+                            <span
+                              className={`rounded px-2 py-1 font-semibold ${
+                                u.active === false ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"
+                              }`}
+                            >
+                              {u.active === false ? "Inactive" : "Active"}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="mt-2 grid gap-2 md:grid-cols-[1fr_auto_auto]">
+                          <input
+                            value={teamPasswordDrafts[u.id] || ""}
+                            onChange={(e) =>
+                              setTeamPasswordDrafts((prev) => ({ ...prev, [u.id]: e.target.value }))
+                            }
+                            className="rounded border border-slate-300 px-2 py-1"
+                            placeholder="New password"
+                          />
+                          <button
+                            onClick={() => void resetTeamMemberPassword(u.id)}
+                            disabled={ownerBlocked}
+                            className="rounded border border-slate-300 px-2 py-1 font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Reset Password
+                          </button>
+                          <button
+                            onClick={() => void setTeamMemberActive(u.id, u.active === false)}
+                            disabled={ownerBlocked}
+                            className={`rounded px-2 py-1 font-semibold text-white ${
+                              u.active === false ? "bg-emerald-600" : "bg-rose-600"
+                            } disabled:cursor-not-allowed disabled:opacity-50`}
+                          >
+                            {u.active === false ? "Activate" : "Deactivate"}
+                          </button>
+                        </div>
+                        {ownerBlocked ? <p className="mt-1 text-[11px] text-amber-700">Owner cannot manage Admin users.</p> : null}
+                            </>
+                          );
+                        })()}
+                      </div>
+                    ))}
+                    {teamUsers.length === 0 ? <p className="px-3 py-2 text-xs text-slate-500">No team members found.</p> : null}
+                  </div>
+                </section>
+              ) : null}
             </>
           ) : null}
 
@@ -2051,7 +2259,15 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                       Back
                     </button>
                   </div>
-                  <div className="mt-3 grid gap-2">
+                  <div className="mt-3">
+                    <input
+                      value={caseSearch}
+                      onChange={(e) => setCaseSearch(e.target.value)}
+                      className="w-full rounded border border-slate-300 px-2 py-2 text-xs"
+                      placeholder="Search by case id, client, application, assignee"
+                    />
+                  </div>
+                  <div className="mt-2 grid gap-2">
                     {activeCaseBoardList.map((c) => (
                       <article
                         key={c.id}
@@ -2059,7 +2275,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                           selectedCase?.id === c.id ? "border-slate-900 bg-slate-50" : "border-slate-200 bg-white"
                         }`}
                       >
-                        <div className="grid gap-2 md:grid-cols-6">
+                        <div className="grid gap-2 md:grid-cols-8">
                           <div>
                             <p className="text-[11px] text-slate-500">Name</p>
                             <p className="font-semibold">{c.client}</p>
@@ -2073,12 +2289,57 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                             <p className="font-semibold">{c.aiStatus || "idle"}</p>
                           </div>
                           <div>
-                            <p className="text-[11px] text-slate-500">Case Status</p>
-                            <p className="font-semibold">{c.caseStatus || "lead"}</p>
+                            <p className="text-[11px] text-slate-500">Assigned To</p>
+                            <select
+                              value={String(c.assignedTo || "Unassigned")}
+                              onChange={(e) => void updateCaseProcessing(c.id, { assignedTo: e.target.value })}
+                              className="w-full rounded border border-slate-300 px-2 py-1 text-[11px] font-semibold"
+                            >
+                              {PROCESSING_TEAM_MEMBERS.map((member) => (
+                                <option key={member} value={member}>
+                                  {member}
+                                </option>
+                              ))}
+                            </select>
                           </div>
                           <div>
-                            <p className="text-[11px] text-slate-500">Deadline</p>
-                            <p className="font-semibold">{c.dueInDays} day(s)</p>
+                            <p className="text-[11px] text-slate-500">Status</p>
+                            <select
+                              value={c.processingStatus || "docs_pending"}
+                              onChange={(e) =>
+                                void updateCaseProcessing(c.id, {
+                                  processingStatus: e.target.value as "docs_pending" | "under_review" | "submitted" | "other",
+                                  processingStatusOther:
+                                    e.target.value === "other" ? c.processingStatusOther || "" : ""
+                                })
+                              }
+                              className="w-full rounded border border-slate-300 px-2 py-1 text-[11px] font-semibold"
+                            >
+                              {PROCESSING_STATUS_OPTIONS.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </option>
+                              ))}
+                            </select>
+                            {(c.processingStatus || "docs_pending") === "other" ? (
+                              <input
+                                defaultValue={c.processingStatusOther || ""}
+                                onBlur={(e) =>
+                                  void updateCaseProcessing(c.id, {
+                                    processingStatus: "other",
+                                    processingStatusOther: e.target.value
+                                  })
+                                }
+                                placeholder="Type custom status"
+                                className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-[11px]"
+                              />
+                            ) : null}
+                          </div>
+                          <div>
+                            <p className="text-[11px] text-slate-500">Last Updated</p>
+                            <p className="font-semibold">
+                              {c.updatedAt ? new Date(c.updatedAt).toLocaleDateString() : "-"}
+                            </p>
                           </div>
                           <div className="flex items-end justify-end gap-2">
                             <button onClick={() => setSelectedCaseId(c.id)} className="rounded border border-slate-300 px-2 py-1 text-[11px] font-semibold">
@@ -2095,6 +2356,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                       <p className="text-xs text-slate-500">No cases in this screen.</p>
                     ) : null}
                   </div>
+                  {caseActionStatus ? <p className="mt-2 text-xs text-slate-700">{caseActionStatus}</p> : null}
                 </>
               )}
 
@@ -2120,47 +2382,57 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                           <p className="font-semibold">{selectedCase.aiStatus || "idle"}</p>
                         </div>
                         <div className="rounded border border-slate-200 p-2">
-                          <p className="text-slate-500">Payment</p>
-                          <p className="font-semibold">{selectedCase.paymentStatus || "pending"}</p>
+                          <p className="text-slate-500">Assigned To</p>
+                          <p className="font-semibold">{selectedCase.assignedTo || "Unassigned"}</p>
                         </div>
                         <div className="rounded border border-slate-200 p-2">
-                          <p className="text-slate-500">Pending Fees</p>
+                          <p className="text-slate-500">Processing Status</p>
                           <p className="font-semibold">
-                            $
-                            {selectedCase.paymentStatus === "paid"
-                              ? Number(selectedCase.servicePackage.balanceAmount || 0)
-                              : Number(selectedCase.servicePackage.retainerAmount || 0)}{" "}
-                            CAD
+                            {selectedCase.processingStatus === "other"
+                              ? selectedCase.processingStatusOther || "other"
+                              : (selectedCase.processingStatus || "docs_pending").replace("_", " ")}
                           </p>
                         </div>
                         <div className="rounded border border-slate-200 p-2 md:col-span-4">
-                          <p className="text-slate-500">Payment Action</p>
+                          <p className="text-slate-500">Client Link Actions</p>
                           <div className="mt-1 flex flex-wrap gap-2">
+                            <input
+                              value={inviteEmail}
+                              onChange={(e) => setInviteEmail(e.target.value)}
+                              placeholder="Client email (optional)"
+                              className="rounded border border-slate-300 px-2 py-2 text-xs"
+                            />
                             <button
-                              onClick={() => void sendPaymentLinkForCase()}
+                              onClick={() => void createClientInvite()}
                               className="rounded bg-slate-900 px-3 py-2 text-xs font-semibold text-white"
                             >
-                              Send Payment Link
+                              Create / Refresh Client Link
                             </button>
-                            {selectedCase.paymentStatus !== "paid" ? (
-                              <button
-                                onClick={() => void confirmInteracReceived()}
-                                className="rounded bg-emerald-600 px-3 py-2 text-xs font-semibold text-white"
-                              >
-                                Confirm Interac Received
-                              </button>
-                            ) : (
-                              <span className="rounded border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
-                                Payment Confirmed
-                              </span>
-                            )}
                             {inviteUrl ? (
                               <a href={inviteUrl} target="_blank" className="rounded border border-slate-300 px-3 py-2 text-xs font-semibold text-blue-700 underline">
-                                Open Invite Link
+                                Open Client Link
                               </a>
                             ) : null}
                           </div>
-                          {paymentLinkStatus ? <p className="mt-1 text-xs text-slate-700">{paymentLinkStatus}</p> : null}
+                          {inviteStatus ? <p className="mt-1 text-xs text-slate-700">{inviteStatus}</p> : null}
+                          <p className="mt-2 text-slate-500">Processing Links</p>
+                          <div className="mt-1 flex flex-wrap gap-2">
+                            {selectedCase.questionnaireLink ? (
+                              <a href={questionnaireUrl(selectedCase.questionnaireLink, selectedCase.id)} target="_blank" className="rounded border border-slate-300 px-3 py-2 text-xs font-semibold text-blue-700 underline">
+                                Open Questions
+                              </a>
+                            ) : null}
+                            {selectedCase.docsUploadLink ? (
+                              <a href={selectedCase.docsUploadLink} target="_blank" className="rounded border border-slate-300 px-3 py-2 text-xs font-semibold text-blue-700 underline">
+                                Open Documents Folder
+                              </a>
+                            ) : null}
+                          </div>
+                          {selectedCase.updatedAt ? (
+                            <p className="mt-2 text-xs text-slate-500">
+                              Last updated: {new Date(selectedCase.updatedAt).toLocaleString()}
+                            </p>
+                          ) : null}
                         </div>
                       </div>
                     ) : null}
@@ -2322,6 +2594,65 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
               </select>
 
               <div className="mt-3 space-y-3">
+                <article className="rounded-lg border-2 border-slate-300 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold">QA / Security Test Bot</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Runs non-destructive system checks for auth, storage, invite policy, Drive config, and data integrity.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => void runDiagnosticsBot()}
+                      className="rounded bg-slate-900 px-3 py-2 text-xs font-semibold text-white"
+                    >
+                      Run Test Bot
+                    </button>
+                  </div>
+                  {diagnosticsStatus ? <p className="mt-2 text-xs text-slate-700">{diagnosticsStatus}</p> : null}
+                  {diagnosticsReport ? (
+                    <div className="mt-3 rounded border border-slate-200 p-2 text-xs">
+                      <div className="mb-2 flex flex-wrap items-center gap-2">
+                        <span
+                          className={`rounded px-2 py-1 text-[11px] font-semibold ${
+                            diagnosticsReport.summary.overall === "pass"
+                              ? "bg-emerald-100 text-emerald-800"
+                              : diagnosticsReport.summary.overall === "warn"
+                                ? "bg-amber-100 text-amber-800"
+                                : "bg-rose-100 text-rose-800"
+                          }`}
+                        >
+                          Overall: {diagnosticsReport.summary.overall.toUpperCase()}
+                        </span>
+                        <span className="text-slate-600">
+                          Pass {diagnosticsReport.summary.passCount} | Warn {diagnosticsReport.summary.warnCount} | Fail {diagnosticsReport.summary.failCount}
+                        </span>
+                      </div>
+                      <div className="max-h-48 space-y-2 overflow-auto">
+                        {diagnosticsReport.checks.map((check) => (
+                          <div key={check.id} className="rounded border border-slate-200 p-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="font-semibold">{check.title}</p>
+                              <span
+                                className={`rounded px-2 py-0.5 text-[10px] font-semibold ${
+                                  check.status === "pass"
+                                    ? "bg-emerald-100 text-emerald-700"
+                                    : check.status === "warn"
+                                      ? "bg-amber-100 text-amber-700"
+                                      : "bg-rose-100 text-rose-700"
+                                }`}
+                              >
+                                {check.status.toUpperCase()}
+                              </span>
+                            </div>
+                            <p className="mt-1 text-slate-600">{check.detail}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </article>
+
                 <article className="rounded-lg border-2 border-slate-300 p-3">
                   <p className="text-sm font-semibold">Payment Confirmation</p>
                   <p className="mt-1 text-xs text-slate-500">Search case and confirm Interac payment here.</p>

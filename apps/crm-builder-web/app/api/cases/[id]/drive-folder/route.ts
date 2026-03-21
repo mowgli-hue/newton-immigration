@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
 import { findCompanyById, getCase, updateCaseLinks } from "@/lib/store";
-import { buildCaseFolderName, createCaseDriveStructure, extractDriveFolderId } from "@/lib/google-drive";
+import { buildCaseFolderNameWithApp, createCaseDriveStructure, extractDriveFolderId } from "@/lib/google-drive";
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const user = await getCurrentUserFromRequest(request);
@@ -23,7 +23,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   }
 
   try {
-    const structure = await createCaseDriveStructure(rootId, buildCaseFolderName(caseItem.id, caseItem.client));
+    const structure = await createCaseDriveStructure(
+      rootId,
+      buildCaseFolderNameWithApp(caseItem.id, caseItem.client, caseItem.formType)
+    );
     const updated = await updateCaseLinks(user.companyId, caseItem.id, {
       docsUploadLink: structure.subfolders.clientDocuments.webViewLink,
       applicationFormsLink: structure.subfolders.applicationForms.webViewLink,

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
 import { createCase, findCompanyById, listCases, updateCaseLinks } from "@/lib/store";
-import { buildCaseFolderName, createCaseDriveStructure, extractDriveFolderId } from "@/lib/google-drive";
+import { buildCaseFolderNameWithApp, createCaseDriveStructure, extractDriveFolderId } from "@/lib/google-drive";
 
 export async function GET(request: NextRequest) {
   const user = await getCurrentUserFromRequest(request);
@@ -39,32 +39,55 @@ export async function POST(request: NextRequest) {
   const formType = String(body.formType ?? "").trim();
   const leadPhone = body?.leadPhone !== undefined ? String(body.leadPhone).trim() : undefined;
   const leadEmail = body?.leadEmail !== undefined ? String(body.leadEmail).trim() : undefined;
+  const isUrgent = Boolean(body?.isUrgent);
+  const dueInDays =
+    body?.dueInDays !== undefined && Number.isFinite(Number(body.dueInDays))
+      ? Number(body.dueInDays)
+      : undefined;
 
   if (!client || !formType) {
     return NextResponse.json({ error: "client and formType are required" }, { status: 400 });
   }
 
-  const created = await createCase({ companyId: user.companyId, client, formType, leadPhone, leadEmail });
+  const created = await createCase({
+    companyId: user.companyId,
+    client,
+    formType,
+    leadPhone,
+    leadEmail,
+    isUrgent,
+    dueInDays
+  });
   const company = await findCompanyById(user.companyId);
   const driveRoot = company?.branding?.driveRootLink || "";
+  let drive: { linked: boolean; reason?: string; error?: string } = {
+    linked: false,
+    reason: "drive_root_missing"
+  };
 
   if (driveRoot) {
     const rootId = extractDriveFolderId(driveRoot);
     if (rootId) {
       try {
-        const structure = await createCaseDriveStructure(rootId, buildCaseFolderName(created.id, created.client));
+        const structure = await createCaseDriveStructure(
+          rootId,
+          buildCaseFolderNameWithApp(created.id, created.client, created.formType)
+        );
         const withDrive = await updateCaseLinks(user.companyId, created.id, {
           docsUploadLink: structure.subfolders.clientDocuments.webViewLink,
           applicationFormsLink: structure.subfolders.applicationForms.webViewLink,
           submittedFolderLink: structure.subfolders.submitted.webViewLink,
           correspondenceFolderLink: structure.subfolders.correspondence.webViewLink
         });
-        return NextResponse.json({ case: withDrive ?? created }, { status: 201 });
-      } catch {
-        // Keep case creation successful even if Drive integration fails.
+        drive = { linked: true };
+        return NextResponse.json({ case: withDrive ?? created, drive }, { status: 201 });
+      } catch (error) {
+        drive = { linked: false, reason: "drive_create_failed", error: (error as Error).message };
       }
+    } else {
+      drive = { linked: false, reason: "drive_root_invalid" };
     }
   }
 
-  return NextResponse.json({ case: created }, { status: 201 });
+  return NextResponse.json({ case: created, drive }, { status: 201 });
 }

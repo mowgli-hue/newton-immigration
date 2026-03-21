@@ -79,17 +79,23 @@ function migrateStore(raw: Partial<AppStore>): AppStore {
   const users = (raw.users ?? seedUsers).map((u, idx) => ({
     ...u,
     companyId: u.companyId ?? companies[0].id,
-    userType: u.userType ?? "staff"
+    userType: u.userType ?? "staff",
+    active: u.active !== false
   }));
 
   const cases = (raw.cases ?? sampleCases).map((c, idx) => ({
     ...c,
+    createdAt: c.createdAt ?? c.updatedAt ?? new Date().toISOString(),
+    updatedAt: c.updatedAt ?? c.createdAt ?? new Date().toISOString(),
     companyId: c.companyId ?? companies[0].id,
     caseStatus: (c.caseStatus as CaseStatus) ?? "lead",
     aiStatus: (c.aiStatus as AiStatus) ?? "idle",
     leadPhone: c.leadPhone ?? undefined,
     leadEmail: c.leadEmail ?? undefined,
     sourceLeadKey: c.sourceLeadKey ?? undefined,
+    assignedTo: c.assignedTo ?? c.owner ?? "Unassigned",
+    processingStatus: c.processingStatus ?? "docs_pending",
+    processingStatusOther: c.processingStatusOther ?? undefined,
     isUrgent: Boolean(c.isUrgent),
     deadlineDate: c.deadlineDate ?? undefined,
     balanceAmount: c.balanceAmount ?? 0,
@@ -164,7 +170,7 @@ export async function writeStore(next: AppStore): Promise<void> {
 export async function findUserByCredentials(email: string, password: string): Promise<AppUser | null> {
   const store = await readStore();
   const found = store.users.find(
-    (u) => u.email.toLowerCase() === email.toLowerCase().trim() && u.password === password
+    (u) => u.email.toLowerCase() === email.toLowerCase().trim() && u.password === password && u.active !== false
   );
   return found ?? null;
 }
@@ -208,6 +214,7 @@ export async function createCompanyWithAdmin(input: {
     email: input.email,
     role: "Admin",
     userType: "staff",
+    active: true,
     password: input.password
   };
 
@@ -244,6 +251,11 @@ export async function createClientInvite(input: {
   const caseItem = store.cases.find((c) => c.companyId === input.companyId && c.id === input.caseId);
   if (!caseItem) throw new Error("Case not found");
 
+  const neverExpire = String(process.env.INVITE_LINK_NEVER_EXPIRES || "true").toLowerCase() !== "false";
+  const expiresAt = neverExpire
+    ? new Date(Date.now() + 1000 * 60 * 60 * 24 * 365 * 50).toISOString()
+    : new Date(Date.now() + 1000 * 60 * 60 * 24 * 14).toISOString();
+
   const invite: ClientInvite = {
     token: randomUUID(),
     companyId: input.companyId,
@@ -251,7 +263,7 @@ export async function createClientInvite(input: {
     email: input.email?.trim() || undefined,
     createdByUserId: input.createdByUserId,
     status: "pending",
-    expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14).toISOString(),
+    expiresAt,
     createdAt: new Date().toISOString()
   };
 
@@ -280,7 +292,8 @@ export async function getClientInviteByToken(token: string): Promise<ClientInvit
   const invite = store.invites.find((i) => i.token === token);
   if (!invite) return null;
 
-  if (invite.status === "pending" && new Date(invite.expiresAt).getTime() <= Date.now()) {
+  const enableExpiry = String(process.env.INVITE_LINK_ENABLE_EXPIRY || "false").toLowerCase() === "true";
+  if (enableExpiry && invite.status === "pending" && new Date(invite.expiresAt).getTime() <= Date.now()) {
     invite.status = "expired";
     await writeStore(store);
   }
@@ -324,6 +337,7 @@ export async function acceptClientInvite(input: {
     email: input.email.trim(),
     role: "Owner",
     userType: "client",
+    active: true,
     password: input.password,
     caseId: invite.caseId
   };
@@ -362,7 +376,13 @@ export async function resolveUserFromSession(token: string): Promise<AppUser | n
     return null;
   }
 
-  return store.users.find((u) => u.id === session.userId) ?? null;
+  const found = store.users.find((u) => u.id === session.userId) ?? null;
+  if (!found || found.active === false) {
+    store.sessions = store.sessions.filter((s) => s.token !== token);
+    await writeStore(store);
+    return null;
+  }
+  return found;
 }
 
 export async function listCases(companyId: string): Promise<CaseItem[]> {
@@ -434,6 +454,8 @@ export async function createCase(input: {
   const item: CaseItem = {
     id: nextId,
     companyId: input.companyId,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     client: input.client,
     caseStatus: "lead",
     aiStatus: "idle",
@@ -441,6 +463,9 @@ export async function createCase(input: {
     leadEmail: input.leadEmail?.trim() || undefined,
     sourceLeadKey: input.sourceLeadKey?.trim() || undefined,
     formType: input.formType,
+    assignedTo: "Unassigned",
+    processingStatus: "docs_pending",
+    processingStatusOther: undefined,
     isUrgent: Boolean(input.isUrgent),
     deadlineDate,
     owner: "N/A",
@@ -512,8 +537,13 @@ export async function resetCompanyDataToSingleCase(input: {
   const freshCase: CaseItem = {
     id: caseId,
     companyId: input.companyId,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     client: normalizedClient,
     formType,
+    assignedTo: "Unassigned",
+    processingStatus: "docs_pending",
+    processingStatusOther: undefined,
     caseStatus: "lead",
     aiStatus: "idle",
     owner: "N/A",
@@ -852,6 +882,7 @@ function applyCaseAutomation(store: AppStore, caseItem: CaseItem) {
   const assignedTo = caseItem.owner && caseItem.owner !== "N/A" ? caseItem.owner : "Unassigned";
   syncMissingIntakeTasksInStore(store, caseItem, assignedTo);
   syncMissingDocumentTasksInStore(store, caseItem, assignedTo);
+  caseItem.updatedAt = new Date().toISOString();
 }
 
 export async function syncCaseAutomation(companyId: string, caseId: string): Promise<CaseItem | null> {
@@ -879,6 +910,7 @@ export async function signCaseRetainer(input: {
 
   store.cases[idx] = {
     ...store.cases[idx],
+    updatedAt: new Date().toISOString(),
     retainerSigned: true,
     retainerRecord: {
       signedAt: new Date().toISOString(),
@@ -929,6 +961,7 @@ export async function updateCaseRetainerSetup(
   const fullAmount = Number(nextServicePackage.retainerAmount || 0);
   store.cases[idx] = {
     ...current,
+    updatedAt: new Date().toISOString(),
     formType: patch.formType !== undefined && patch.formType.trim() ? patch.formType.trim() : current.formType,
     servicePackage: nextServicePackage,
     retainerSentAt: isSendingRetainer ? new Date().toISOString() : current.retainerSentAt,
@@ -971,8 +1004,41 @@ export async function updateCaseStage(companyId: string, id: string, stage: Stag
   const store = await readStore();
   const idx = store.cases.findIndex((c) => c.companyId === companyId && c.id === id);
   if (idx === -1) return null;
-  store.cases[idx] = { ...store.cases[idx], stage };
+  store.cases[idx] = { ...store.cases[idx], stage, updatedAt: new Date().toISOString() };
   applyCaseAutomation(store, store.cases[idx]);
+  await writeStore(store);
+  return store.cases[idx];
+}
+
+export async function updateCaseProcessing(
+  companyId: string,
+  id: string,
+  patch: {
+    assignedTo?: string;
+    processingStatus?: "docs_pending" | "under_review" | "submitted" | "other";
+    processingStatusOther?: string;
+  }
+): Promise<CaseItem | null> {
+  const store = await readStore();
+  const idx = store.cases.findIndex((c) => c.companyId === companyId && c.id === id);
+  if (idx === -1) return null;
+  const current = store.cases[idx];
+
+  const nextStatus = patch.processingStatus ?? current.processingStatus ?? "docs_pending";
+  const nextOther =
+    nextStatus === "other"
+      ? (patch.processingStatusOther ?? current.processingStatusOther ?? "").trim() || undefined
+      : undefined;
+
+  store.cases[idx] = {
+    ...current,
+    assignedTo:
+      patch.assignedTo !== undefined ? patch.assignedTo.trim() || "Unassigned" : current.assignedTo,
+    processingStatus: nextStatus,
+    processingStatusOther: nextOther,
+    updatedAt: new Date().toISOString()
+  };
+
   await writeStore(store);
   return store.cases[idx];
 }
@@ -1001,6 +1067,7 @@ export async function updateCaseFinancials(
   const remaining = Math.max(0, total - paid);
   store.cases[idx] = {
     ...current,
+    updatedAt: new Date().toISOString(),
     servicePackage: {
       ...nextPackage,
       balanceAmount: remaining
@@ -1034,6 +1101,7 @@ export async function recordCasePayment(companyId: string, id: string, amount: n
 
   store.cases[idx] = {
     ...current,
+    updatedAt: new Date().toISOString(),
     amountPaid: nextPaid,
     balanceAmount: remaining,
     paymentStatus: remaining <= 0 ? "paid" : "pending",
@@ -1064,6 +1132,7 @@ export async function updateCaseLinks(
   const current = store.cases[idx];
   store.cases[idx] = {
     ...current,
+    updatedAt: new Date().toISOString(),
     questionnaireLink:
       patch.questionnaireLink !== undefined ? String(patch.questionnaireLink) : current.questionnaireLink,
     docsUploadLink: patch.docsUploadLink !== undefined ? String(patch.docsUploadLink) : current.docsUploadLink,
@@ -1102,6 +1171,7 @@ export async function addCaseMilestone(
   };
   store.cases[idx] = {
     ...current,
+    updatedAt: new Date().toISOString(),
     servicePackage: {
       ...currentPackage,
       milestones: [...currentPackage.milestones, milestone]
@@ -1128,6 +1198,7 @@ export async function toggleMilestone(
   };
   store.cases[idx] = {
     ...current,
+    updatedAt: new Date().toISOString(),
     servicePackage: {
       ...currentPackage,
       milestones: currentPackage.milestones.map((m) =>
@@ -1165,6 +1236,7 @@ export async function addInvoice(
   };
   store.cases[idx] = {
     ...current,
+    updatedAt: new Date().toISOString(),
     invoices: [...currentInvoices, invoice],
     servicePackage: {
       ...currentPackage,
@@ -1199,6 +1271,7 @@ export async function inviteUser(input: {
     email: input.email,
     role: input.role,
     userType: "staff",
+    active: true,
     password: input.password
   };
 
@@ -1212,6 +1285,24 @@ export async function resetUserPassword(companyId: string, userId: string, passw
   const idx = store.users.findIndex((u) => u.companyId === companyId && u.id === userId);
   if (idx === -1) return null;
   store.users[idx] = { ...store.users[idx], password };
+  await writeStore(store);
+  return store.users[idx];
+}
+
+export async function getUserById(companyId: string, userId: string): Promise<AppUser | null> {
+  const store = await readStore();
+  return store.users.find((u) => u.companyId === companyId && u.id === userId) ?? null;
+}
+
+export async function setUserActive(
+  companyId: string,
+  userId: string,
+  active: boolean
+): Promise<AppUser | null> {
+  const store = await readStore();
+  const idx = store.users.findIndex((u) => u.companyId === companyId && u.id === userId);
+  if (idx === -1) return null;
+  store.users[idx] = { ...store.users[idx], active: Boolean(active) };
   await writeStore(store);
   return store.users[idx];
 }
@@ -1270,9 +1361,10 @@ export async function addDocument(input: {
     createdAt: new Date().toISOString()
   };
   store.documents.push(doc);
-  const caseItem = store.cases.find((c) => c.companyId === input.companyId && c.id === input.caseId);
-  if (caseItem) {
-    applyCaseAutomation(store, caseItem);
+  const caseIdx = store.cases.findIndex((c) => c.companyId === input.companyId && c.id === input.caseId);
+  if (caseIdx !== -1) {
+    store.cases[caseIdx] = { ...store.cases[caseIdx], updatedAt: new Date().toISOString() };
+    applyCaseAutomation(store, store.cases[caseIdx]);
   }
   await writeStore(store);
   return doc;
@@ -1306,6 +1398,7 @@ export async function addCaseDocRequest(input: {
   };
   store.cases[idx] = {
     ...current,
+    updatedAt: new Date().toISOString(),
     docRequests: [request, ...(current.docRequests ?? [])]
   };
   await writeStore(store);
@@ -1336,6 +1429,7 @@ export async function fulfillCaseDocRequest(input: {
   );
   store.cases[idx] = {
     ...current,
+    updatedAt: new Date().toISOString(),
     docRequests: nextRequests
   };
   await writeStore(store);
@@ -1468,6 +1562,7 @@ export async function updateCasePgwpIntake(
   const current = store.cases[idx];
   store.cases[idx] = {
     ...current,
+    updatedAt: new Date().toISOString(),
     pgwpIntake: {
       ...(current.pgwpIntake ?? {}),
       ...patch
@@ -1490,6 +1585,7 @@ export async function updateCaseImm5710Automation(
   const current = store.cases[idx];
   store.cases[idx] = {
     ...current,
+    updatedAt: new Date().toISOString(),
     imm5710Automation: {
       status: "idle",
       ...(current.imm5710Automation ?? {}),

@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { resolveApplicationChecklistKey } from "@/lib/application-checklists";
 
 type CaseMessage = {
   id: string;
@@ -38,6 +39,7 @@ type EducationEntry = {
 type IntakeForm = {
   fullName: string;
   applicationType: string;
+  applicationSpecificAnswers: string;
   intendedWorkDetails: string;
   usedOtherName: string;
   otherNameDetails: string;
@@ -99,6 +101,7 @@ type IntakeForm = {
 const EMPTY_FORM: IntakeForm = {
   fullName: "",
   applicationType: "PGWP",
+  applicationSpecificAnswers: "",
   intendedWorkDetails: "",
   usedOtherName: "",
   otherNameDetails: "",
@@ -156,6 +159,143 @@ const EMPTY_FORM: IntakeForm = {
   medicalHistory: "",
   additionalNotes: ""
 };
+
+const APPLICATION_PROMPTS: Record<string, string[]> = {
+  pgwp: [
+    "Have you used any other name? (Yes/No, details if yes)",
+    "Current marital status",
+    "If married/common-law: spouse full name and date of marriage",
+    "Any previous marriage/common-law? (details if yes)",
+    "Current mailing address and phone number",
+    "Date/place/purpose of first entry to Canada",
+    "Any recent entry to Canada? (date + reason)",
+    "Any refusal, criminal history, or medical history? (details if yes)",
+    "Employment history (include foreign experience)",
+    "Education after 12th (if any)"
+  ],
+  trv_inside: [
+    "Have you used any other name? (Yes/No, details if yes)",
+    "Current marital status and spouse details (if applicable)",
+    "Current mailing/residential address and phone",
+    "Any refusal, criminal history, or medical history? (details if yes)",
+    "Employment history",
+    "Education after 12th",
+    "Name/relationship/address of person you will visit in Canada",
+    "Funds available and who will pay expenses"
+  ],
+  visitor_visa: [
+    "Have you used any other name? (Yes/No, details if yes)",
+    "Current marital status and spouse details",
+    "Countries lived in during past 5 years",
+    "Post-secondary studies details",
+    "Military/police/security service history",
+    "Employment and activities in last 10 years",
+    "Travel history in last 5 years",
+    "Refusal/criminal/medical history details",
+    "Parents and children details"
+  ],
+  visitor_record: [
+    "Current status in Canada and expiry details",
+    "Reason for extension and requested duration",
+    "Current address and phone number",
+    "Proof of funds summary",
+    "Any refusal/criminal/medical issues? (details if yes)"
+  ],
+  work_permit: [
+    "Have you used any other name? (Yes/No, details if yes)",
+    "Current marital status and spouse details",
+    "Current mailing/residential address and phone",
+    "Date/place/purpose of first entry to Canada",
+    "Any recent entry to Canada? (date + reason)",
+    "Any refusal, criminal history, or medical history? (details if yes)",
+    "Employment details (all positions, most recent first)",
+    "Education after 12th (if any)",
+    "Native language and English test status"
+  ],
+  study_permit: [
+    "Have you used any other name? (Yes/No, details if yes)",
+    "Current marital status and spouse details",
+    "Current mailing/residential address and phone",
+    "Any refusal, criminal history, or medical history? (details if yes)",
+    "Employment details",
+    "Education details after 12th",
+    "Native language"
+  ],
+  study_permit_extension: [
+    "Current permit details and expiry",
+    "Current institution + enrollment details",
+    "Reason for extension/college change",
+    "Address and phone details",
+    "Any refusal/criminal/medical issues? (details if yes)"
+  ],
+  super_visa: [
+    "Have you used any other name? (Yes/No, details if yes)",
+    "Current marital status and spouse details",
+    "Current mailing/residential address and phone",
+    "Any refusal, criminal history, or medical history? (details if yes)",
+    "Employment and education details",
+    "Native language",
+    "Family info (spouse/children/parents)"
+  ],
+  us_b1b2: [
+    "Purpose of US trip and intended dates",
+    "US contact details (if any)",
+    "Family information (parents/spouse)",
+    "Employment/education/training details",
+    "Travel history + past refusals/overstays",
+    "Security background answers"
+  ],
+  uk_visitor: [
+    "Address history (past 2 years)",
+    "Current activity/work/study details",
+    "Estimated monthly living expenses",
+    "Travel purpose and intended UK arrival date",
+    "Family details and UK relatives",
+    "Travel/refusal/criminal/medical history"
+  ],
+  refugee: [
+    "Other names used (if any)",
+    "Current address, phone, email, and language details",
+    "Marital/spouse/previous relationship details",
+    "Parents/siblings/children details",
+    "Address history last 10 years",
+    "Employment/activity history last 10 years",
+    "Travel history last 5 years",
+    "Detailed refugee claim narrative (incidents, dates, threats)"
+  ],
+  canadian_passport_doc: [
+    "Any previous names used?",
+    "Eye color and height (cm)",
+    "Address history (past 2 years)",
+    "Occupation history (past 2 years)",
+    "Guarantor details",
+    "Two references and emergency contact details"
+  ],
+  generic: [
+    "Please provide all key details relevant to this application",
+    "Any refusals, criminal, or medical history?",
+    "Any additional notes for your case team?"
+  ]
+};
+
+function parseSpecificAnswers(raw: string, prompts: string[]): Record<string, string> {
+  const base: Record<string, string> = {};
+  for (const p of prompts) base[p] = "";
+  if (!raw.trim()) return base;
+  try {
+    const parsed = JSON.parse(raw) as Record<string, string>;
+    for (const p of prompts) base[p] = String(parsed[p] || "");
+    return base;
+  } catch {
+    return base;
+  }
+}
+
+function serializeSpecificAnswers(values: Record<string, string>, prompts: string[]): string {
+  const out: Record<string, string> = {};
+  for (const p of prompts) out[p] = String(values[p] || "").trim();
+  return JSON.stringify(out);
+}
 
 function SectionTitle({ title }: { title: string }) {
   return <h2 className="mt-4 border-t border-slate-200 pt-4 text-sm font-semibold text-slate-900">{title}</h2>;
@@ -310,6 +450,9 @@ export default function QuestionnairePage({ params }: { params: { caseId: string
   const [assistantInput, setAssistantInput] = useState("");
   const [assistantStatus, setAssistantStatus] = useState("");
   const [assistantMessages, setAssistantMessages] = useState<CaseMessage[]>([]);
+  const [specificAnswers, setSpecificAnswers] = useState<Record<string, string>>({});
+  const appKey = useMemo(() => resolveApplicationChecklistKey(form.applicationType || "generic"), [form.applicationType]);
+  const appPrompts = useMemo(() => APPLICATION_PROMPTS[appKey] || APPLICATION_PROMPTS.generic, [appKey]);
 
   async function loadAssistantMessages() {
     const res = await fetch(`/api/cases/${params.caseId}/messages`, { cache: "no-store" });
@@ -331,10 +474,18 @@ export default function QuestionnairePage({ params }: { params: { caseId: string
           return;
         }
         const nextForm = { ...EMPTY_FORM, ...(payload.intake || {}) };
+        const serverFormType = String(payload.formType || "").trim();
+        if (serverFormType && !nextForm.applicationType) {
+          nextForm.applicationType = serverFormType;
+        } else if (serverFormType) {
+          nextForm.applicationType = serverFormType;
+        }
         setForm(nextForm);
         setEmploymentEntries(parseEmploymentHistory(String(nextForm.employmentHistory || "")));
         setTravelEntries(parseTravelHistory(String(nextForm.travelHistoryDetails || "")));
         setEducationEntries(parseEducationHistory(String(nextForm.educationDetails || "")));
+        const promptList = APPLICATION_PROMPTS[resolveApplicationChecklistKey(nextForm.applicationType || "generic")] || APPLICATION_PROMPTS.generic;
+        setSpecificAnswers(parseSpecificAnswers(String(nextForm.applicationSpecificAnswers || ""), promptList));
         await loadAssistantMessages();
       } catch {
         setStatus("Could not load intake");
@@ -349,6 +500,19 @@ export default function QuestionnairePage({ params }: { params: { caseId: string
   function updateField<K extends keyof IntakeForm>(key: K, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
+
+  useEffect(() => {
+    setSpecificAnswers((prev) => {
+      const next: Record<string, string> = {};
+      for (const p of appPrompts) next[p] = String(prev[p] || "");
+      setForm((current) => ({
+        ...current,
+        applicationSpecificAnswers: serializeSpecificAnswers(next, appPrompts)
+      }));
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appKey]);
 
   function updateEmploymentEntry(index: number, key: keyof EmploymentEntry, value: string) {
     setEmploymentEntries((prev) => {
@@ -408,6 +572,17 @@ export default function QuestionnairePage({ params }: { params: { caseId: string
     });
   }
 
+  function updateSpecificAnswer(prompt: string, value: string) {
+    setSpecificAnswers((prev) => {
+      const next = { ...prev, [prompt]: value };
+      setForm((current) => ({
+        ...current,
+        applicationSpecificAnswers: serializeSpecificAnswers(next, appPrompts)
+      }));
+      return next;
+    });
+  }
+
   function addEducationRow() {
     setEducationEntries((prev) => {
       const next = [...prev, emptyEducationEntry()];
@@ -428,10 +603,14 @@ export default function QuestionnairePage({ params }: { params: { caseId: string
   async function saveDraft(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setStatus("Saving...");
+    const payloadForm = {
+      ...form,
+      applicationSpecificAnswers: serializeSpecificAnswers(specificAnswers, appPrompts)
+    };
     const res = await fetch(`/api/cases/${params.caseId}/intake`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...form, finalizeIntake: true })
+      body: JSON.stringify({ ...payloadForm, finalizeIntake: true })
     });
     const payload = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -439,7 +618,14 @@ export default function QuestionnairePage({ params }: { params: { caseId: string
       return;
     }
     const pdfLink = String(payload?.intakePdf?.driveLink || "");
-    setStatus(pdfLink ? `Saved successfully. Intake PDF uploaded: ${pdfLink}` : "Saved successfully.");
+    const pdfError = String(payload?.intakePdfError || "");
+    if (pdfLink) {
+      setStatus(`Saved successfully. Intake PDF uploaded: ${pdfLink}`);
+    } else if (pdfError) {
+      setStatus(`Saved successfully (Drive upload pending): ${pdfError}`);
+    } else {
+      setStatus("Saved successfully.");
+    }
   }
 
   async function sendAssistantMessage(event: FormEvent) {
@@ -512,6 +698,13 @@ export default function QuestionnairePage({ params }: { params: { caseId: string
           <form className="mt-5 grid gap-3" onSubmit={saveDraft}>
             <SectionTitle title="Basic Details" />
             <div className="grid gap-3 md:grid-cols-2">
+              <label className="text-sm font-medium text-slate-700">Application Type
+                <input
+                  value={form.applicationType}
+                  readOnly
+                  className="mt-1 w-full rounded-lg border-2 border-slate-300 bg-slate-100 px-3 py-2"
+                />
+              </label>
               <label className="text-sm font-medium text-slate-700">Full Name
                 <input value={form.fullName} onChange={(e) => updateField("fullName", e.target.value)} className="mt-1 w-full rounded-lg border-2 border-slate-300 px-3 py-2" />
               </label>
@@ -536,6 +729,21 @@ export default function QuestionnairePage({ params }: { params: { caseId: string
               <label className="text-sm font-medium text-slate-700 md:col-span-2">Previous relationship details (if yes)
                 <textarea value={form.previousRelationshipDetails} onChange={(e) => updateField("previousRelationshipDetails", e.target.value)} className="mt-1 w-full rounded-lg border-2 border-slate-300 px-3 py-2" rows={2} />
               </label>
+            </div>
+
+            <SectionTitle title="Application-Specific Questions" />
+            <div className="grid gap-3">
+              {appPrompts.map((prompt) => (
+                <label key={prompt} className="text-sm font-medium text-slate-700">
+                  {prompt}
+                  <textarea
+                    value={specificAnswers[prompt] || ""}
+                    onChange={(e) => updateSpecificAnswer(prompt, e.target.value)}
+                    className="mt-1 w-full rounded-lg border-2 border-slate-300 px-3 py-2"
+                    rows={2}
+                  />
+                </label>
+              ))}
             </div>
 
             <SectionTitle title="Contact" />

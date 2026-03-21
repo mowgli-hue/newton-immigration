@@ -5,10 +5,12 @@ export type AiStatus = "idle" | "collecting_docs" | "waiting_client" | "drafting
 export type TaskPriority = "low" | "medium" | "high";
 export type TaskStatus = "pending" | "completed";
 export type NotificationType = "deadline" | "missing_doc" | "ai_alert";
+export type DocRequestStatus = "open" | "fulfilled";
 
 export type PgwpIntakeData = {
   fullName?: string;
   applicationType?: string;
+  applicationSpecificAnswers?: string;
   intendedWorkDetails?: string;
   usedOtherName?: string;
   otherNameDetails?: string;
@@ -112,6 +114,8 @@ export type Company = {
 export type CaseItem = {
   id: string;
   companyId: string;
+  createdAt?: string;
+  updatedAt?: string;
   clientUserId?: string;
   client: string;
   caseStatus?: CaseStatus;
@@ -120,6 +124,11 @@ export type CaseItem = {
   leadEmail?: string;
   sourceLeadKey?: string;
   formType: string;
+  assignedTo?: string;
+  processingStatus?: "docs_pending" | "under_review" | "submitted" | "other";
+  processingStatusOther?: string;
+  isUrgent?: boolean;
+  deadlineDate?: string;
   owner: string;
   reviewer: string;
   stage: Stage;
@@ -139,6 +148,7 @@ export type CaseItem = {
   interacInstructions?: string;
   paymentStatus?: "pending" | "paid" | "not_required";
   paymentPaidAt?: string;
+  amountPaid?: number;
   imm5710Automation?: {
     status: "idle" | "started" | "failed";
     startedAt?: string;
@@ -149,6 +159,17 @@ export type CaseItem = {
     autoTriggered?: boolean;
   };
   pgwpIntake?: PgwpIntakeData;
+  docRequests?: Array<{
+    id: string;
+    title: string;
+    details?: string;
+    status: DocRequestStatus;
+    requestedBy: string;
+    requestedAt: string;
+    fulfilledAt?: string;
+    fulfilledBy?: string;
+    documentId?: string;
+  }>;
   retainerRecord?: {
     signedAt: string;
     signerName: string;
@@ -182,6 +203,7 @@ export type AppUser = {
   email: string;
   role: Role;
   userType: UserType;
+  active?: boolean;
   password: string;
   caseId?: string;
 };

@@ -6,7 +6,7 @@ import { maybeAutoRunImm5710 } from "@/lib/imm5710-runner";
 import { buildReadyPackage, writeReadyPackageToDisk } from "@/lib/ready-package";
 import { getCase, listDocuments, syncCaseAutomation, updateCaseImm5710Automation, updateCasePgwpIntake } from "@/lib/store";
 import { PgwpIntakeData } from "@/lib/models";
-import { buildCaseFolderName, createCaseDriveStructure, extractDriveFolderId, uploadFileToDriveFolder } from "@/lib/google-drive";
+import { buildCaseFolderNameWithApp, createCaseDriveStructure, extractDriveFolderId, uploadFileToDriveFolder } from "@/lib/google-drive";
 import { findCompanyById, updateCaseLinks } from "@/lib/store";
 import { buildSimpleTextPdf } from "@/lib/simple-pdf";
 import { getDataDir } from "@/lib/storage-paths";
@@ -14,6 +14,7 @@ import { getDataDir } from "@/lib/storage-paths";
 const INTAKE_FIELDS: Array<keyof PgwpIntakeData> = [
   "fullName",
   "applicationType",
+  "applicationSpecificAnswers",
   "intendedWorkDetails",
   "usedOtherName",
   "otherNameDetails",
@@ -100,6 +101,7 @@ function sanitizePatch(body: Record<string, unknown>): Partial<PgwpIntakeData> {
 function labelForField(key: keyof PgwpIntakeData): string {
   const map: Partial<Record<keyof PgwpIntakeData, string>> = {
     fullName: "Full name",
+    applicationSpecificAnswers: "Application specific answers",
     phone: "Phone number",
     maritalStatus: "Marital status",
     address: "Mailing address",
@@ -192,7 +194,10 @@ async function ensureCaseDriveFolders(companyId: string, caseId: string) {
   const rootId = extractDriveFolderId(driveRoot);
   if (!rootId) return { created: false, skipped: "drive_root_invalid" as const };
 
-  const structure = await createCaseDriveStructure(rootId, buildCaseFolderName(caseItem.id, caseItem.client));
+  const structure = await createCaseDriveStructure(
+    rootId,
+    buildCaseFolderNameWithApp(caseItem.id, caseItem.client, caseItem.formType)
+  );
   await updateCaseLinks(companyId, caseItem.id, {
     docsUploadLink: structure.subfolders.clientDocuments.webViewLink,
     applicationFormsLink: structure.subfolders.applicationForms.webViewLink,
@@ -212,7 +217,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  return NextResponse.json({ intake: caseItem.pgwpIntake ?? {} });
+  return NextResponse.json({ intake: caseItem.pgwpIntake ?? {}, formType: caseItem.formType });
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
@@ -235,6 +240,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   const synced = await syncCaseAutomation(user.companyId, params.id);
   if (!synced) return NextResponse.json({ error: "Case not found" }, { status: 404 });
   let intakePdf: { localPath: string; driveLink?: string } | null = null;
+  let intakePdfError = "";
   if (finalizeIntake) {
     try {
       await ensureCaseDriveFolders(user.companyId, params.id);
@@ -246,8 +252,9 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
           intake: refreshedCase.pgwpIntake
         });
       }
-    } catch {
+    } catch (error) {
       // Keep intake save successful even if PDF upload fails.
+      intakePdfError = (error as Error).message;
     }
   }
   const docs = await listDocuments(user.companyId, params.id);
@@ -284,5 +291,12 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 
   const latest = await getCase(user.companyId, params.id);
-  return NextResponse.json({ intake: latest?.pgwpIntake ?? {}, case: latest ?? synced, automation, drive, intakePdf });
+  return NextResponse.json({
+    intake: latest?.pgwpIntake ?? {},
+    case: latest ?? synced,
+    automation,
+    drive,
+    intakePdf,
+    intakePdfError
+  });
 }

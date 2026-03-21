@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
-import { getUserById, resetUserPassword } from "@/lib/store";
+import { getUserById, setUserActive } from "@/lib/store";
 
 export async function PATCH(
   request: NextRequest,
@@ -16,17 +16,26 @@ export async function PATCH(
   if (!target) return NextResponse.json({ error: "User not found" }, { status: 404 });
   if (target.userType !== "staff") return NextResponse.json({ error: "Invalid target user" }, { status: 400 });
   if (user.role === "Owner" && target.role === "Admin") {
-    return NextResponse.json({ error: "Owner cannot reset Admin password." }, { status: 403 });
+    return NextResponse.json({ error: "Owner cannot manage Admin users." }, { status: 403 });
   }
 
   const body = await request.json().catch(() => ({}));
-  const password = String(body.password ?? "");
-  if (!password) {
-    return NextResponse.json({ error: "password is required" }, { status: 400 });
+  if (typeof body.active !== "boolean") {
+    return NextResponse.json({ error: "active boolean is required" }, { status: 400 });
+  }
+  if (target.id === user.id && body.active === false) {
+    return NextResponse.json({ error: "You cannot deactivate your own account." }, { status: 400 });
   }
 
-  const updated = await resetUserPassword(user.companyId, params.id, password);
+  const updated = await setUserActive(user.companyId, params.id, body.active);
   if (!updated) return NextResponse.json({ error: "User not found" }, { status: 404 });
-
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({
+    user: {
+      id: updated.id,
+      name: updated.name,
+      email: updated.email,
+      role: updated.role,
+      active: updated.active !== false
+    }
+  });
 }

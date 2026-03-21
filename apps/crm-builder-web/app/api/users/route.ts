@@ -12,7 +12,8 @@ export async function GET(request: NextRequest) {
       id: u.id,
       name: u.name,
       email: u.email,
-      role: u.role
+      role: u.role,
+      active: u.active !== false
     }))
   });
 }
@@ -20,7 +21,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const user = await getCurrentUserFromRequest(request);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (user.role !== "Admin") {
+  if (user.userType !== "staff" || (user.role !== "Admin" && user.role !== "Owner")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -36,6 +37,9 @@ export async function POST(request: NextRequest) {
 
   if (!["Admin", "Owner", "Reviewer"].includes(role)) {
     return NextResponse.json({ error: "Invalid role" }, { status: 400 });
+  }
+  if (user.role === "Owner" && role === "Admin") {
+    return NextResponse.json({ error: "Owner cannot create Admin users." }, { status: 403 });
   }
 
   try {
