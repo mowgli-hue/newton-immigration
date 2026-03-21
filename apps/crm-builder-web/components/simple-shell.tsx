@@ -1026,6 +1026,33 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     }
   }
 
+  async function tryServerDispatch(
+    channel: "email" | "whatsapp" | "sms",
+    target: string,
+    message: string
+  ): Promise<"sent" | "provider_missing" | "failed" | "not_applicable"> {
+    if (!selectedCase) return "not_applicable";
+    const trimmedTarget = String(target || "").trim();
+    if (!trimmedTarget) return "failed";
+    const res = await apiFetch(`/cases/${selectedCase.id}/dispatch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        channel,
+        target: trimmedTarget,
+        message
+      })
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) return "failed";
+    const status = String(payload?.result?.status || "");
+    const log = payload?.log as OutboundMessageItem | undefined;
+    if (log) setOutboundMessages((prev) => [log, ...prev]);
+    if (status === "sent") return "sent";
+    if (status === "provider_missing") return "provider_missing";
+    return "failed";
+  }
+
   function normalizePhoneForWa(phone: string) {
     const digits = phone.replace(/[^\d]/g, "");
     if (!digits) return "";
@@ -1079,10 +1106,19 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
           setInviteShareStatus("Enter client email first.");
           return;
         }
+        const dispatchStatus = await tryServerDispatch("email", email, message);
+        if (dispatchStatus === "sent") {
+          setInviteShareStatus("Email sent from server.");
+          return;
+        }
         const subject = encodeURIComponent(`Newton Immigration Portal Link - ${caseItem.id}`);
         const body = encodeURIComponent(message);
         window.open(`mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`, "_blank");
-        setInviteShareStatus("Email app opened.");
+        setInviteShareStatus(
+          dispatchStatus === "provider_missing"
+            ? "Email provider not configured yet. Email app opened instead."
+            : "Email app opened."
+        );
         await logOutboundCommunication({
           channel: "email",
           status: "opened_app",
@@ -1097,9 +1133,18 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
           setInviteShareStatus("Enter client phone number first.");
           return;
         }
+        const dispatchStatus = await tryServerDispatch("whatsapp", waPhone, message);
+        if (dispatchStatus === "sent") {
+          setInviteShareStatus("WhatsApp sent from server.");
+          return;
+        }
         const text = encodeURIComponent(message);
         window.open(`https://wa.me/${waPhone}?text=${text}`, "_blank");
-        setInviteShareStatus("WhatsApp opened.");
+        setInviteShareStatus(
+          dispatchStatus === "provider_missing"
+            ? "WhatsApp provider not configured yet. WhatsApp app opened instead."
+            : "WhatsApp opened."
+        );
         await logOutboundCommunication({
           channel: "whatsapp",
           status: "opened_app",
@@ -1114,9 +1159,18 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
           setInviteShareStatus("Enter client phone number first.");
           return;
         }
+        const dispatchStatus = await tryServerDispatch("sms", smsPhone, message);
+        if (dispatchStatus === "sent") {
+          setInviteShareStatus("SMS sent from server.");
+          return;
+        }
         const body = encodeURIComponent(message);
         window.open(`sms:${smsPhone}?body=${body}`, "_blank");
-        setInviteShareStatus("SMS app opened.");
+        setInviteShareStatus(
+          dispatchStatus === "provider_missing"
+            ? "SMS provider not configured yet. SMS app opened instead."
+            : "SMS app opened."
+        );
         await logOutboundCommunication({
           channel: "sms",
           status: "opened_app",
