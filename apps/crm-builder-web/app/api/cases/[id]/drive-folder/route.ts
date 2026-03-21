@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
-import { findCompanyById, getCase, updateCaseLinks } from "@/lib/store";
+import { getCase, resolveCaseDriveRootLink, updateCaseLinks } from "@/lib/store";
 import { buildCaseFolderNameWithApp, createCaseDriveStructure, extractDriveFolderId } from "@/lib/google-drive";
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
@@ -11,10 +11,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   const caseItem = await getCase(user.companyId, params.id);
   if (!caseItem) return NextResponse.json({ error: "Case not found" }, { status: 404 });
 
-  const company = await findCompanyById(user.companyId);
-  const driveRoot = company?.branding?.driveRootLink || "";
+  const driveRootChoice = await resolveCaseDriveRootLink(user.companyId, caseItem.id);
+  const driveRoot = driveRootChoice.link || "";
   if (!driveRoot) {
-    return NextResponse.json({ error: "Main Google Drive folder link is not set in Company Branding." }, { status: 400 });
+    return NextResponse.json({ error: "No Drive root is configured for this case assignment." }, { status: 400 });
   }
 
   const rootId = extractDriveFolderId(driveRoot);
@@ -33,7 +33,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       submittedFolderLink: structure.subfolders.submitted.webViewLink,
       correspondenceFolderLink: structure.subfolders.correspondence.webViewLink
     });
-    return NextResponse.json({ case: updated ?? caseItem, folder: structure.caseFolder, subfolders: structure.subfolders });
+    return NextResponse.json({
+      case: updated ?? caseItem,
+      folder: structure.caseFolder,
+      subfolders: structure.subfolders,
+      driveRootSource: driveRootChoice.source
+    });
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 400 });
   }

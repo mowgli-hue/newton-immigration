@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
 import { canCreateCase } from "@/lib/rbac";
-import { createCase, findCompanyById, listCases, updateCaseLinks } from "@/lib/store";
+import { createCase, listCases, resolveCaseDriveRootLink, updateCaseLinks } from "@/lib/store";
 import { buildCaseFolderNameWithApp, createCaseDriveStructure, extractDriveFolderId } from "@/lib/google-drive";
 
 export async function GET(request: NextRequest) {
@@ -62,8 +62,8 @@ export async function POST(request: NextRequest) {
     isUrgent,
     dueInDays
   });
-  const company = await findCompanyById(user.companyId);
-  const driveRoot = company?.branding?.driveRootLink || "";
+  const driveRootChoice = await resolveCaseDriveRootLink(user.companyId, created.id);
+  const driveRoot = driveRootChoice.link || "";
   let drive: { linked: boolean; reason?: string; error?: string } = {
     linked: false,
     reason: "drive_root_missing"
@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
           submittedFolderLink: structure.subfolders.submitted.webViewLink,
           correspondenceFolderLink: structure.subfolders.correspondence.webViewLink
         });
-        drive = { linked: true };
+        drive = { linked: true, reason: driveRootChoice.source };
         return NextResponse.json({ case: withDrive ?? created, drive }, { status: 201 });
       } catch (error) {
         drive = { linked: false, reason: "drive_create_failed", error: (error as Error).message };

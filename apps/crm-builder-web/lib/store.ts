@@ -538,6 +538,38 @@ export async function findCompanyById(companyId: string): Promise<Company | null
   return store.companies.find((c) => c.id === companyId) ?? null;
 }
 
+export async function resolveCaseDriveRootLink(
+  companyId: string,
+  caseId: string
+): Promise<{
+  link: string;
+  source: "assigned_user" | "company";
+  assignedUserId?: string;
+}> {
+  const store = await readStore();
+  const caseItem = store.cases.find((c) => c.companyId === companyId && c.id === caseId);
+  const company = store.companies.find((c) => c.id === companyId);
+  if (!caseItem || !company) {
+    return { link: "", source: "company" };
+  }
+
+  const assignedTo = String(caseItem.assignedTo || "").trim().toLowerCase();
+  if (assignedTo && assignedTo !== "unassigned") {
+    const assignedUser = store.users.find(
+      (u) =>
+        u.companyId === companyId &&
+        u.userType === "staff" &&
+        String(u.name || "").trim().toLowerCase() === assignedTo
+    );
+    const userLink = String(assignedUser?.workspaceDriveLink || "").trim();
+    if (userLink) {
+      return { link: userLink, source: "assigned_user", assignedUserId: assignedUser?.id };
+    }
+  }
+
+  return { link: String(company.branding?.driveRootLink || "").trim(), source: "company" };
+}
+
 export async function findCompanyBySlug(slug: string): Promise<Company | null> {
   const store = await readStore();
   return store.companies.find((c) => c.slug === slug) ?? null;

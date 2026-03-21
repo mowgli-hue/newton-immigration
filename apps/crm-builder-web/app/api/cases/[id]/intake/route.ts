@@ -7,7 +7,7 @@ import { buildReadyPackage, writeReadyPackageToDisk } from "@/lib/ready-package"
 import { getCase, listDocuments, syncCaseAutomation, updateCaseImm5710Automation, updateCasePgwpIntake } from "@/lib/store";
 import { PgwpIntakeData } from "@/lib/models";
 import { buildCaseFolderNameWithApp, createCaseDriveStructure, extractDriveFolderId, uploadFileToDriveFolder } from "@/lib/google-drive";
-import { findCompanyById, updateCaseLinks } from "@/lib/store";
+import { resolveCaseDriveRootLink, updateCaseLinks } from "@/lib/store";
 import { buildSimpleTextPdf } from "@/lib/simple-pdf";
 import { getDataDir } from "@/lib/storage-paths";
 
@@ -187,8 +187,8 @@ async function ensureCaseDriveFolders(companyId: string, caseId: string) {
     return { created: false, skipped: "already_exists" as const };
   }
 
-  const company = await findCompanyById(companyId);
-  const driveRoot = String(company?.branding?.driveRootLink || "").trim();
+  const choice = await resolveCaseDriveRootLink(companyId, caseItem.id);
+  const driveRoot = String(choice.link || "").trim();
   if (!driveRoot) return { created: false, skipped: "drive_root_missing" as const };
 
   const rootId = extractDriveFolderId(driveRoot);

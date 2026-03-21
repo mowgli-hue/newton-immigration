@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
 import { stageOrder } from "@/lib/data";
-import { getCase, updateCaseProcessing, updateCaseStage } from "@/lib/store";
+import { buildCaseFolderNameWithApp, createCaseDriveStructure, extractDriveFolderId } from "@/lib/google-drive";
+import { getCase, resolveCaseDriveRootLink, updateCaseLinks, updateCaseProcessing, updateCaseStage } from "@/lib/store";
 
 export async function PATCH(
   request: NextRequest,
@@ -37,7 +38,31 @@ export async function PATCH(
     if (!updated) {
       return NextResponse.json({ error: "Case not found" }, { status: 404 });
     }
-    return NextResponse.json({ case: updated });
+    let driveReroute: { updated: boolean; reason?: string; error?: string } = { updated: false };
+    if (assignedTo !== undefined) {
+      try {
+        const root = await resolveCaseDriveRootLink(user.companyId, updated.id);
+        const rootId = extractDriveFolderId(root.link || "");
+        if (rootId) {
+          const structure = await createCaseDriveStructure(
+            rootId,
+            buildCaseFolderNameWithApp(updated.id, updated.client, updated.formType)
+          );
+          const withDrive = await updateCaseLinks(user.companyId, updated.id, {
+            docsUploadLink: structure.subfolders.clientDocuments.webViewLink,
+            applicationFormsLink: structure.subfolders.applicationForms.webViewLink,
+            submittedFolderLink: structure.subfolders.submitted.webViewLink,
+            correspondenceFolderLink: structure.subfolders.correspondence.webViewLink
+          });
+          driveReroute = { updated: true, reason: root.source };
+          return NextResponse.json({ case: withDrive ?? updated, driveReroute });
+        }
+        driveReroute = { updated: false, reason: "drive_root_missing" };
+      } catch (error) {
+        driveReroute = { updated: false, error: (error as Error).message };
+      }
+    }
+    return NextResponse.json({ case: updated, driveReroute });
   }
 
   if (!stageOrder.includes(stage as (typeof stageOrder)[number])) {

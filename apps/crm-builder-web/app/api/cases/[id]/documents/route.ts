@@ -7,9 +7,9 @@ import { buildReadyPackage, writeReadyPackageToDisk } from "@/lib/ready-package"
 import {
   addDocument,
   fulfillCaseDocRequest,
-  findCompanyById,
   getCase,
   listDocuments,
+  resolveCaseDriveRootLink,
   syncCaseAutomation,
   updateCaseImm5710Automation,
   updateCaseLinks
@@ -38,8 +38,8 @@ async function ensureCaseDriveFolders(companyId: string, caseId: string) {
     return { created: false, skipped: "already_exists" as const };
   }
 
-  const company = await findCompanyById(companyId);
-  const driveRoot = String(company?.branding?.driveRootLink || "").trim();
+  const choice = await resolveCaseDriveRootLink(companyId, caseItem.id);
+  const driveRoot = String(choice.link || "").trim();
   if (!driveRoot) return { created: false, skipped: "drive_root_missing" as const };
 
   const rootId = extractDriveFolderId(driveRoot);
@@ -122,7 +122,12 @@ export async function POST(
       reason: "not_attempted"
     };
     let targetCase = caseItem;
-    if (!extractDriveFolderId(caseItem.docsUploadLink || "")) {
+    const needsStructure =
+      !targetCase.applicationFormsLink ||
+      !targetCase.submittedFolderLink ||
+      !targetCase.correspondenceFolderLink ||
+      !targetCase.docsUploadLink;
+    if (needsStructure) {
       try {
         await ensureCaseDriveFolders(user.companyId, params.id);
         const refreshed = await getCase(user.companyId, params.id);
