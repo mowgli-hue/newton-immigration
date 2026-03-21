@@ -156,7 +156,7 @@ export const seedUsers: AppUser[] = [
     companyId: "CMP-1",
     name: "Case Owner",
     email: "owner@flowdesk.local",
-    role: "Owner",
+    role: "Processing",
     userType: "staff",
     password: "owner123"
   },
@@ -174,7 +174,7 @@ export const seedUsers: AppUser[] = [
     companyId: "CMP-1",
     name: "Jatin Yadav",
     email: "client@flowdesk.local",
-    role: "Owner",
+    role: "Client",
     userType: "client",
     password: "client123",
     caseId: "CASE-1021"

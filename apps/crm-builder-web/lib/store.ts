@@ -23,6 +23,7 @@ import {
 import { sampleCases, seedCompany, seedUsers } from "@/lib/data";
 import { getMissingChecklistDocs } from "@/lib/application-checklists";
 import { getMissingImm5710Questions } from "@/lib/imm5710";
+import { NEWTON_TEAM_MEMBERS } from "@/lib/newton-team";
 import { generatePgwpDraft } from "@/lib/pgwp";
 import { getStorePath } from "@/lib/storage-paths";
 import { hashPassword, isPasswordHash, verifyPassword } from "@/lib/security";
@@ -105,6 +106,10 @@ function migrateStore(raw: Partial<AppStore>): AppStore {
   const users = (raw.users ?? seedUsers).map((u, idx) => ({
     ...u,
     companyId: u.companyId ?? companies[0].id,
+    role:
+      u.role === "Owner"
+        ? (u.userType === "client" ? "Client" : "Processing")
+        : u.role,
     userType: u.userType ?? "staff",
     active: u.active !== false
   }));
@@ -465,7 +470,7 @@ export async function acceptClientInvite(input: {
     companyId: invite.companyId,
     name: input.name.trim(),
     email: input.email.trim(),
-    role: "Owner",
+    role: "Client",
     userType: "client",
     active: true,
     password: await hashPassword(input.password),
@@ -1445,12 +1450,53 @@ export async function listUsers(companyId: string): Promise<AppUser[]> {
   return store.users.filter((u) => u.companyId === companyId && u.userType === "staff");
 }
 
+export async function syncNewtonTeamUsers(companyId: string): Promise<{ created: number; updated: number }> {
+  const store = await readStore();
+  let created = 0;
+  let updated = 0;
+  for (const item of NEWTON_TEAM_MEMBERS) {
+    const idx = store.users.findIndex(
+      (u) => u.companyId === companyId && u.email.toLowerCase() === item.email.toLowerCase()
+    );
+    if (idx === -1) {
+      const user: AppUser = {
+        id: `USR-${store.users.length + 1}`,
+        companyId,
+        name: item.name,
+        email: item.email,
+        role: item.role,
+        userType: "staff",
+        active: true,
+        password: await hashPassword(`Temp${Math.random().toString(36).slice(2, 10)}A1`),
+        workspaceDriveLink: item.workspaceDriveLink,
+        workspaceDriveFolderId: item.workspaceDriveFolderId
+      };
+      store.users.push(user);
+      created += 1;
+      continue;
+    }
+    const current = store.users[idx];
+    store.users[idx] = {
+      ...current,
+      name: item.name,
+      role: item.role,
+      workspaceDriveLink: item.workspaceDriveLink,
+      workspaceDriveFolderId: item.workspaceDriveFolderId
+    };
+    updated += 1;
+  }
+  await writeStore(store);
+  return { created, updated };
+}
+
 export async function inviteUser(input: {
   companyId: string;
   name: string;
   email: string;
   role: AppUser["role"];
   password: string;
+  workspaceDriveLink?: string;
+  workspaceDriveFolderId?: string;
 }): Promise<AppUser> {
   const store = await readStore();
   const existing = store.users.find((u) => u.email.toLowerCase() === input.email.toLowerCase());
@@ -1464,7 +1510,9 @@ export async function inviteUser(input: {
     role: input.role,
     userType: "staff",
     active: true,
-    password: await hashPassword(input.password)
+    password: await hashPassword(input.password),
+    workspaceDriveLink: input.workspaceDriveLink,
+    workspaceDriveFolderId: input.workspaceDriveFolderId
   };
 
   store.users.push(user);

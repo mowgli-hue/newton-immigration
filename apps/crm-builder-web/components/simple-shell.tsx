@@ -17,8 +17,9 @@ import { CaseItem, Role } from "@/lib/data";
 import { apiFetch } from "@/lib/api-client";
 import { Company } from "@/lib/models";
 import { getChecklistForFormType } from "@/lib/application-checklists";
+import { canCreateCase, canManageUsers, tabsForRole, type AppScreen } from "@/lib/rbac";
 
-type Screen = "dashboard" | "cases" | "communications" | "results" | "accounting" | "tasks" | "chat" | "files";
+type Screen = AppScreen;
 type ClientScreen = "retainer" | "overview" | "documents" | "questions" | "results" | "chat";
 type SessionUser = {
   id: string;
@@ -75,6 +76,8 @@ type TeamUserItem = {
   email: string;
   role: Role;
   active?: boolean;
+  workspaceDriveLink?: string;
+  workspaceDriveFolderId?: string;
 };
 type DocRequestItem = {
   id: string;
@@ -224,8 +227,7 @@ const tabs: { id: Screen; label: string; icon: ReactNode }[] = [
 ];
 
 function filterCasesByRole(allCases: CaseItem[], role: Role) {
-  if (role === "Reviewer") return allCases.filter((c) => c.stage === "Under Review" || c.reviewer !== "N/A");
-  if (role === "Owner") return allCases.filter((c) => c.owner !== "N/A");
+  if (role === "Client") return [];
   return allCases;
 }
 
@@ -306,8 +308,9 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [brandStatus, setBrandStatus] = useState("");
   const [teamName, setTeamName] = useState("");
   const [teamEmail, setTeamEmail] = useState("");
-  const [teamRole, setTeamRole] = useState<Role>("Owner");
+  const [teamRole, setTeamRole] = useState<Role>("Processing");
   const [teamPassword, setTeamPassword] = useState("");
+  const [teamDriveLink, setTeamDriveLink] = useState("");
   const [teamStatus, setTeamStatus] = useState("");
   const [teamPasswordDrafts, setTeamPasswordDrafts] = useState<Record<string, string>>({});
   const [setupFormType, setSetupFormType] = useState("");
@@ -520,6 +523,18 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       })
       .slice(0, 8);
   }, [commSearch, visibleCases, commPaymentFilter]);
+  const allowedTabs = useMemo(
+    () => (sessionUser?.userType === "staff" ? tabsForRole(sessionUser.role) : []),
+    [sessionUser?.role, sessionUser?.userType]
+  );
+  const visibleTabs = useMemo(() => tabs.filter((t) => allowedTabs.includes(t.id)), [allowedTabs]);
+
+  useEffect(() => {
+    if (!visibleTabs.length) return;
+    if (!visibleTabs.some((t) => t.id === screen)) {
+      setScreen(visibleTabs[0].id);
+    }
+  }, [screen, visibleTabs]);
 
   async function loadCaseDetail(caseId: string) {
     const [msgRes, docRes, reqRes] = await Promise.all([
@@ -1292,7 +1307,8 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
         name: teamName.trim(),
         email: teamEmail.trim(),
         role: teamRole,
-        password: teamPassword.trim()
+        password: teamPassword.trim(),
+        workspaceDriveLink: teamDriveLink.trim()
       })
     });
     const payload = await res.json().catch(() => ({}));
@@ -1304,6 +1320,23 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     setTeamName("");
     setTeamEmail("");
     setTeamPassword("");
+    setTeamDriveLink("");
+    const usersRes = await apiFetch("/users", { cache: "no-store" });
+    if (usersRes.ok) {
+      const usersPayload = await usersRes.json().catch(() => ({}));
+      setTeamUsers((usersPayload.users || []) as TeamUserItem[]);
+    }
+  }
+
+  async function syncNewtonTeamPreset() {
+    setTeamStatus("Syncing Newton team users...");
+    const res = await apiFetch("/users/sync-newton", { method: "POST" });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setTeamStatus(String(payload.error || "Could not sync team preset."));
+      return;
+    }
+    setTeamStatus(`Team preset synced. Created ${Number(payload.created || 0)}, updated ${Number(payload.updated || 0)}.`);
     const usersRes = await apiFetch("/users", { cache: "no-store" });
     if (usersRes.ok) {
       const usersPayload = await usersRes.json().catch(() => ({}));
@@ -2157,11 +2190,6 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                 </div>
               ) : null}
             </div>
-            <select value={viewRole} onChange={(e) => setViewRole(e.target.value as Role)} className="rounded-lg border-2 border-slate-300 bg-white px-3 py-2 text-sm font-semibold">
-              <option>Admin</option>
-              <option>Owner</option>
-              <option>Reviewer</option>
-            </select>
             <button onClick={logout} className="rounded-lg border-2 border-slate-300 bg-white px-3 py-2 text-sm font-semibold">
               <LogOut size={14} className="inline mr-1" /> Logout
             </button>
@@ -2177,7 +2205,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
             {company ? `${company.name} Workspace` : "Company Workspace"}
           </p>
           <div className="space-y-1">
-            {tabs.map((tab) => (
+            {visibleTabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setScreen(tab.id)}
@@ -2281,11 +2309,11 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                 {brandStatus ? <p className="mt-2 text-xs text-slate-600">{brandStatus}</p> : null}
               </section>
 
-              {sessionUser?.userType === "staff" && (sessionUser.role === "Admin" || sessionUser.role === "Owner") ? (
+              {sessionUser?.userType === "staff" && canManageUsers(sessionUser.role) ? (
                 <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
                   <h3 className="text-base font-semibold">Team Management</h3>
-                  <p className="mt-1 text-xs text-slate-500">Owner/Admin can add processing team members here.</p>
-                  <div className="mt-3 grid gap-2 md:grid-cols-4">
+                  <p className="mt-1 text-xs text-slate-500">Admin can add and manage team members here.</p>
+                  <div className="mt-3 grid gap-2 md:grid-cols-5">
                     <input
                       value={teamName}
                       onChange={(e) => setTeamName(e.target.value)}
@@ -2303,9 +2331,11 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                       onChange={(e) => setTeamRole(e.target.value as Role)}
                       className="rounded-lg border-2 border-slate-300 px-3 py-2 text-sm"
                     >
-                      <option value="Owner">Owner</option>
+                      <option value="Marketing">Marketing</option>
+                      <option value="Processing">Processing</option>
+                      <option value="ProcessingLead">Processing Lead</option>
                       <option value="Reviewer">Reviewer</option>
-                      {sessionUser.role === "Admin" ? <option value="Admin">Admin</option> : null}
+                      <option value="Admin">Admin</option>
                     </select>
                     <input
                       value={teamPassword}
@@ -2313,26 +2343,45 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                       className="rounded-lg border-2 border-slate-300 px-3 py-2 text-sm"
                       placeholder="Temporary password"
                     />
+                    <input
+                      value={teamDriveLink}
+                      onChange={(e) => setTeamDriveLink(e.target.value)}
+                      className="rounded-lg border-2 border-slate-300 px-3 py-2 text-sm md:col-span-2"
+                      placeholder="Workspace Drive folder link (optional)"
+                    />
                   </div>
-                  <button
-                    onClick={() => void addTeamMember()}
-                    className="mt-2 rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white"
-                  >
-                    Add Team Member
-                  </button>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      onClick={() => void addTeamMember()}
+                      className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white"
+                    >
+                      Add Team Member
+                    </button>
+                    <button
+                      onClick={() => void syncNewtonTeamPreset()}
+                      className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold"
+                    >
+                      Sync Newton Team Preset
+                    </button>
+                  </div>
                   {teamStatus ? <p className="mt-2 text-xs text-slate-600">{teamStatus}</p> : null}
 
                   <div className="mt-3 max-h-52 overflow-auto rounded border border-slate-200">
                     {teamUsers.map((u) => (
                       <div key={u.id} className="border-b border-slate-100 px-3 py-2 text-xs">
                         {(() => {
-                          const ownerBlocked = sessionUser.role === "Owner" && u.role === "Admin";
+                          const ownerBlocked = false;
                           return (
                             <>
                         <div className="flex items-start justify-between gap-2">
                           <div>
                             <p className="font-semibold">{u.name}</p>
                             <p className="text-slate-500">{u.email}</p>
+                            {u.workspaceDriveLink ? (
+                              <a href={u.workspaceDriveLink} target="_blank" className="text-[11px] text-blue-700 underline">
+                                Workspace Drive
+                              </a>
+                            ) : null}
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="rounded bg-slate-100 px-2 py-1 font-semibold text-slate-700">{u.role}</span>
@@ -2371,7 +2420,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                             {u.active === false ? "Activate" : "Deactivate"}
                           </button>
                         </div>
-                        {ownerBlocked ? <p className="mt-1 text-[11px] text-amber-700">Owner cannot manage Admin users.</p> : null}
+                        {ownerBlocked ? <p className="mt-1 text-[11px] text-amber-700">Restricted user action.</p> : null}
                             </>
                           );
                         })()}

@@ -1,4 +1,4 @@
-export type Role = "Admin" | "Owner" | "Reviewer";
+export type Role = "Admin" | "Marketing" | "Processing" | "ProcessingLead" | "Reviewer" | "Client";
 export type UserType = "staff" | "client";
 export type CaseStatus = "lead" | "active" | "under_review" | "ready" | "submitted";
 export type AiStatus = "idle" | "collecting_docs" | "waiting_client" | "drafting" | "completed";
@@ -116,6 +116,7 @@ export type CaseItem = {
   companyId: string;
   createdAt?: string;
   updatedAt?: string;
+  clientId?: string;
   clientUserId?: string;
   client: string;
   caseStatus?: CaseStatus;
@@ -149,6 +150,10 @@ export type CaseItem = {
   paymentStatus?: "pending" | "paid" | "not_required";
   paymentPaidAt?: string;
   amountPaid?: number;
+  submittedAt?: string;
+  decisionDate?: string;
+  finalOutcome?: "approved" | "refused" | "withdrawn";
+  remarks?: string;
   imm5710Automation?: {
     status: "idle" | "started" | "failed";
     startedAt?: string;
@@ -205,6 +210,8 @@ export type AppUser = {
   userType: UserType;
   active?: boolean;
   password: string;
+  workspaceDriveLink?: string;
+  workspaceDriveFolderId?: string;
   caseId?: string;
 };
 
@@ -241,11 +248,55 @@ export type MessageItem = {
 export type DocumentItem = {
   id: string;
   companyId: string;
+  clientId?: string;
   caseId: string;
   name: string;
   category?: "general" | "result";
+  fileType?: string;
+  version?: number;
+  versionGroupId?: string;
   status: "pending" | "received";
   link: string;
+  createdAt: string;
+};
+
+export type ClientMaster = {
+  id: string;
+  companyId: string;
+  clientCode: string;
+  fullName: string;
+  phone?: string;
+  email?: string;
+  assignedTo?: string;
+  internalFlags: {
+    previousRefusals?: boolean;
+    risks?: string;
+    missingDocuments?: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ClientCommunication = {
+  id: string;
+  companyId: string;
+  clientId: string;
+  createdByUserId: string;
+  createdByName: string;
+  type: "note" | "call" | "email" | "ai";
+  message: string;
+  createdAt: string;
+};
+
+export type AuditLog = {
+  id: string;
+  companyId: string;
+  actorUserId: string;
+  actorName: string;
+  action: string;
+  resourceType: "client_profile" | "client_note" | "client_invite" | "case";
+  resourceId: string;
+  metadata?: Record<string, string>;
   createdAt: string;
 };
 
@@ -276,9 +327,12 @@ export type NotificationItem = {
 export type AppStore = {
   companies: Company[];
   users: AppUser[];
+  clients: ClientMaster[];
   cases: CaseItem[];
   messages: MessageItem[];
   documents: DocumentItem[];
+  clientCommunications: ClientCommunication[];
+  auditLogs: AuditLog[];
   tasks: TaskItem[];
   notifications: NotificationItem[];
   sessions: Session[];

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
+import { canCreateCase } from "@/lib/rbac";
 import { createCase, findCompanyById, listCases, updateCaseLinks } from "@/lib/store";
 import { buildCaseFolderNameWithApp, createCaseDriveStructure, extractDriveFolderId } from "@/lib/google-drive";
 
@@ -31,6 +32,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   if (user.userType !== "staff") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!canCreateCase(user.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

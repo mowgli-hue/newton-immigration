@@ -14,7 +14,9 @@ export async function GET(request: NextRequest) {
       name: u.name,
       email: u.email,
       role: u.role,
-      active: u.active !== false
+      active: u.active !== false,
+      workspaceDriveLink: u.workspaceDriveLink || "",
+      workspaceDriveFolderId: u.workspaceDriveFolderId || ""
     }))
   });
 }
@@ -22,7 +24,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const user = await getCurrentUserFromRequest(request);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (user.userType !== "staff" || (user.role !== "Admin" && user.role !== "Owner")) {
+  if (user.userType !== "staff" || user.role !== "Admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -31,20 +33,19 @@ export async function POST(request: NextRequest) {
   const email = String(body.email ?? "").trim();
   const role = String(body.role ?? "").trim();
   const password = String(body.password ?? "temp1234");
+  const workspaceDriveLink = String(body.workspaceDriveLink ?? "").trim();
+  const workspaceDriveFolderId = String(body.workspaceDriveFolderId ?? "").trim();
 
   if (!name || !email || !role) {
     return NextResponse.json({ error: "name, email, role are required" }, { status: 400 });
   }
 
-  if (!["Admin", "Owner", "Reviewer"].includes(role)) {
+  if (!["Admin", "Marketing", "Processing", "ProcessingLead", "Reviewer"].includes(role)) {
     return NextResponse.json({ error: "Invalid role" }, { status: 400 });
   }
   const strength = validatePasswordStrength(password);
   if (!strength.ok) {
     return NextResponse.json({ error: strength.reason || "Weak password." }, { status: 400 });
-  }
-  if (user.role === "Owner" && role === "Admin") {
-    return NextResponse.json({ error: "Owner cannot create Admin users." }, { status: 403 });
   }
 
   try {
@@ -52,8 +53,10 @@ export async function POST(request: NextRequest) {
       companyId: user.companyId,
       name,
       email,
-      role: role as "Admin" | "Owner" | "Reviewer",
-      password
+      role: role as "Admin" | "Marketing" | "Processing" | "ProcessingLead" | "Reviewer",
+      password,
+      workspaceDriveLink: workspaceDriveLink || undefined,
+      workspaceDriveFolderId: workspaceDriveFolderId || undefined
     });
 
     return NextResponse.json(

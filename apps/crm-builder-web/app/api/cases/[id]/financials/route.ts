@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
+import { canUseAccounting } from "@/lib/rbac";
 import { addCaseMilestone, addInvoice, recordCasePayment, toggleMilestone, updateCaseFinancials } from "@/lib/store";
 
 export async function PATCH(
@@ -9,6 +10,7 @@ export async function PATCH(
   const user = await getCurrentUserFromRequest(request);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (user.userType !== "staff") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!canUseAccounting(user.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await request.json().catch(() => ({}));
   const updated = await updateCaseFinancials(user.companyId, params.id, {
@@ -27,6 +29,7 @@ export async function POST(
   const user = await getCurrentUserFromRequest(request);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (user.userType !== "staff") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!canUseAccounting(user.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await request.json().catch(() => ({}));
   const actionRaw = String(body.action ?? "").trim();
