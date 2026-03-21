@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { SESSION_COOKIE } from "@/lib/auth";
+import { applySessionCookie } from "@/lib/auth";
 import { createSession, findCompanyById, findUserByCredentials } from "@/lib/store";
 
 export async function POST(request: Request) {
@@ -29,15 +29,7 @@ export async function POST(request: Request) {
     company
   });
 
-  response.cookies.set({
-    name: SESSION_COOKIE,
-    value: session.token,
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7
-  });
+  applySessionCookie(response, session.token);
 
   return response;
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
+import { validatePasswordStrength } from "@/lib/security";
 import { inviteUser, listUsers } from "@/lib/store";
 
 export async function GET(request: NextRequest) {
@@ -37,6 +38,10 @@ export async function POST(request: NextRequest) {
 
   if (!["Admin", "Owner", "Reviewer"].includes(role)) {
     return NextResponse.json({ error: "Invalid role" }, { status: 400 });
+  }
+  const strength = validatePasswordStrength(password);
+  if (!strength.ok) {
+    return NextResponse.json({ error: strength.reason || "Weak password." }, { status: 400 });
   }
   if (user.role === "Owner" && role === "Admin") {
     return NextResponse.json({ error: "Owner cannot create Admin users." }, { status: 403 });

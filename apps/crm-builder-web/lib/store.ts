@@ -3,11 +3,14 @@ import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 import {
   AiStatus,
+  AuditLog,
   AppStore,
   AppUser,
   CaseItem,
   CaseStatus,
+  ClientCommunication,
   ClientInvite,
+  ClientMaster,
   Company,
   DocumentItem,
   MessageItem,
@@ -22,12 +25,18 @@ import { getMissingChecklistDocs } from "@/lib/application-checklists";
 import { getMissingImm5710Questions } from "@/lib/imm5710";
 import { generatePgwpDraft } from "@/lib/pgwp";
 import { getStorePath } from "@/lib/storage-paths";
+import { hashPassword, isPasswordHash, verifyPassword } from "@/lib/security";
 
 const STORE_PATH = getStorePath();
+const SESSION_MAX_AGE_SECONDS = Math.max(
+  60 * 15,
+  Number(process.env.SESSION_MAX_AGE_SECONDS || 60 * 60 * 12)
+);
 
 const defaultStore: AppStore = {
   companies: [seedCompany],
   users: seedUsers,
+  clients: [],
   cases: sampleCases,
   messages: [
     {
@@ -61,11 +70,27 @@ const defaultStore: AppStore = {
       createdAt: new Date().toISOString()
     }
   ],
+  clientCommunications: [],
+  auditLogs: [],
   tasks: [],
   notifications: [],
   sessions: [],
   invites: []
 };
+
+function normalizeClientCode(value: string) {
+  const trimmed = String(value || "").trim().toUpperCase();
+  if (!/^CLT-\d+$/.test(trimmed)) return "";
+  return trimmed;
+}
+
+function nextClientCode(clients: ClientMaster[]) {
+  const max = clients.reduce((acc, c) => {
+    const parsed = Number(String(c.clientCode || "").replace(/^CLT-/, ""));
+    return Number.isFinite(parsed) ? Math.max(acc, parsed) : acc;
+  }, 1000);
+  return `CLT-${max + 1}`;
+}
 
 function migrateStore(raw: Partial<AppStore>): AppStore {
   const companies =
@@ -84,65 +109,152 @@ function migrateStore(raw: Partial<AppStore>): AppStore {
     active: u.active !== false
   }));
 
-  const cases = (raw.cases ?? sampleCases).map((c, idx) => ({
+  const clients: ClientMaster[] = (raw.clients ?? []).map((c, idx) => ({
     ...c,
-    createdAt: c.createdAt ?? c.updatedAt ?? new Date().toISOString(),
-    updatedAt: c.updatedAt ?? c.createdAt ?? new Date().toISOString(),
     companyId: c.companyId ?? companies[0].id,
-    caseStatus: (c.caseStatus as CaseStatus) ?? "lead",
-    aiStatus: (c.aiStatus as AiStatus) ?? "idle",
-    leadPhone: c.leadPhone ?? undefined,
-    leadEmail: c.leadEmail ?? undefined,
-    sourceLeadKey: c.sourceLeadKey ?? undefined,
-    assignedTo: c.assignedTo ?? c.owner ?? "Unassigned",
-    processingStatus: c.processingStatus ?? "docs_pending",
-    processingStatusOther: c.processingStatusOther ?? undefined,
-    isUrgent: Boolean(c.isUrgent),
-    deadlineDate: c.deadlineDate ?? undefined,
-    balanceAmount: c.balanceAmount ?? 0,
-    retainerSigned: c.retainerSigned ?? false,
-    retainerSentAt: c.retainerSentAt ?? undefined,
-    docsUploadLink: c.docsUploadLink ?? "",
-    applicationFormsLink: c.applicationFormsLink ?? undefined,
-    submittedFolderLink: c.submittedFolderLink ?? undefined,
-    correspondenceFolderLink: c.correspondenceFolderLink ?? undefined,
-    questionnaireLink: c.questionnaireLink ?? "",
-    paymentMethod: c.paymentMethod ?? "interac",
-    interacRecipient: c.interacRecipient ?? "",
-    interacInstructions:
-      c.interacInstructions ??
-      ((c as any).paymentLink
-        ? `Use previous payment link: ${(c as any).paymentLink}`
-        : "Send Interac e-Transfer with case number."),
-    paymentStatus: c.paymentStatus ?? (c.retainerSigned ? "paid" : "pending"),
-    paymentPaidAt: c.paymentPaidAt ?? undefined,
-    amountPaid:
-      Number.isFinite(Number(c.amountPaid))
-        ? Number(c.amountPaid)
-        : c.paymentStatus === "paid"
-          ? Number(c.servicePackage?.retainerAmount || 0)
-          : 0,
-    imm5710Automation: c.imm5710Automation ?? { status: "idle" },
-    pgwpIntake: c.pgwpIntake ?? undefined,
-    docRequests: Array.isArray(c.docRequests) ? c.docRequests : [],
-    retainerRecord: c.retainerRecord ?? undefined,
-    servicePackage: c.servicePackage ?? {
-      name: "Standard Service",
-      retainerAmount: c.balanceAmount ?? 0,
-      balanceAmount: c.balanceAmount ?? 0,
-      milestones: []
-    },
-    invoices: c.invoices ?? []
+    clientCode: normalizeClientCode(c.clientCode) || `CLT-${1001 + idx}`,
+    fullName: String(c.fullName || "").trim() || "Client",
+    phone: c.phone ?? undefined,
+    email: c.email ?? undefined,
+    assignedTo: c.assignedTo ?? "Unassigned",
+    internalFlags: c.internalFlags ?? {},
+    createdAt: c.createdAt ?? new Date().toISOString(),
+    updatedAt: c.updatedAt ?? c.createdAt ?? new Date().toISOString()
   }));
+
+  const findOrCreateClientForCase = (input: {
+    companyId: string;
+    clientName: string;
+    clientId?: string;
+    leadEmail?: string;
+    leadPhone?: string;
+    assignedTo?: string;
+  }) => {
+    const explicitId = String(input.clientId || "").trim();
+    if (explicitId) {
+      const explicit = clients.find((c) => c.companyId === input.companyId && c.id === explicitId);
+      if (explicit) return explicit;
+    }
+
+    const email = String(input.leadEmail || "").trim().toLowerCase();
+    const phone = String(input.leadPhone || "").replace(/\s+/g, "");
+    const name = String(input.clientName || "").trim().toLowerCase();
+    const found =
+      (email && clients.find((c) => c.companyId === input.companyId && String(c.email || "").toLowerCase() === email)) ||
+      (phone && clients.find((c) => c.companyId === input.companyId && String(c.phone || "").replace(/\s+/g, "") === phone)) ||
+      (name && clients.find((c) => c.companyId === input.companyId && String(c.fullName || "").trim().toLowerCase() === name));
+    if (found) {
+      return found;
+    }
+
+    const created: ClientMaster = {
+      id: `CLIENT-${randomUUID()}`,
+      companyId: input.companyId,
+      clientCode: nextClientCode(clients),
+      fullName: String(input.clientName || "Client").trim(),
+      phone: String(input.leadPhone || "").trim() || undefined,
+      email: String(input.leadEmail || "").trim() || undefined,
+      assignedTo: input.assignedTo || "Unassigned",
+      internalFlags: {},
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    clients.push(created);
+    return created;
+  };
+
+  const cases = (raw.cases ?? sampleCases).map((c, idx) => {
+    const companyId = c.companyId ?? companies[0].id;
+    const assignedTo = c.assignedTo ?? c.owner ?? "Unassigned";
+    const linkedClient = findOrCreateClientForCase({
+      companyId,
+      clientName: String(c.client || "Client"),
+      clientId: c.clientId,
+      leadEmail: c.leadEmail,
+      leadPhone: c.leadPhone,
+      assignedTo
+    });
+    return {
+      ...c,
+      createdAt: c.createdAt ?? c.updatedAt ?? new Date().toISOString(),
+      updatedAt: c.updatedAt ?? c.createdAt ?? new Date().toISOString(),
+      companyId,
+      clientId: linkedClient.id,
+      client: c.client || linkedClient.fullName,
+      caseStatus: (c.caseStatus as CaseStatus) ?? "lead",
+      aiStatus: (c.aiStatus as AiStatus) ?? "idle",
+      leadPhone: c.leadPhone ?? linkedClient.phone ?? undefined,
+      leadEmail: c.leadEmail ?? linkedClient.email ?? undefined,
+      sourceLeadKey: c.sourceLeadKey ?? undefined,
+      assignedTo,
+      processingStatus: c.processingStatus ?? "docs_pending",
+      processingStatusOther: c.processingStatusOther ?? undefined,
+      isUrgent: Boolean(c.isUrgent),
+      deadlineDate: c.deadlineDate ?? undefined,
+      balanceAmount: c.balanceAmount ?? 0,
+      retainerSigned: c.retainerSigned ?? false,
+      retainerSentAt: c.retainerSentAt ?? undefined,
+      docsUploadLink: c.docsUploadLink ?? "",
+      applicationFormsLink: c.applicationFormsLink ?? undefined,
+      submittedFolderLink: c.submittedFolderLink ?? undefined,
+      correspondenceFolderLink: c.correspondenceFolderLink ?? undefined,
+      questionnaireLink: c.questionnaireLink ?? "",
+      paymentMethod: c.paymentMethod ?? "interac",
+      interacRecipient: c.interacRecipient ?? "",
+      interacInstructions:
+        c.interacInstructions ??
+        ((c as any).paymentLink
+          ? `Use previous payment link: ${(c as any).paymentLink}`
+          : "Send Interac e-Transfer with case number."),
+      paymentStatus: c.paymentStatus ?? (c.retainerSigned ? "paid" : "pending"),
+      paymentPaidAt: c.paymentPaidAt ?? undefined,
+      submittedAt: c.submittedAt ?? undefined,
+      decisionDate: c.decisionDate ?? undefined,
+      finalOutcome: c.finalOutcome ?? undefined,
+      remarks: c.remarks ?? undefined,
+      amountPaid:
+        Number.isFinite(Number(c.amountPaid))
+          ? Number(c.amountPaid)
+          : c.paymentStatus === "paid"
+            ? Number(c.servicePackage?.retainerAmount || 0)
+            : 0,
+      imm5710Automation: c.imm5710Automation ?? { status: "idle" },
+      pgwpIntake: c.pgwpIntake ?? undefined,
+      docRequests: Array.isArray(c.docRequests) ? c.docRequests : [],
+      retainerRecord: c.retainerRecord ?? undefined,
+      servicePackage: c.servicePackage ?? {
+        name: "Standard Service",
+        retainerAmount: c.balanceAmount ?? 0,
+        balanceAmount: c.balanceAmount ?? 0,
+        milestones: []
+      },
+      invoices: c.invoices ?? []
+    };
+  });
 
   return {
     companies,
     users,
+    clients,
     cases,
     messages: raw.messages ?? defaultStore.messages,
     documents: (raw.documents ?? defaultStore.documents).map((d) => ({
       ...d,
-      category: d.category ?? "general"
+      category: d.category ?? "general",
+      fileType: d.fileType ?? undefined,
+      version: Number(d.version || 1),
+      versionGroupId: d.versionGroupId ?? d.id,
+      clientId:
+        d.clientId ??
+        cases.find((c) => c.companyId === d.companyId && c.id === d.caseId)?.clientId
+    })),
+    clientCommunications: (raw.clientCommunications ?? []).map((n) => ({
+      ...n,
+      createdAt: n.createdAt ?? new Date().toISOString()
+    })),
+    auditLogs: (raw.auditLogs ?? []).map((l) => ({
+      ...l,
+      createdAt: l.createdAt ?? new Date().toISOString()
     })),
     tasks: raw.tasks ?? [],
     notifications: raw.notifications ?? [],
@@ -163,7 +275,19 @@ async function ensureStoreFile() {
 export async function readStore(): Promise<AppStore> {
   await ensureStoreFile();
   const raw = await readFile(STORE_PATH, "utf8");
-  return migrateStore(JSON.parse(raw) as Partial<AppStore>);
+  const store = migrateStore(JSON.parse(raw) as Partial<AppStore>);
+  let changed = false;
+  for (let i = 0; i < store.users.length; i += 1) {
+    const current = String(store.users[i].password || "");
+    if (!isPasswordHash(current)) {
+      store.users[i] = { ...store.users[i], password: await hashPassword(current) };
+      changed = true;
+    }
+  }
+  if (changed) {
+    await writeStore(store);
+  }
+  return store;
 }
 
 export async function writeStore(next: AppStore): Promise<void> {
@@ -173,9 +297,11 @@ export async function writeStore(next: AppStore): Promise<void> {
 
 export async function findUserByCredentials(email: string, password: string): Promise<AppUser | null> {
   const store = await readStore();
-  const found = store.users.find(
-    (u) => u.email.toLowerCase() === email.toLowerCase().trim() && u.password === password && u.active !== false
-  );
+  const normalized = email.toLowerCase().trim();
+  const found = store.users.find((u) => u.email.toLowerCase() === normalized && u.active !== false);
+  if (!found) return null;
+  const ok = await verifyPassword(password, String(found.password || ""));
+  if (!ok) return null;
   return found ?? null;
 }
 
@@ -219,7 +345,7 @@ export async function createCompanyWithAdmin(input: {
     role: "Admin",
     userType: "staff",
     active: true,
-    password: input.password
+    password: await hashPassword(input.password)
   };
 
   store.companies.push(company);
@@ -230,7 +356,7 @@ export async function createCompanyWithAdmin(input: {
 
 export async function createSession(user: AppUser): Promise<Session> {
   const store = await readStore();
-  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString();
+  const expiresAt = new Date(Date.now() + 1000 * SESSION_MAX_AGE_SECONDS).toISOString();
   const session: Session = {
     token: randomUUID(),
     userId: user.id,
@@ -255,10 +381,10 @@ export async function createClientInvite(input: {
   const caseItem = store.cases.find((c) => c.companyId === input.companyId && c.id === input.caseId);
   if (!caseItem) throw new Error("Case not found");
 
-  const neverExpire = String(process.env.INVITE_LINK_NEVER_EXPIRES || "true").toLowerCase() !== "false";
+  const neverExpire = String(process.env.INVITE_LINK_NEVER_EXPIRES || "false").toLowerCase() === "true";
   const expiresAt = neverExpire
     ? new Date(Date.now() + 1000 * 60 * 60 * 24 * 365 * 50).toISOString()
-    : new Date(Date.now() + 1000 * 60 * 60 * 24 * 14).toISOString();
+    : new Date(Date.now() + 1000 * 60 * 60 * 48).toISOString();
 
   const invite: ClientInvite = {
     token: randomUUID(),
@@ -296,7 +422,7 @@ export async function getClientInviteByToken(token: string): Promise<ClientInvit
   const invite = store.invites.find((i) => i.token === token);
   if (!invite) return null;
 
-  const enableExpiry = String(process.env.INVITE_LINK_ENABLE_EXPIRY || "false").toLowerCase() === "true";
+  const enableExpiry = String(process.env.INVITE_LINK_ENABLE_EXPIRY || "true").toLowerCase() === "true";
   if (enableExpiry && invite.status === "pending" && new Date(invite.expiresAt).getTime() <= Date.now()) {
     invite.status = "expired";
     await writeStore(store);
@@ -342,7 +468,7 @@ export async function acceptClientInvite(input: {
     role: "Owner",
     userType: "client",
     active: true,
-    password: input.password,
+    password: await hashPassword(input.password),
     caseId: invite.caseId
   };
 
@@ -447,6 +573,48 @@ export async function createCase(input: {
 }): Promise<CaseItem> {
   const store = await readStore();
   const company = store.companies.find((c) => c.id === input.companyId);
+  const normalizedEmail = String(input.leadEmail || "").trim().toLowerCase();
+  const normalizedPhone = String(input.leadPhone || "").replace(/\s+/g, "");
+  let client =
+    (normalizedEmail &&
+      store.clients.find(
+        (c) => c.companyId === input.companyId && String(c.email || "").trim().toLowerCase() === normalizedEmail
+      )) ||
+    (normalizedPhone &&
+      store.clients.find(
+        (c) => c.companyId === input.companyId && String(c.phone || "").replace(/\s+/g, "") === normalizedPhone
+      )) ||
+    store.clients.find(
+      (c) =>
+        c.companyId === input.companyId &&
+        String(c.fullName || "").trim().toLowerCase() === String(input.client || "").trim().toLowerCase()
+    );
+  if (!client) {
+    client = {
+      id: `CLIENT-${randomUUID()}`,
+      companyId: input.companyId,
+      clientCode: nextClientCode(store.clients),
+      fullName: input.client,
+      phone: String(input.leadPhone || "").trim() || undefined,
+      email: String(input.leadEmail || "").trim() || undefined,
+      assignedTo: "Unassigned",
+      internalFlags: {},
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    store.clients.push(client);
+  } else {
+    client = {
+      ...client,
+      fullName: input.client || client.fullName,
+      phone: String(input.leadPhone || "").trim() || client.phone,
+      email: String(input.leadEmail || "").trim() || client.email,
+      updatedAt: new Date().toISOString()
+    };
+    const cIdx = store.clients.findIndex((c) => c.id === client?.id);
+    if (cIdx !== -1) store.clients[cIdx] = client;
+  }
+
   const companyCases = store.cases.filter((c) => c.companyId === input.companyId);
   const highestCaseNumber = companyCases.reduce((max, c) => {
     const parsed = Number(String(c.id || "").replace(/^CASE-/, ""));
@@ -460,6 +628,7 @@ export async function createCase(input: {
     companyId: input.companyId,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+    clientId: client.id,
     client: input.client,
     caseStatus: "lead",
     aiStatus: "idle",
@@ -543,6 +712,7 @@ export async function resetCompanyDataToSingleCase(input: {
     companyId: input.companyId,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+    clientId: `CLIENT-${randomUUID()}`,
     client: normalizedClient,
     formType,
     assignedTo: "Unassigned",
@@ -579,8 +749,23 @@ export async function resetCompanyDataToSingleCase(input: {
   };
 
   store.cases = [freshCase, ...store.cases.filter((c) => c.companyId !== input.companyId)];
+  store.clients = [
+    {
+      id: freshCase.clientId as string,
+      companyId: input.companyId,
+      clientCode: nextClientCode(store.clients.filter((c) => c.companyId === input.companyId)),
+      fullName: normalizedClient,
+      assignedTo: "Unassigned",
+      internalFlags: {},
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    },
+    ...store.clients.filter((c) => c.companyId !== input.companyId)
+  ];
   store.messages = store.messages.filter((m) => m.companyId !== input.companyId);
   store.documents = store.documents.filter((d) => d.companyId !== input.companyId);
+  store.clientCommunications = store.clientCommunications.filter((n) => n.companyId !== input.companyId);
+  store.auditLogs = store.auditLogs.filter((l) => l.companyId !== input.companyId);
   store.tasks = store.tasks.filter((t) => t.companyId !== input.companyId);
   store.notifications = store.notifications.filter((n) => n.companyId !== input.companyId);
   store.invites = store.invites.filter((i) => i.companyId !== input.companyId);
@@ -645,6 +830,9 @@ export async function pruneCompanyDataToCaseIds(input: {
     return keepIds.has(u.caseId);
   });
   store.notifications = store.notifications.filter((n) => n.companyId !== input.companyId);
+  store.clientCommunications = store.clientCommunications.filter(
+    (n) => n.companyId !== input.companyId || keepIds.has(store.cases.find((c) => c.clientId === n.clientId)?.id || "")
+  );
   store.sessions = keepSessions
     ? store.sessions.filter((s) => s.companyId !== input.companyId || staffUserIds.has(s.userId))
     : store.sessions.filter((s) => s.companyId !== input.companyId);
@@ -1276,7 +1464,7 @@ export async function inviteUser(input: {
     role: input.role,
     userType: "staff",
     active: true,
-    password: input.password
+    password: await hashPassword(input.password)
   };
 
   store.users.push(user);
@@ -1288,7 +1476,7 @@ export async function resetUserPassword(companyId: string, userId: string, passw
   const store = await readStore();
   const idx = store.users.findIndex((u) => u.companyId === companyId && u.id === userId);
   if (idx === -1) return null;
-  store.users[idx] = { ...store.users[idx], password };
+  store.users[idx] = { ...store.users[idx], password: await hashPassword(password) };
   await writeStore(store);
   return store.users[idx];
 }

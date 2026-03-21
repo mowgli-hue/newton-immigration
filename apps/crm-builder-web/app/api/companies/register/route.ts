@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { SESSION_COOKIE } from "@/lib/auth";
+import { applySessionCookie } from "@/lib/auth";
+import { validatePasswordStrength } from "@/lib/security";
 import { createCompanyWithAdmin, createSession } from "@/lib/store";
 
 export async function POST(request: Request) {
@@ -11,6 +12,10 @@ export async function POST(request: Request) {
 
   if (!companyName || !adminName || !email || !password) {
     return NextResponse.json({ error: "All fields are required." }, { status: 400 });
+  }
+  const strength = validatePasswordStrength(password);
+  if (!strength.ok) {
+    return NextResponse.json({ error: strength.reason || "Weak password." }, { status: 400 });
   }
 
   try {
@@ -33,15 +38,7 @@ export async function POST(request: Request) {
       }
     });
 
-    response.cookies.set({
-      name: SESSION_COOKIE,
-      value: session.token,
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 7
-    });
+    applySessionCookie(response, session.token);
 
     return response;
   } catch (error) {

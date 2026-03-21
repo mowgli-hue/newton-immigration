@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
+import { validatePasswordStrength } from "@/lib/security";
 import { getUserById, resetUserPassword } from "@/lib/store";
 
 export async function PATCH(
@@ -23,6 +24,10 @@ export async function PATCH(
   const password = String(body.password ?? "");
   if (!password) {
     return NextResponse.json({ error: "password is required" }, { status: 400 });
+  }
+  const strength = validatePasswordStrength(password);
+  if (!strength.ok) {
+    return NextResponse.json({ error: strength.reason || "Weak password." }, { status: 400 });
   }
 
   const updated = await resetUserPassword(user.companyId, params.id, password);

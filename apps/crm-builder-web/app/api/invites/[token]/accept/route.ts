@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { SESSION_COOKIE } from "@/lib/auth";
+import { applySessionCookie } from "@/lib/auth";
+import { validatePasswordStrength } from "@/lib/security";
 import { acceptClientInvite, createSession } from "@/lib/store";
 
 export async function POST(request: Request, { params }: { params: { token: string } }) {
@@ -17,6 +18,10 @@ export async function POST(request: Request, { params }: { params: { token: stri
   const password =
     passwordRaw ||
     `fd_${params.token.slice(0, 10)}_${Math.random().toString(36).slice(2, 10)}`;
+  const strength = validatePasswordStrength(password);
+  if (!strength.ok) {
+    return NextResponse.json({ error: strength.reason || "Weak password." }, { status: 400 });
+  }
 
   try {
     const { user, company } = await acceptClientInvite({ token: params.token, name, email, password });
@@ -28,15 +33,7 @@ export async function POST(request: Request, { params }: { params: { token: stri
       user: { id: user.id, name: user.name, email: user.email, userType: user.userType }
     });
 
-    response.cookies.set({
-      name: SESSION_COOKIE,
-      value: session.token,
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 7
-    });
+    applySessionCookie(response, session.token);
 
     return response;
   } catch (error) {
