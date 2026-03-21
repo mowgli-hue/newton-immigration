@@ -289,6 +289,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [commClientName, setCommClientName] = useState("");
   const [commFormType, setCommFormType] = useState("PGWP");
   const [commPhone, setCommPhone] = useState("");
+  const [commEmail, setCommEmail] = useState("");
   const [commCreateStatus, setCommCreateStatus] = useState("");
   const [commUrgent, setCommUrgent] = useState(false);
   const [commUrgentDays, setCommUrgentDays] = useState("5");
@@ -678,6 +679,8 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       setInviteUrl("");
       return;
     }
+    setInviteEmail(String(selectedCase.leadEmail || ""));
+    setInvitePhone(String(selectedCase.leadPhone || ""));
     void loadLatestInviteForCase(selectedCase.id);
   }, [selectedCase?.id, sessionUser?.userType]);
 
@@ -761,6 +764,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
         client: commClientName.trim(),
         formType: commFormType.trim(),
         leadPhone: commPhone.trim() || undefined,
+        leadEmail: commEmail.trim() || undefined,
         isUrgent: commUrgent,
         dueInDays: commUrgent ? Number(commUrgentDays || 0) : undefined
       })
@@ -773,6 +777,8 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     const created = payload.case as CaseItem;
     setCases((prev) => [created, ...prev]);
     setSelectedCaseId(created.id);
+    setInviteEmail(String(created.leadEmail || ""));
+    setInvitePhone(String(created.leadPhone || ""));
     setSetupFormType(created.formType || commFormType.trim());
     const driveLinked = Boolean(payload?.drive?.linked);
     const driveReason = String(payload?.drive?.reason || "");
@@ -3207,7 +3213,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                 <article className="rounded-lg border-2 border-slate-300 p-3">
                   <p className="text-sm font-semibold">Create Case</p>
                   <p className="mt-1 text-xs text-slate-500">Create a new client case before generating invite/payment link.</p>
-                  <div className="mt-2 grid gap-2 md:grid-cols-3">
+                  <div className="mt-2 grid gap-2 md:grid-cols-4">
                     <input
                       value={commClientName}
                       onChange={(e) => setCommClientName(e.target.value)}
@@ -3229,6 +3235,12 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                       value={commPhone}
                       onChange={(e) => setCommPhone(e.target.value)}
                       placeholder="Phone number"
+                      className="rounded border border-slate-300 px-2 py-2 text-xs"
+                    />
+                    <input
+                      value={commEmail}
+                      onChange={(e) => setCommEmail(e.target.value)}
+                      placeholder="Email address"
                       className="rounded border border-slate-300 px-2 py-2 text-xs"
                     />
                   </div>
