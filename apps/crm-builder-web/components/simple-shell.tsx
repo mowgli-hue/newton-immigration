@@ -38,8 +38,12 @@ type MessageItem = {
 
 type DocumentItem = {
   id: string;
+  clientId?: string;
   name: string;
   category?: "general" | "result";
+  fileType?: string;
+  version?: number;
+  versionGroupId?: string;
   status: "pending" | "received";
   link: string;
   createdAt: string;
@@ -83,7 +87,7 @@ type DocRequestItem = {
   fulfilledBy?: string;
   documentId?: string;
 };
-type CaseDetailTab = "overview" | "documents" | "tasks" | "communication";
+type CaseDetailTab = "overview" | "profile" | "documents" | "tasks" | "communication";
 type CaseBoardView = "home" | "new_cases" | "under_review_cases" | "urgent_cases" | "all_cases";
 
 type PgwpDraft = {
@@ -434,6 +438,34 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     });
   }, [cases, viewRole, caseSearch, caseStatusFilter]);
   const selectedCase = visibleCases.find((c) => c.id === selectedCaseId) ?? visibleCases[0] ?? null;
+  const clientRelatedCases = useMemo(() => {
+    if (!selectedCase) return [] as CaseItem[];
+    const scoped = cases.filter((c) => c.companyId === selectedCase.companyId);
+    const byClientId = selectedCase.clientId
+      ? scoped.filter((c) => c.clientId && c.clientId === selectedCase.clientId)
+      : [];
+    const byContact = scoped.filter((c) => {
+      const sameEmail =
+        String(selectedCase.leadEmail || "").trim().length > 0 &&
+        String(c.leadEmail || "").trim().toLowerCase() === String(selectedCase.leadEmail || "").trim().toLowerCase();
+      const samePhone =
+        String(selectedCase.leadPhone || "").trim().length > 0 &&
+        String(c.leadPhone || "").replace(/\s+/g, "") === String(selectedCase.leadPhone || "").replace(/\s+/g, "");
+      const sameName =
+        String(c.client || "").trim().toLowerCase() === String(selectedCase.client || "").trim().toLowerCase();
+      return sameEmail || samePhone || sameName;
+    });
+    const dedup = new Map<string, CaseItem>();
+    [...byClientId, ...byContact].forEach((c) => dedup.set(c.id, c));
+    if (!dedup.has(selectedCase.id)) {
+      dedup.set(selectedCase.id, selectedCase);
+    }
+    return Array.from(dedup.values()).sort((a, b) => {
+      const aTs = new Date(a.updatedAt || a.createdAt || 0).getTime();
+      const bTs = new Date(b.updatedAt || b.createdAt || 0).getTime();
+      return bTs - aTs;
+    });
+  }, [cases, selectedCase]);
   const newCasesList = useMemo(
     () =>
       visibleCases.filter((c) => {
@@ -2544,10 +2576,141 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                     <p className="text-sm font-semibold">Case Detail</p>
                     <div className="mt-2 flex flex-wrap gap-2">
                       <button onClick={() => setCaseDetailTab("overview")} className={`rounded border px-3 py-1 text-xs font-semibold ${caseDetailTab === "overview" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300"}`}>Overview</button>
+                      <button onClick={() => setCaseDetailTab("profile")} className={`rounded border px-3 py-1 text-xs font-semibold ${caseDetailTab === "profile" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300"}`}>Client Profile</button>
                       <button onClick={() => setCaseDetailTab("documents")} className={`rounded border px-3 py-1 text-xs font-semibold ${caseDetailTab === "documents" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300"}`}>Documents</button>
                       <button onClick={() => setCaseDetailTab("tasks")} className={`rounded border px-3 py-1 text-xs font-semibold ${caseDetailTab === "tasks" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300"}`}>Tasks</button>
                       <button onClick={() => setCaseDetailTab("communication")} className={`rounded border px-3 py-1 text-xs font-semibold ${caseDetailTab === "communication" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300"}`}>Communication</button>
                     </div>
+
+                    {caseDetailTab === "profile" ? (
+                      <div className="mt-3 space-y-3 text-xs">
+                        <div className="grid gap-2 md:grid-cols-4">
+                          <div className="rounded border border-slate-200 p-2">
+                            <p className="text-slate-500">Client Name</p>
+                            <p className="font-semibold">{selectedCase.client || "Client"}</p>
+                          </div>
+                          <div className="rounded border border-slate-200 p-2">
+                            <p className="text-slate-500">Phone</p>
+                            <p className="font-semibold">{selectedCase.leadPhone || "-"}</p>
+                          </div>
+                          <div className="rounded border border-slate-200 p-2">
+                            <p className="text-slate-500">Email</p>
+                            <p className="font-semibold">{selectedCase.leadEmail || "-"}</p>
+                          </div>
+                          <div className="rounded border border-slate-200 p-2">
+                            <p className="text-slate-500">Client ID</p>
+                            <p className="font-semibold">{selectedCase.clientId || "Not linked yet"}</p>
+                          </div>
+                        </div>
+
+                        <div className="rounded border border-slate-200 p-2">
+                          <p className="font-semibold">Current Status</p>
+                          <div className="mt-2 grid gap-2 md:grid-cols-4">
+                            <div>
+                              <p className="text-slate-500">Application</p>
+                              <p className="font-semibold">{selectedCase.formType}</p>
+                            </div>
+                            <div>
+                              <p className="text-slate-500">Stage</p>
+                              <p className="font-semibold">{selectedCase.stage}</p>
+                            </div>
+                            <div>
+                              <p className="text-slate-500">Assigned Staff</p>
+                              <p className="font-semibold">{selectedCase.assignedTo || selectedCase.owner || "Unassigned"}</p>
+                            </div>
+                            <div>
+                              <p className="text-slate-500">Pending Tasks</p>
+                              <p className="font-semibold">{caseTasks.filter((t) => t.status !== "completed").length}</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="rounded border border-slate-200 p-2">
+                          <p className="font-semibold">Application History</p>
+                          <div className="mt-2 space-y-2">
+                            {clientRelatedCases.map((c) => (
+                              <div key={c.id} className="rounded border border-slate-200 p-2">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <p className="font-semibold">
+                                    {c.id} - {c.formType}
+                                  </p>
+                                  <p className="text-slate-500">
+                                    Submitted: {c.submittedAt ? new Date(c.submittedAt).toLocaleDateString() : "-"}
+                                  </p>
+                                </div>
+                                <p className="text-slate-600">
+                                  {c.finalOutcome
+                                    ? `${c.finalOutcome === "approved" ? "Approved" : c.finalOutcome === "refused" ? "Refused" : "Withdrawn"}${c.decisionDate ? ` on ${new Date(c.decisionDate).toLocaleDateString()}` : ""}`
+                                    : "Outcome pending"}
+                                </p>
+                                {c.remarks ? <p className="mt-1 text-slate-600">Notes: {c.remarks}</p> : null}
+                              </div>
+                            ))}
+                            {clientRelatedCases.length === 0 ? <p className="text-slate-500">No timeline records yet.</p> : null}
+                          </div>
+                        </div>
+
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <div className="rounded border border-slate-200 p-2">
+                            <p className="font-semibold">Documents</p>
+                            <div className="mt-2 space-y-2">
+                              {documents.map((d) => (
+                                <div key={d.id} className="rounded border border-slate-100 p-2">
+                                  <p className="font-semibold">{d.name}</p>
+                                  <p className="text-slate-500">
+                                    Type: {d.fileType || d.category || "general"} • Version: {Number(d.version || 1)}
+                                  </p>
+                                </div>
+                              ))}
+                              {documents.length === 0 ? <p className="text-slate-500">No documents uploaded.</p> : null}
+                            </div>
+                          </div>
+
+                          <div className="rounded border border-slate-200 p-2">
+                            <p className="font-semibold">Communication</p>
+                            <div className="mt-2 space-y-2">
+                              {messages.slice(0, 6).map((m) => (
+                                <div key={m.id} className="rounded border border-slate-100 p-2">
+                                  <p className="font-semibold">
+                                    {m.senderName} <span className="font-normal text-slate-500">({m.senderType})</span>
+                                  </p>
+                                  <p>{m.text}</p>
+                                </div>
+                              ))}
+                              {messages.length === 0 ? <p className="text-slate-500">No communication records yet.</p> : null}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="rounded border border-slate-200 p-2">
+                          <p className="font-semibold">Internal Flags</p>
+                          <div className="mt-2 grid gap-2 md:grid-cols-2">
+                            <div className="rounded border border-slate-100 p-2">
+                              <p className="text-slate-500">Previous refusals</p>
+                              <p className="font-semibold">
+                                {String(selectedCase.pgwpIntake?.refusedAnyCountry || "").trim() || "Not flagged"}
+                              </p>
+                            </div>
+                            <div className="rounded border border-slate-100 p-2">
+                              <p className="text-slate-500">Criminal history</p>
+                              <p className="font-semibold">
+                                {String(selectedCase.pgwpIntake?.criminalHistory || "").trim() || "Not flagged"}
+                              </p>
+                            </div>
+                            <div className="rounded border border-slate-100 p-2">
+                              <p className="text-slate-500">Medical history</p>
+                              <p className="font-semibold">
+                                {String(selectedCase.pgwpIntake?.medicalHistory || "").trim() || "Not flagged"}
+                              </p>
+                            </div>
+                            <div className="rounded border border-slate-100 p-2">
+                              <p className="text-slate-500">Missing docs</p>
+                              <p className="font-semibold">{docRequests.filter((r) => r.status === "open").length}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
 
                     {caseDetailTab === "overview" ? (
                       <div className="mt-3 grid gap-2 md:grid-cols-4 text-xs">
@@ -3070,7 +3233,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                     const payStatus = remaining <= 0 && total > 0 ? "paid" : "pending";
                     return (
                       <article key={c.id} className="rounded border border-slate-200 p-3 text-xs">
-                        <div className="grid gap-2 md:grid-cols-6">
+                        <div className="grid gap-2 md:grid-cols-7">
                           <div>
                             <p className="text-slate-500">Case</p>
                             <p className="font-semibold">{c.id}</p>
@@ -3098,6 +3261,12 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                           <div>
                             <p className="text-slate-500">Status</p>
                             <p className={`font-semibold ${payStatus === "paid" ? "text-emerald-700" : "text-amber-700"}`}>{payStatus}</p>
+                          </div>
+                          <div>
+                            <p className="text-slate-500">Last Updated</p>
+                            <p className="font-semibold">
+                              {c.updatedAt ? new Date(c.updatedAt).toLocaleDateString() : "-"}
+                            </p>
                           </div>
                         </div>
                         <div className="mt-2 flex flex-wrap gap-2">
