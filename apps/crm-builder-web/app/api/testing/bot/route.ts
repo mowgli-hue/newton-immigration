@@ -1,4 +1,5 @@
 import { access, constants } from "node:fs/promises";
+import { dirname } from "node:path";
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
 import { extractDriveFolderId } from "@/lib/google-drive";
@@ -50,6 +51,7 @@ export async function GET(request: NextRequest) {
 
   const dataDir = getDataDir();
   const storePath = getStorePath();
+  const storeDir = dirname(storePath);
 
   try {
     await access(dataDir, constants.R_OK | constants.W_OK);
@@ -63,8 +65,25 @@ export async function GET(request: NextRequest) {
     checks.push({
       id: "storage_dir",
       title: "Storage Directory Access",
-      status: "fail",
+      status: "warn",
       detail: `Cannot access data directory: ${dataDir}`
+    });
+  }
+
+  try {
+    await access(storeDir, constants.R_OK | constants.W_OK);
+    checks.push({
+      id: "store_dir",
+      title: "Store Directory Access",
+      status: "pass",
+      detail: `Readable/writable: ${storeDir}`
+    });
+  } catch {
+    checks.push({
+      id: "store_dir",
+      title: "Store Directory Access",
+      status: "fail",
+      detail: `Cannot access store directory: ${storeDir}`
     });
   }
 

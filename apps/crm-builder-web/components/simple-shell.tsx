@@ -277,6 +277,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [commUrgent, setCommUrgent] = useState(false);
   const [commUrgentDays, setCommUrgentDays] = useState("5");
   const [commSearch, setCommSearch] = useState("");
+  const [commPaymentFilter, setCommPaymentFilter] = useState<"all" | "pending" | "paid">("all");
   const [commPaymentStatus, setCommPaymentStatus] = useState("");
   const [commPruneCaseIds, setCommPruneCaseIds] = useState("CASE-1006, CASE-1007");
   const [commPruneStatus, setCommPruneStatus] = useState("");
@@ -284,7 +285,9 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [diagnosticsStatus, setDiagnosticsStatus] = useState("");
   const [diagnosticsReport, setDiagnosticsReport] = useState<DiagnosticsReport | null>(null);
   const [caseSearch, setCaseSearch] = useState("");
+  const [caseStatusFilter, setCaseStatusFilter] = useState<"all" | "docs_pending" | "under_review" | "submitted" | "other">("all");
   const [accountingSearch, setAccountingSearch] = useState("");
+  const [accountingPaymentFilter, setAccountingPaymentFilter] = useState<"all" | "pending" | "paid">("all");
   const [accountingAmount, setAccountingAmount] = useState<Record<string, string>>({});
   const [accountingStatus, setAccountingStatus] = useState("");
   const [brandAppName, setBrandAppName] = useState("");
@@ -413,12 +416,16 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const visibleCases = useMemo(() => {
     const byRole = filterCasesByRole(cases, viewRole);
     const q = caseSearch.trim().toLowerCase();
-    if (!q) return byRole;
-    return byRole.filter((c) => {
+    const byStatus =
+      caseStatusFilter === "all"
+        ? byRole
+        : byRole.filter((c) => (c.processingStatus || "docs_pending") === caseStatusFilter);
+    if (!q) return byStatus;
+    return byStatus.filter((c) => {
       const candidate = `${c.id} ${c.client} ${c.formType} ${c.assignedTo || ""} ${c.processingStatus || ""} ${c.processingStatusOther || ""}`.toLowerCase();
       return candidate.includes(q);
     });
-  }, [cases, viewRole, caseSearch]);
+  }, [cases, viewRole, caseSearch, caseStatusFilter]);
   const selectedCase = visibleCases.find((c) => c.id === selectedCaseId) ?? visibleCases[0] ?? null;
   const newCasesList = useMemo(
     () =>
@@ -451,8 +458,17 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   );
   const communicationSearchList = useMemo(() => {
     const query = commSearch.trim().toLowerCase();
-    if (!query) return visibleCases.slice(0, 8);
-    return visibleCases
+    const byPayment =
+      commPaymentFilter === "all"
+        ? visibleCases
+        : visibleCases.filter((c) => {
+            const total = Number(c.servicePackage?.retainerAmount || 0);
+            const paid = Number(c.amountPaid || 0);
+            const status = paid >= total && total > 0 ? "paid" : c.paymentStatus || "pending";
+            return status === commPaymentFilter;
+          });
+    if (!query) return byPayment.slice(0, 8);
+    return byPayment
       .filter((c) => {
         const client = c.client.toLowerCase();
         const formType = (c.formType || "").toLowerCase();
@@ -460,7 +476,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
         return client.includes(query) || formType.includes(query) || caseId.includes(query);
       })
       .slice(0, 8);
-  }, [commSearch, visibleCases]);
+  }, [commSearch, visibleCases, commPaymentFilter]);
 
   async function loadCaseDetail(caseId: string) {
     const [msgRes, docRes, reqRes] = await Promise.all([
@@ -2260,12 +2276,29 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                     </button>
                   </div>
                   <div className="mt-3">
-                    <input
-                      value={caseSearch}
-                      onChange={(e) => setCaseSearch(e.target.value)}
-                      className="w-full rounded border border-slate-300 px-2 py-2 text-xs"
-                      placeholder="Search by case id, client, application, assignee"
-                    />
+                    <div className="grid gap-2 md:grid-cols-2">
+                      <input
+                        value={caseSearch}
+                        onChange={(e) => setCaseSearch(e.target.value)}
+                        className="w-full rounded border border-slate-300 px-2 py-2 text-xs"
+                        placeholder="Search by case id, client, application, assignee"
+                      />
+                      <select
+                        value={caseStatusFilter}
+                        onChange={(e) =>
+                          setCaseStatusFilter(
+                            e.target.value as "all" | "docs_pending" | "under_review" | "submitted" | "other"
+                          )
+                        }
+                        className="w-full rounded border border-slate-300 px-2 py-2 text-xs"
+                      >
+                        <option value="all">All statuses</option>
+                        <option value="docs_pending">Docs Pending</option>
+                        <option value="under_review">Under Review</option>
+                        <option value="submitted">Submitted</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
                   </div>
                   <div className="mt-2 grid gap-2">
                     {activeCaseBoardList.map((c) => (
@@ -2656,15 +2689,33 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                 <article className="rounded-lg border-2 border-slate-300 p-3">
                   <p className="text-sm font-semibold">Payment Confirmation</p>
                   <p className="mt-1 text-xs text-slate-500">Search case and confirm Interac payment here.</p>
-                  <input
-                    value={commSearch}
-                    onChange={(e) => setCommSearch(e.target.value)}
-                    placeholder="Search by case ID, client name, or application type"
-                    className="mt-2 w-full rounded border border-slate-300 px-2 py-2 text-xs"
-                  />
+                  <div className="mt-2 grid gap-2 md:grid-cols-2">
+                    <input
+                      value={commSearch}
+                      onChange={(e) => setCommSearch(e.target.value)}
+                      placeholder="Search by case ID, client name, or application type"
+                      className="w-full rounded border border-slate-300 px-2 py-2 text-xs"
+                    />
+                    <select
+                      value={commPaymentFilter}
+                      onChange={(e) => setCommPaymentFilter(e.target.value as "all" | "pending" | "paid")}
+                      className="w-full rounded border border-slate-300 px-2 py-2 text-xs"
+                    >
+                      <option value="all">All payments</option>
+                      <option value="pending">Pending only</option>
+                      <option value="paid">Paid only</option>
+                    </select>
+                  </div>
                   <div className="mt-2 max-h-48 space-y-2 overflow-auto rounded border border-slate-200 p-2">
                     {communicationSearchList.map((c) => (
                       <div key={c.id} className="rounded border border-slate-200 p-2 text-xs">
+                        {(() => {
+                          const total = Number(c.servicePackage?.retainerAmount || 0);
+                          const paid = Number(c.amountPaid || 0);
+                          const remaining = Math.max(0, total - paid);
+                          const status = remaining <= 0 && total > 0 ? "paid" : c.paymentStatus || "pending";
+                          return (
+                            <>
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <button
                             onClick={() => setSelectedCaseId(c.id)}
@@ -2672,12 +2723,13 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                           >
                             {c.id} - {c.client}
                           </button>
-                          <span className={`rounded px-2 py-1 text-[10px] font-semibold ${c.paymentStatus === "paid" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
-                            {c.paymentStatus || "pending"}
+                          <span className={`rounded px-2 py-1 text-[10px] font-semibold ${status === "paid" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
+                            {status}
                           </span>
                         </div>
                         <p className="mt-1 text-slate-500">{c.formType}</p>
-                        {c.paymentStatus !== "paid" ? (
+                        <p className="mt-1 text-slate-500">Paid ${paid} / Total ${total} / Remaining ${remaining}</p>
+                        {status !== "paid" ? (
                           <button
                             onClick={() => void confirmInteracReceivedForCase(c.id, "communications")}
                             className="mt-2 rounded bg-emerald-600 px-2 py-1 font-semibold text-white"
@@ -2685,6 +2737,9 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                             Confirm Payment
                           </button>
                         ) : null}
+                            </>
+                          );
+                        })()}
                       </div>
                     ))}
                     {communicationSearchList.length === 0 ? (
@@ -2827,23 +2882,40 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
             <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
               <h3 className="text-base font-semibold">Accounting</h3>
               <p className="mt-1 text-xs text-slate-500">Track paid amount and pending fees for each client.</p>
-              <input
-                value={accountingSearch}
-                onChange={(e) => setAccountingSearch(e.target.value)}
-                className="mt-3 w-full rounded border border-slate-300 px-2 py-2 text-xs"
-                placeholder="Search by case id, client, or application"
-              />
+              <div className="mt-3 grid gap-2 md:grid-cols-2">
+                <input
+                  value={accountingSearch}
+                  onChange={(e) => setAccountingSearch(e.target.value)}
+                  className="w-full rounded border border-slate-300 px-2 py-2 text-xs"
+                  placeholder="Search by case id, client, or application"
+                />
+                <select
+                  value={accountingPaymentFilter}
+                  onChange={(e) => setAccountingPaymentFilter(e.target.value as "all" | "pending" | "paid")}
+                  className="w-full rounded border border-slate-300 px-2 py-2 text-xs"
+                >
+                  <option value="all">All payments</option>
+                  <option value="pending">Pending only</option>
+                  <option value="paid">Paid only</option>
+                </select>
+              </div>
               <div className="mt-3 space-y-2">
                 {visibleCases
                   .filter((c) => {
                     const q = accountingSearch.trim().toLowerCase();
-                    if (!q) return true;
-                    return `${c.id} ${c.client} ${c.formType}`.toLowerCase().includes(q);
+                    const matchesText = !q || `${c.id} ${c.client} ${c.formType}`.toLowerCase().includes(q);
+                    const total = Number(c.servicePackage.retainerAmount || 0);
+                    const paid = Number((c as CaseItem & { amountPaid?: number }).amountPaid || 0);
+                    const status = paid >= total && total > 0 ? "paid" : "pending";
+                    const matchesPayment =
+                      accountingPaymentFilter === "all" ? true : status === accountingPaymentFilter;
+                    return matchesText && matchesPayment;
                   })
                   .map((c) => {
                     const total = Number(c.servicePackage.retainerAmount || 0);
                     const paid = Number((c as CaseItem & { amountPaid?: number }).amountPaid || 0);
                     const remaining = Math.max(0, total - paid);
+                    const payStatus = remaining <= 0 && total > 0 ? "paid" : "pending";
                     return (
                       <article key={c.id} className="rounded border border-slate-200 p-3 text-xs">
                         <div className="grid gap-2 md:grid-cols-6">
@@ -2870,6 +2942,10 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                           <div>
                             <p className="text-slate-500">Pending</p>
                             <p className="font-semibold">${remaining}</p>
+                          </div>
+                          <div>
+                            <p className="text-slate-500">Status</p>
+                            <p className={`font-semibold ${payStatus === "paid" ? "text-emerald-700" : "text-amber-700"}`}>{payStatus}</p>
                           </div>
                         </div>
                         <div className="mt-2 flex flex-wrap gap-2">
