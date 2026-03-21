@@ -332,8 +332,10 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [internalIntake, setInternalIntake] = useState<InternalExtractionIntake>({});
   const [internalIntakeStatus, setInternalIntakeStatus] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
+  const [invitePhone, setInvitePhone] = useState("");
   const [inviteUrl, setInviteUrl] = useState("");
   const [inviteStatus, setInviteStatus] = useState("");
+  const [inviteShareStatus, setInviteShareStatus] = useState("");
   const [paymentLinkStatus, setPaymentLinkStatus] = useState("");
   const [leadSheetCsvUrl, setLeadSheetCsvUrl] = useState(
     process.env.NEXT_PUBLIC_LEADS_SHEET_CSV_URL || ""
@@ -828,6 +830,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   async function createClientInvite() {
     if (!selectedCase) return;
     setInviteStatus("Creating invite link...");
+    setInviteShareStatus("");
     const res = await apiFetch(`/cases/${selectedCase.id}/invite`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -843,10 +846,90 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     setInviteStatus("Invite link ready. Send this to client.");
   }
 
+  function normalizePhoneForWa(phone: string) {
+    const digits = phone.replace(/[^\d]/g, "");
+    if (!digits) return "";
+    if (digits.length === 10) return `1${digits}`;
+    return digits;
+  }
+
+  function buildInviteMessage(caseItem: CaseItem, url: string) {
+    const amount = Number(setupRetainerAmount || caseItem.servicePackage.retainerAmount || 0);
+    return [
+      `Hi ${caseItem.client},`,
+      "",
+      `Your Newton Immigration portal link is ready for ${caseItem.formType}.`,
+      `Case: ${caseItem.id}`,
+      "",
+      `Complete your details and documents here:`,
+      url,
+      "",
+      amount > 0
+        ? `Interac amount: $${amount} CAD to ${fixedInteracRecipient} (use case number ${caseItem.id} in message).`
+        : `Please follow instructions inside your portal.`,
+      "",
+      "Newton Immigration Team"
+    ].join("\n");
+  }
+
+  async function shareInvite(channel: "copy" | "email" | "whatsapp" | "sms") {
+    const caseItem = selectedCase;
+    if (!caseItem || !inviteUrl) {
+      setInviteShareStatus("Create invite link first.");
+      return;
+    }
+    const message = buildInviteMessage(caseItem, inviteUrl);
+    const email = inviteEmail.trim() || String(caseItem.leadEmail || "").trim();
+    const phone = invitePhone.trim() || String(caseItem.leadPhone || "").trim();
+
+    try {
+      if (channel === "copy") {
+        await navigator.clipboard.writeText(message);
+        setInviteShareStatus("Invite message copied.");
+        return;
+      }
+      if (channel === "email") {
+        if (!email) {
+          setInviteShareStatus("Enter client email first.");
+          return;
+        }
+        const subject = encodeURIComponent(`Newton Immigration Portal Link - ${caseItem.id}`);
+        const body = encodeURIComponent(message);
+        window.open(`mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`, "_blank");
+        setInviteShareStatus("Email app opened.");
+        return;
+      }
+      if (channel === "whatsapp") {
+        const waPhone = normalizePhoneForWa(phone);
+        if (!waPhone) {
+          setInviteShareStatus("Enter client phone number first.");
+          return;
+        }
+        const text = encodeURIComponent(message);
+        window.open(`https://wa.me/${waPhone}?text=${text}`, "_blank");
+        setInviteShareStatus("WhatsApp opened.");
+        return;
+      }
+      if (channel === "sms") {
+        const smsPhone = phone.replace(/[^\d+]/g, "");
+        if (!smsPhone) {
+          setInviteShareStatus("Enter client phone number first.");
+          return;
+        }
+        const body = encodeURIComponent(message);
+        window.open(`sms:${smsPhone}?body=${body}`, "_blank");
+        setInviteShareStatus("SMS app opened.");
+      }
+    } catch {
+      setInviteShareStatus("Could not open sharing app.");
+    }
+  }
+
   async function sendPaymentLinkForCase(caseInput?: CaseItem) {
     const caseItem = caseInput ?? selectedCase;
     if (!caseItem) return;
     setPaymentLinkStatus("Preparing payment link...");
+    setInviteShareStatus("");
 
     const formTypeToUse = setupFormType.trim() || caseItem.formType;
     const amountRaw = Number(setupRetainerAmount || caseItem.servicePackage.retainerAmount || 0);
@@ -2857,18 +2940,37 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                         placeholder="Client email (optional)"
                         className="rounded border border-slate-300 px-2 py-2 text-xs md:col-span-2"
                       />
+                      <input
+                        value={invitePhone}
+                        onChange={(e) => setInvitePhone(e.target.value)}
+                        placeholder="Client phone (optional)"
+                        className="rounded border border-slate-300 px-2 py-2 text-xs md:col-span-2"
+                      />
                     </div>
                     <div className="mt-2 flex flex-wrap gap-2">
                       <button onClick={() => void sendPaymentLinkForCase()} className="rounded bg-emerald-600 px-3 py-2 text-xs font-semibold text-white">
                         Create Invite + Payment Link
                       </button>
+                      <button onClick={() => void shareInvite("copy")} className="rounded border border-slate-300 px-3 py-2 text-xs font-semibold">
+                        Copy
+                      </button>
+                      <button onClick={() => void shareInvite("email")} className="rounded border border-slate-300 px-3 py-2 text-xs font-semibold">
+                        Email
+                      </button>
+                      <button onClick={() => void shareInvite("whatsapp")} className="rounded border border-slate-300 px-3 py-2 text-xs font-semibold">
+                        WhatsApp
+                      </button>
+                      <button onClick={() => void shareInvite("sms")} className="rounded border border-slate-300 px-3 py-2 text-xs font-semibold">
+                        SMS
+                      </button>
                     </div>
                     {inviteStatus ? <p className="mt-2 text-xs text-slate-700">{inviteStatus}</p> : null}
                     {paymentLinkStatus ? <p className="mt-1 text-xs text-slate-700">{paymentLinkStatus}</p> : null}
+                    {inviteShareStatus ? <p className="mt-1 text-xs text-slate-700">{inviteShareStatus}</p> : null}
                     {inviteUrl ? (
-                      <a href={inviteUrl} target="_blank" className="mt-2 block break-all text-xs text-blue-700 underline">
+                      <p className="mt-2 break-all text-xs text-blue-700 underline">
                         {inviteUrl}
-                      </a>
+                      </p>
                     ) : null}
                   </article>
                 ) : (
