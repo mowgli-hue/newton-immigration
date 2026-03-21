@@ -219,7 +219,11 @@ async function loadFromNormalizedTables(): Promise<Partial<AppStore>> {
       token: r.token,
       userId: r.user_id,
       companyId: r.company_id,
-      expiresAt: toIso(r.expires_at)
+      expiresAt: toIso(r.expires_at),
+      ipAddress: r.ip_address || undefined,
+      ipSubnet: r.ip_subnet || undefined,
+      userAgent: r.user_agent || undefined,
+      createdAt: r.created_at ? toIso(r.created_at) : undefined
     })),
     invites: invitesRes.rows.map((r) => ({
       token: r.token,
@@ -261,4 +265,3 @@ export async function writeStoreToPostgres(store: AppStore): Promise<void> {
     ["global", JSON.stringify(store)]
   );
 }
-

@@ -38,21 +38,56 @@ function consumeRateLimit(request: NextRequest): boolean {
 }
 
 function withSecurityHeaders(response: NextResponse) {
+  if (process.env.NODE_ENV === "production") {
+    response.headers.set(
+      "Strict-Transport-Security",
+      "max-age=31536000; includeSubDomains; preload"
+    );
+  }
   response.headers.set("X-Frame-Options", "DENY");
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
   response.headers.set("X-XSS-Protection", "0");
+  response.headers.set("Cross-Origin-Opener-Policy", "same-origin");
+  response.headers.set("Cross-Origin-Resource-Policy", "same-origin");
   response.headers.set(
     "Content-Security-Policy",
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+    process.env.NODE_ENV === "production"
+      ? "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+      : "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
   );
   return response;
+}
+
+function isStateChangingMethod(method: string) {
+  const value = String(method || "").toUpperCase();
+  return value === "POST" || value === "PUT" || value === "PATCH" || value === "DELETE";
+}
+
+function sameOrigin(request: NextRequest) {
+  const origin = request.headers.get("origin");
+  if (!origin) return true;
+  try {
+    const originUrl = new URL(origin);
+    const host = request.headers.get("host") || request.nextUrl.host;
+    return originUrl.host === host;
+  } catch {
+    return false;
+  }
 }
 
 export function middleware(request: NextRequest) {
   const isApi = request.nextUrl.pathname.startsWith("/api/");
   if (isApi) {
+    if (isStateChangingMethod(request.method) && !sameOrigin(request)) {
+      return withSecurityHeaders(
+        NextResponse.json(
+          { error: "Cross-site request rejected." },
+          { status: 403 }
+        )
+      );
+    }
     if (!consumeRateLimit(request)) {
       return withSecurityHeaders(
         NextResponse.json(
@@ -68,4 +103,3 @@ export function middleware(request: NextRequest) {
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"]
 };
-

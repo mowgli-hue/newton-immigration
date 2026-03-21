@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE } from "@/lib/auth";
-import { addAuditLog, destroySession, resolveUserFromSession } from "@/lib/store";
+import { addAuditLog, destroySession, resolveUserFromSessionWithContext } from "@/lib/store";
 
 export async function POST(request: NextRequest) {
   const token = request.cookies.get(SESSION_COOKIE)?.value;
-  const user = token ? await resolveUserFromSession(token) : null;
+  const forwarded = request.headers.get("x-forwarded-for") || "";
+  const ipAddress = forwarded.split(",")[0]?.trim() || request.ip || "";
+  const userAgent = request.headers.get("user-agent") || "";
+  const user = token ? await resolveUserFromSessionWithContext(token, { ipAddress, userAgent }) : null;
 
   if (token) {
     await destroySession(token);
@@ -29,7 +32,7 @@ export async function POST(request: NextRequest) {
     name: SESSION_COOKIE,
     value: "",
     httpOnly: true,
-    sameSite: "lax",
+    sameSite: "strict",
     secure: process.env.NODE_ENV === "production",
     path: "/",
     maxAge: 0

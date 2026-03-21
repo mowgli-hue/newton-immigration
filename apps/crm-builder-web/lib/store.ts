@@ -391,13 +391,40 @@ export async function createCompanyWithAdmin(input: {
 }
 
 export async function createSession(user: AppUser): Promise<Session> {
+  return createSessionWithContext(user, {});
+}
+
+function deriveIpSubnet(ip: string): string {
+  const value = String(ip || "").trim();
+  if (!value) return "";
+  if (value.includes(".")) {
+    const parts = value.split(".").slice(0, 3);
+    if (parts.length === 3) return `${parts.join(".")}.x`;
+  }
+  if (value.includes(":")) {
+    const parts = value.split(":").slice(0, 4);
+    if (parts.length > 0) return `${parts.join(":")}::/64`;
+  }
+  return value;
+}
+
+export async function createSessionWithContext(
+  user: AppUser,
+  context?: { ipAddress?: string; userAgent?: string }
+): Promise<Session> {
   const store = await readStore();
   const expiresAt = new Date(Date.now() + 1000 * SESSION_MAX_AGE_SECONDS).toISOString();
+  const ipAddress = String(context?.ipAddress || "").trim() || undefined;
+  const userAgent = String(context?.userAgent || "").slice(0, 500) || undefined;
   const session: Session = {
     token: randomUUID(),
     userId: user.id,
     companyId: user.companyId,
-    expiresAt
+    expiresAt,
+    ipAddress,
+    ipSubnet: ipAddress ? deriveIpSubnet(ipAddress) : undefined,
+    userAgent,
+    createdAt: new Date().toISOString()
   };
 
   store.sessions = store.sessions
@@ -484,9 +511,15 @@ export async function acceptClientInvite(input: {
   const caseIdx = store.cases.findIndex((c) => c.companyId === invite.companyId && c.id === invite.caseId);
   if (caseIdx === -1) throw new Error("Case not found");
 
-  // Allow the same invite link to re-open portal after first acceptance.
+  const allowReuse =
+    String(process.env.INVITE_ALLOW_REUSE || "false").toLowerCase() === "true";
   if (invite.status === "accepted" && invite.usedByUserId) {
-    const existingUser = store.users.find((u) => u.id === invite.usedByUserId && u.companyId === invite.companyId);
+    if (!allowReuse) {
+      throw new Error("Invite is no longer valid. Please request a new secure link.");
+    }
+    const existingUser = store.users.find(
+      (u) => u.id === invite.usedByUserId && u.companyId === invite.companyId
+    );
     if (!existingUser) throw new Error("Invite user not found");
     return { user: existingUser, company, caseItem: store.cases[caseIdx] };
   }
@@ -532,6 +565,13 @@ export async function destroySession(token: string): Promise<void> {
 }
 
 export async function resolveUserFromSession(token: string): Promise<AppUser | null> {
+  return resolveUserFromSessionWithContext(token, {});
+}
+
+export async function resolveUserFromSessionWithContext(
+  token: string,
+  context?: { ipAddress?: string; userAgent?: string }
+): Promise<AppUser | null> {
   const store = await readStore();
   const session = store.sessions.find((s) => s.token === token);
   if (!session) return null;
@@ -548,6 +588,25 @@ export async function resolveUserFromSession(token: string): Promise<AppUser | n
     await writeStore(store);
     return null;
   }
+
+  const strictBinding =
+    String(process.env.ENFORCE_SESSION_BINDING || "true").toLowerCase() === "true";
+  if (strictBinding) {
+    const reqIp = String(context?.ipAddress || "").trim();
+    const reqUa = String(context?.userAgent || "").trim();
+    const sessionSubnet = String(session.ipSubnet || "").trim();
+    const reqSubnet = reqIp ? deriveIpSubnet(reqIp) : "";
+    const sessionUa = String(session.userAgent || "").trim();
+    const uaMismatch = Boolean(sessionUa && reqUa && sessionUa !== reqUa);
+    const ipMismatch = Boolean(sessionSubnet && reqSubnet && sessionSubnet !== reqSubnet);
+
+    if (uaMismatch || ipMismatch) {
+      store.sessions = store.sessions.filter((s) => s.token !== token);
+      await writeStore(store);
+      return null;
+    }
+  }
+
   return found;
 }
 

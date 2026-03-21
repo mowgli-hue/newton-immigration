@@ -29,6 +29,9 @@ create table if not exists sessions (
   token text primary key,
   user_id text not null,
   company_id text not null references companies(id) on delete cascade,
+  ip_address text,
+  ip_subnet text,
+  user_agent text,
   expires_at timestamptz not null,
   created_at timestamptz not null default now()
 );
@@ -185,4 +188,3 @@ create table if not exists invites (
   created_at timestamptz not null default now(),
   accepted_at timestamptz
 );
-

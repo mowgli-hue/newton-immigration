@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { NextRequest } from "next/server";
-import { resolveUserFromSession } from "@/lib/store";
+import { resolveUserFromSessionWithContext } from "@/lib/store";
 
 export const SESSION_COOKIE = "fd_session";
 export const SESSION_MAX_AGE_SECONDS = Math.max(
@@ -11,13 +11,16 @@ export const SESSION_MAX_AGE_SECONDS = Math.max(
 export async function getCurrentUserFromRequest(req: NextRequest) {
   const token = req.cookies.get(SESSION_COOKIE)?.value;
   if (!token) return null;
-  return resolveUserFromSession(token);
+  const forwarded = req.headers.get("x-forwarded-for") || "";
+  const ipAddress = forwarded.split(",")[0]?.trim() || req.ip || "";
+  const userAgent = req.headers.get("user-agent") || "";
+  return resolveUserFromSessionWithContext(token, { ipAddress, userAgent });
 }
 
 export async function getCurrentUserFromCookies() {
   const token = cookies().get(SESSION_COOKIE)?.value;
   if (!token) return null;
-  return resolveUserFromSession(token);
+  return resolveUserFromSessionWithContext(token, {});
 }
 
 export function applySessionCookie(response: {
@@ -26,7 +29,7 @@ export function applySessionCookie(response: {
       name: string;
       value: string;
       httpOnly: boolean;
-      sameSite: "lax";
+      sameSite: "lax" | "strict";
       secure: boolean;
       path: string;
       maxAge: number;
@@ -36,10 +39,10 @@ export function applySessionCookie(response: {
   response.cookies.set({
     name: SESSION_COOKIE,
     value: token,
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: SESSION_MAX_AGE_SECONDS
+      httpOnly: true,
+      sameSite: "strict",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: SESSION_MAX_AGE_SECONDS
   });
 }

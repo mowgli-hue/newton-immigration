@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 import { applySessionCookie } from "@/lib/auth";
-import { addAuditLog, createSession, findCompanyById, findUserByCredentials } from "@/lib/store";
+import { addAuditLog, createSessionWithContext, findCompanyById, findUserByCredentials } from "@/lib/store";
 import { isValidEmail, normalizeEmail } from "@/lib/validation";
 
 export async function POST(request: Request) {
+  const forwarded = request.headers.get("x-forwarded-for") || "";
+  const ipAddress = forwarded.split(",")[0]?.trim() || "";
+  const userAgent = request.headers.get("user-agent") || "";
   const body = await request.json().catch(() => ({}));
   const email = normalizeEmail(body.email);
   const password = String(body.password ?? "");
@@ -20,7 +23,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid credentials." }, { status: 401 });
   }
 
-  const session = await createSession(user);
+  const session = await createSessionWithContext(user, { ipAddress, userAgent });
   const company = await findCompanyById(user.companyId);
   const response = NextResponse.json({
     user: {
@@ -43,7 +46,8 @@ export async function POST(request: Request) {
     resourceId: user.id,
     metadata: {
       email: user.email,
-      userType: user.userType
+      userType: user.userType,
+      ipAddress: ipAddress || "unknown"
     }
   });
 

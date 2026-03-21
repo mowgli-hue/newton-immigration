@@ -6,6 +6,7 @@ import { canStaffAccessCase } from "@/lib/rbac";
 import { maybeAutoRunImm5710 } from "@/lib/imm5710-runner";
 import { buildReadyPackage, writeReadyPackageToDisk } from "@/lib/ready-package";
 import {
+  addAuditLog,
   addDocument,
   fulfillCaseDocRequest,
   getCase,
@@ -76,6 +77,18 @@ export async function GET(
   }
 
   const documents = await listDocuments(user.companyId, params.id);
+  await addAuditLog({
+    companyId: user.companyId,
+    actorUserId: user.id,
+    actorName: user.name,
+    action: "documents.list",
+    resourceType: "case",
+    resourceId: params.id,
+    metadata: {
+      count: String(documents.length),
+      userType: user.userType
+    }
+  });
   return NextResponse.json({ documents });
 }
 
@@ -171,6 +184,19 @@ export async function POST(
       link: finalLink,
       status: "received"
     });
+    await addAuditLog({
+      companyId: user.companyId,
+      actorUserId: user.id,
+      actorName: user.name,
+      action: "document.upload",
+      resourceType: "document",
+      resourceId: doc.id,
+      metadata: {
+        caseId: params.id,
+        category,
+        name: doc.name
+      }
+    });
     if (requestId) {
       await fulfillCaseDocRequest({
         companyId: user.companyId,
@@ -239,6 +265,19 @@ export async function POST(
     category,
     link,
     status
+  });
+  await addAuditLog({
+    companyId: user.companyId,
+    actorUserId: user.id,
+    actorName: user.name,
+    action: "document.add_link",
+    resourceType: "document",
+    resourceId: doc.id,
+    metadata: {
+      caseId: params.id,
+      category,
+      name: doc.name
+    }
   });
   if (requestId) {
     await fulfillCaseDocRequest({

@@ -223,6 +223,10 @@ export type Session = {
   userId: string;
   companyId: string;
   expiresAt: string;
+  ipAddress?: string;
+  ipSubnet?: string;
+  userAgent?: string;
+  createdAt?: string;
 };
 
 export type ClientInvite = {
