@@ -150,6 +150,9 @@ export type CaseItem = {
   paymentStatus?: "pending" | "paid" | "not_required";
   paymentPaidAt?: string;
   amountPaid?: number;
+  totalCharges?: number;
+  irccFees?: number;
+  irccFeePayer?: "sir_card" | "client_card";
   submittedAt?: string;
   decisionDate?: string;
   finalOutcome?: "approved" | "refused" | "request_letter" | "withdrawn";

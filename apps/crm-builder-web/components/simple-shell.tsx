@@ -311,6 +311,9 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [commFormType, setCommFormType] = useState("PGWP");
   const [commPhone, setCommPhone] = useState("");
   const [commEmail, setCommEmail] = useState("");
+  const [commTotalCharges, setCommTotalCharges] = useState("");
+  const [commIrccFees, setCommIrccFees] = useState("");
+  const [commIrccFeePayer, setCommIrccFeePayer] = useState<"sir_card" | "client_card">("client_card");
   const [commCreateStatus, setCommCreateStatus] = useState("");
   const [commUrgent, setCommUrgent] = useState(false);
   const [commUrgentDays, setCommUrgentDays] = useState("5");
@@ -815,6 +818,18 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       setCommCreateStatus("Client name and application type are required.");
       return;
     }
+    const totalChargesRaw = commTotalCharges.trim();
+    const irccFeesRaw = commIrccFees.trim();
+    const totalCharges = totalChargesRaw ? Number(totalChargesRaw) : 0;
+    const irccFees = irccFeesRaw ? Number(irccFeesRaw) : 0;
+    if (!Number.isFinite(totalCharges) || totalCharges < 0) {
+      setCommCreateStatus("Enter a valid Total Charges amount.");
+      return;
+    }
+    if (!Number.isFinite(irccFees) || irccFees < 0) {
+      setCommCreateStatus("Enter a valid IRCC Fees amount.");
+      return;
+    }
     if (commUrgent) {
       const days = Number(commUrgentDays || 0);
       if (!Number.isFinite(days) || days <= 0) {
@@ -831,6 +846,9 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
         formType: commFormType.trim(),
         leadPhone: commPhone.trim() || undefined,
         leadEmail: commEmail.trim() || undefined,
+        totalCharges,
+        irccFees,
+        irccFeePayer: commIrccFeePayer,
         isUrgent: commUrgent,
         dueInDays: commUrgent ? Number(commUrgentDays || 0) : undefined
       })
@@ -857,6 +875,10 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     }
     setCommClientName("");
     setCommPhone("");
+    setCommEmail("");
+    setCommTotalCharges("");
+    setCommIrccFees("");
+    setCommIrccFeePayer("client_card");
     setCommUrgent(false);
     setCommUrgentDays("5");
   }
@@ -2812,7 +2834,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                           selectedCase?.id === c.id ? "border-slate-900 bg-slate-50" : "border-slate-200 bg-white"
                         }`}
                       >
-                        <div className="grid gap-2 md:grid-cols-8">
+                        <div className="grid gap-2 md:grid-cols-9">
                           <div>
                             <p className="text-[11px] text-slate-500">Name</p>
                             <p className="font-semibold">{c.client}</p>
@@ -2876,6 +2898,15 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                             <p className="text-[11px] text-slate-500">Last Updated</p>
                             <p className="font-semibold">
                               {c.updatedAt ? new Date(c.updatedAt).toLocaleDateString() : "-"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[11px] text-slate-500">Payment Method</p>
+                            <p className="font-semibold">
+                              {c.paymentMethod === "interac" ? "Interac" : c.paymentMethod || "-"}
+                            </p>
+                            <p className="text-[11px] text-slate-500">
+                              IRCC: {c.irccFeePayer === "sir_card" ? "Sir Card" : "Client Card"}
                             </p>
                           </div>
                           <div className="flex items-end justify-end gap-2">
@@ -3060,6 +3091,20 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                               ? selectedCase.processingStatusOther || "other"
                               : (selectedCase.processingStatus || "docs_pending").replace("_", " ")}
                           </p>
+                        </div>
+                        <div className="rounded border border-slate-200 p-2">
+                          <p className="text-slate-500">Total Charges</p>
+                          <p className="font-semibold">${Number(selectedCase.totalCharges ?? selectedCase.servicePackage?.retainerAmount ?? 0)}</p>
+                        </div>
+                        <div className="rounded border border-slate-200 p-2">
+                          <p className="text-slate-500">IRCC Fees</p>
+                          <p className="font-semibold">
+                            ${Number(selectedCase.irccFees ?? 0)} ({selectedCase.irccFeePayer === "sir_card" ? "Sir Card" : "Client Card"})
+                          </p>
+                        </div>
+                        <div className="rounded border border-slate-200 p-2">
+                          <p className="text-slate-500">Payment Method</p>
+                          <p className="font-semibold">{selectedCase.paymentMethod === "interac" ? "Interac" : selectedCase.paymentMethod || "-"}</p>
                         </div>
                         <div className="rounded border border-slate-200 p-2 md:col-span-4">
                           <p className="text-slate-500">Client Link Actions</p>
@@ -3427,7 +3472,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                 <article className="rounded-lg border-2 border-slate-300 p-3">
                   <p className="text-sm font-semibold">Create Case</p>
                   <p className="mt-1 text-xs text-slate-500">Create a new client case before generating invite/payment link.</p>
-                  <div className="mt-2 grid gap-2 md:grid-cols-4">
+                  <div className="mt-2 grid gap-2 md:grid-cols-7">
                     <input
                       value={commClientName}
                       onChange={(e) => setCommClientName(e.target.value)}
@@ -3457,6 +3502,26 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                       placeholder="Email address"
                       className="rounded border border-slate-300 px-2 py-2 text-xs"
                     />
+                    <input
+                      value={commTotalCharges}
+                      onChange={(e) => setCommTotalCharges(e.target.value)}
+                      placeholder="Total charges (CAD)"
+                      className="rounded border border-slate-300 px-2 py-2 text-xs"
+                    />
+                    <input
+                      value={commIrccFees}
+                      onChange={(e) => setCommIrccFees(e.target.value)}
+                      placeholder="IRCC fees (CAD)"
+                      className="rounded border border-slate-300 px-2 py-2 text-xs"
+                    />
+                    <select
+                      value={commIrccFeePayer}
+                      onChange={(e) => setCommIrccFeePayer(e.target.value as "sir_card" | "client_card")}
+                      className="rounded border border-slate-300 px-2 py-2 text-xs"
+                    >
+                      <option value="sir_card">IRCC fees by Sir card</option>
+                      <option value="client_card">IRCC fees by Client card</option>
+                    </select>
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-3">
                     <label className="inline-flex items-center gap-2 text-xs text-slate-700">

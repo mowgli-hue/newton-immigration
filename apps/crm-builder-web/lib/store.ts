@@ -226,6 +226,15 @@ function migrateStore(raw: Partial<AppStore>): AppStore {
           : c.paymentStatus === "paid"
             ? Number(c.servicePackage?.retainerAmount || 0)
             : 0,
+      totalCharges:
+        Number.isFinite(Number(c.totalCharges))
+          ? Number(c.totalCharges)
+          : Number(c.servicePackage?.retainerAmount || 0),
+      irccFees: Number.isFinite(Number(c.irccFees)) ? Number(c.irccFees) : 0,
+      irccFeePayer:
+        c.irccFeePayer === "sir_card" || c.irccFeePayer === "client_card"
+          ? c.irccFeePayer
+          : "client_card",
       imm5710Automation: c.imm5710Automation ?? { status: "idle" },
       pgwpIntake: c.pgwpIntake ?? undefined,
       docRequests: Array.isArray(c.docRequests) ? c.docRequests : [],
@@ -629,6 +638,9 @@ export async function createCase(input: {
   sourceLeadKey?: string;
   isUrgent?: boolean;
   dueInDays?: number;
+  totalCharges?: number;
+  irccFees?: number;
+  irccFeePayer?: "sir_card" | "client_card";
 }): Promise<CaseItem> {
   const store = await readStore();
   const company = store.companies.find((c) => c.id === input.companyId);
@@ -682,6 +694,15 @@ export async function createCase(input: {
   const nextId = `CASE-${highestCaseNumber + 1}`;
   const dueInDays = Number.isFinite(Number(input.dueInDays)) && Number(input.dueInDays) > 0 ? Number(input.dueInDays) : 7;
   const deadlineDate = new Date(Date.now() + dueInDays * 24 * 60 * 60 * 1000).toISOString();
+  const totalCharges =
+    Number.isFinite(Number(input.totalCharges)) && Number(input.totalCharges) >= 0
+      ? Number(input.totalCharges)
+      : 0;
+  const irccFees =
+    Number.isFinite(Number(input.irccFees)) && Number(input.irccFees) >= 0
+      ? Number(input.irccFees)
+      : 0;
+  const irccFeePayer = input.irccFeePayer === "sir_card" ? "sir_card" : "client_card";
   const item: CaseItem = {
     id: nextId,
     companyId: input.companyId,
@@ -706,7 +727,7 @@ export async function createCase(input: {
     dueInDays,
     unreadClientMessages: 0,
     docsPending: 5,
-    balanceAmount: 0,
+    balanceAmount: totalCharges,
     retainerSigned: false,
     retainerSentAt: undefined,
     docsUploadLink: company?.branding?.driveRootLink || "",
@@ -720,14 +741,17 @@ export async function createCase(input: {
     paymentStatus: "pending",
     paymentPaidAt: undefined,
     amountPaid: 0,
+    totalCharges,
+    irccFees,
+    irccFeePayer,
     imm5710Automation: { status: "idle" },
     pgwpIntake: undefined,
     docRequests: [],
     retainerRecord: undefined,
     servicePackage: {
       name: "Standard Service",
-      retainerAmount: 0,
-      balanceAmount: 0,
+      retainerAmount: totalCharges,
+      balanceAmount: totalCharges,
       milestones: []
     },
     invoices: []
@@ -796,6 +820,9 @@ export async function resetCompanyDataToSingleCase(input: {
     interacInstructions: "Send Interac e-Transfer with case number.",
     paymentStatus: "pending",
     amountPaid: 0,
+    totalCharges: 0,
+    irccFees: 0,
+    irccFeePayer: "client_card",
     imm5710Automation: { status: "idle" },
     docRequests: [],
     servicePackage: {
