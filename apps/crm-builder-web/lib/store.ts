@@ -15,6 +15,7 @@ import {
   DocumentItem,
   MessageItem,
   NotificationItem,
+  OutboundMessageItem,
   PgwpIntakeData,
   Session,
   Stage,
@@ -59,6 +60,7 @@ const defaultStore: AppStore = {
       createdAt: new Date().toISOString()
     }
   ],
+  outboundMessages: [],
   documents: [
     {
       id: "DOC-1",
@@ -243,6 +245,11 @@ function migrateStore(raw: Partial<AppStore>): AppStore {
     clients,
     cases,
     messages: raw.messages ?? defaultStore.messages,
+    outboundMessages: (raw.outboundMessages ?? []).map((m) => ({
+      ...m,
+      status: m.status ?? "sent",
+      createdAt: m.createdAt ?? new Date().toISOString()
+    })),
     documents: (raw.documents ?? defaultStore.documents).map((d) => ({
       ...d,
       category: d.category ?? "general",
@@ -800,6 +807,7 @@ export async function resetCompanyDataToSingleCase(input: {
     ...store.clients.filter((c) => c.companyId !== input.companyId)
   ];
   store.messages = store.messages.filter((m) => m.companyId !== input.companyId);
+  store.outboundMessages = store.outboundMessages.filter((m) => m.companyId !== input.companyId);
   store.documents = store.documents.filter((d) => d.companyId !== input.companyId);
   store.clientCommunications = store.clientCommunications.filter((n) => n.companyId !== input.companyId);
   store.auditLogs = store.auditLogs.filter((l) => l.companyId !== input.companyId);
@@ -849,6 +857,9 @@ export async function pruneCompanyDataToCaseIds(input: {
     ...keptCases
   ];
   store.messages = store.messages.filter(
+    (m) => m.companyId !== input.companyId || keepIds.has(m.caseId)
+  );
+  store.outboundMessages = store.outboundMessages.filter(
     (m) => m.companyId !== input.companyId || keepIds.has(m.caseId)
   );
   store.documents = store.documents.filter(
@@ -1618,6 +1629,41 @@ export async function addMessage(input: {
   store.messages.push(message);
   await writeStore(store);
   return message;
+}
+
+export async function listOutboundMessages(companyId: string, caseId: string): Promise<OutboundMessageItem[]> {
+  const store = await readStore();
+  return store.outboundMessages
+    .filter((m) => m.companyId === companyId && m.caseId === caseId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export async function addOutboundMessage(input: {
+  companyId: string;
+  caseId: string;
+  channel: OutboundMessageItem["channel"];
+  status: OutboundMessageItem["status"];
+  target?: string;
+  message: string;
+  createdByUserId: string;
+  createdByName: string;
+}): Promise<OutboundMessageItem> {
+  const store = await readStore();
+  const item: OutboundMessageItem = {
+    id: `OUT-${store.outboundMessages.length + 1}`,
+    companyId: input.companyId,
+    caseId: input.caseId,
+    channel: input.channel,
+    status: input.status,
+    target: input.target,
+    message: input.message,
+    createdByUserId: input.createdByUserId,
+    createdByName: input.createdByName,
+    createdAt: new Date().toISOString()
+  };
+  store.outboundMessages.push(item);
+  await writeStore(store);
+  return item;
 }
 
 export async function listDocuments(companyId: string, caseId: string): Promise<DocumentItem[]> {

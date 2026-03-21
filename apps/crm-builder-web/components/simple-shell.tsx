@@ -37,6 +37,16 @@ type MessageItem = {
   createdAt: string;
 };
 
+type OutboundMessageItem = {
+  id: string;
+  channel: "email" | "whatsapp" | "sms" | "link" | "copy";
+  status: "queued" | "opened_app" | "sent" | "failed";
+  target?: string;
+  message: string;
+  createdByName: string;
+  createdAt: string;
+};
+
 type DocumentItem = {
   id: string;
   clientId?: string;
@@ -259,6 +269,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [viewRole, setViewRole] = useState<Role>("Admin");
   const [selectedCaseId, setSelectedCaseId] = useState("");
   const [messages, setMessages] = useState<MessageItem[]>([]);
+  const [outboundMessages, setOutboundMessages] = useState<OutboundMessageItem[]>([]);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [resultUploadFile, setResultUploadFile] = useState<File | null>(null);
   const [resultUploadName, setResultUploadName] = useState("");
@@ -556,10 +567,11 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   }, [screen, visibleTabs]);
 
   async function loadCaseDetail(caseId: string) {
-    const [msgRes, docRes, reqRes] = await Promise.all([
+    const [msgRes, docRes, reqRes, outRes] = await Promise.all([
       apiFetch(`/cases/${caseId}/messages`, { cache: "no-store" }),
       apiFetch(`/cases/${caseId}/documents`, { cache: "no-store" }),
-      apiFetch(`/cases/${caseId}/doc-requests`, { cache: "no-store" })
+      apiFetch(`/cases/${caseId}/doc-requests`, { cache: "no-store" }),
+      apiFetch(`/cases/${caseId}/outbound`, { cache: "no-store" })
     ]);
 
     if (msgRes.ok) {
@@ -573,6 +585,10 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     if (reqRes.ok) {
       const payload = await reqRes.json();
       setDocRequests((payload.requests || []) as DocRequestItem[]);
+    }
+    if (outRes.ok) {
+      const payload = await outRes.json();
+      setOutboundMessages((payload.logs || []) as OutboundMessageItem[]);
     }
   }
 
@@ -982,6 +998,32 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     const url = String(payload.inviteUrl || "");
     setInviteUrl(url);
     setInviteStatus("Invite link ready. Send this to client.");
+    await logOutboundCommunication({
+      channel: "link",
+      status: "sent",
+      target: inviteEmail.trim() || invitePhone.trim() || undefined,
+      message: `Client portal link generated: ${url}`
+    });
+  }
+
+  async function logOutboundCommunication(input: {
+    channel: "email" | "whatsapp" | "sms" | "link" | "copy";
+    status: "queued" | "opened_app" | "sent" | "failed";
+    target?: string;
+    message: string;
+  }) {
+    if (!selectedCase) return;
+    const res = await apiFetch(`/cases/${selectedCase.id}/outbound`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input)
+    });
+    if (!res.ok) return;
+    const payload = await res.json().catch(() => ({}));
+    const log = payload?.log as OutboundMessageItem | undefined;
+    if (log) {
+      setOutboundMessages((prev) => [log, ...prev]);
+    }
   }
 
   function normalizePhoneForWa(phone: string) {
@@ -1024,6 +1066,12 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       if (channel === "copy") {
         await navigator.clipboard.writeText(message);
         setInviteShareStatus("Invite message copied.");
+        await logOutboundCommunication({
+          channel: "copy",
+          status: "sent",
+          target: undefined,
+          message
+        });
         return;
       }
       if (channel === "email") {
@@ -1035,6 +1083,12 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
         const body = encodeURIComponent(message);
         window.open(`mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`, "_blank");
         setInviteShareStatus("Email app opened.");
+        await logOutboundCommunication({
+          channel: "email",
+          status: "opened_app",
+          target: email,
+          message
+        });
         return;
       }
       if (channel === "whatsapp") {
@@ -1046,6 +1100,12 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
         const text = encodeURIComponent(message);
         window.open(`https://wa.me/${waPhone}?text=${text}`, "_blank");
         setInviteShareStatus("WhatsApp opened.");
+        await logOutboundCommunication({
+          channel: "whatsapp",
+          status: "opened_app",
+          target: waPhone,
+          message
+        });
         return;
       }
       if (channel === "sms") {
@@ -1057,9 +1117,21 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
         const body = encodeURIComponent(message);
         window.open(`sms:${smsPhone}?body=${body}`, "_blank");
         setInviteShareStatus("SMS app opened.");
+        await logOutboundCommunication({
+          channel: "sms",
+          status: "opened_app",
+          target: smsPhone,
+          message
+        });
       }
     } catch {
       setInviteShareStatus("Could not open sharing app.");
+      await logOutboundCommunication({
+        channel,
+        status: "failed",
+        target: channel === "email" ? email : phone,
+        message
+      });
     }
   }
 
@@ -2986,6 +3058,25 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
 
                     {caseDetailTab === "communication" ? (
                       <div className="mt-3">
+                        <div className="mb-3 rounded border border-slate-200 p-2 text-xs">
+                          <p className="font-semibold">Sent Link History</p>
+                          <div className="mt-2 max-h-40 space-y-2 overflow-auto">
+                            {outboundMessages.map((o) => (
+                              <div key={o.id} className="rounded border border-slate-200 p-2">
+                                <p className="font-semibold">
+                                  {o.channel.toUpperCase()} • {o.status}
+                                </p>
+                                <p className="text-slate-500">
+                                  {new Date(o.createdAt).toLocaleString()} • by {o.createdByName}
+                                </p>
+                                {o.target ? <p className="text-slate-600">To: {o.target}</p> : null}
+                              </div>
+                            ))}
+                            {outboundMessages.length === 0 ? (
+                              <p className="text-slate-500">No sent link records yet.</p>
+                            ) : null}
+                          </div>
+                        </div>
                         <div className="max-h-56 space-y-2 overflow-auto rounded border border-slate-200 p-2 text-xs">
                           {messages.map((m) => (
                             <div key={m.id} className="rounded bg-slate-50 p-2">

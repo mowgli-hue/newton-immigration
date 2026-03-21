@@ -245,6 +245,19 @@ export type MessageItem = {
   createdAt: string;
 };
 
+export type OutboundMessageItem = {
+  id: string;
+  companyId: string;
+  caseId: string;
+  channel: "email" | "whatsapp" | "sms" | "link" | "copy";
+  status: "queued" | "opened_app" | "sent" | "failed";
+  target?: string;
+  message: string;
+  createdByUserId: string;
+  createdByName: string;
+  createdAt: string;
+};
+
 export type DocumentItem = {
   id: string;
   companyId: string;
@@ -330,6 +343,7 @@ export type AppStore = {
   clients: ClientMaster[];
   cases: CaseItem[];
   messages: MessageItem[];
+  outboundMessages: OutboundMessageItem[];
   documents: DocumentItem[];
   clientCommunications: ClientCommunication[];
   auditLogs: AuditLog[];
