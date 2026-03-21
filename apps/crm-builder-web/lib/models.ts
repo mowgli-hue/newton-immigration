@@ -243,6 +243,7 @@ export type DocumentItem = {
   companyId: string;
   caseId: string;
   name: string;
+  category?: "general" | "result";
   status: "pending" | "received";
   link: string;
   createdAt: string;

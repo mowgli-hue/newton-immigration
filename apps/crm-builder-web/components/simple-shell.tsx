@@ -18,8 +18,8 @@ import { apiFetch } from "@/lib/api-client";
 import { Company } from "@/lib/models";
 import { getChecklistForFormType } from "@/lib/application-checklists";
 
-type Screen = "dashboard" | "cases" | "communications" | "accounting" | "tasks" | "chat" | "files";
-type ClientScreen = "retainer" | "overview" | "documents" | "questions" | "chat";
+type Screen = "dashboard" | "cases" | "communications" | "results" | "accounting" | "tasks" | "chat" | "files";
+type ClientScreen = "retainer" | "overview" | "documents" | "questions" | "results" | "chat";
 type SessionUser = {
   id: string;
   name: string;
@@ -39,6 +39,7 @@ type MessageItem = {
 type DocumentItem = {
   id: string;
   name: string;
+  category?: "general" | "result";
   status: "pending" | "received";
   link: string;
   createdAt: string;
@@ -211,6 +212,7 @@ const tabs: { id: Screen; label: string; icon: ReactNode }[] = [
   { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard size={16} /> },
   { id: "cases", label: "Cases", icon: <Users size={16} /> },
   { id: "communications", label: "Communications", icon: <MessageCircle size={16} /> },
+  { id: "results", label: "Results", icon: <FileText size={16} /> },
   { id: "accounting", label: "Accounting", icon: <FileText size={16} /> },
   { id: "tasks", label: "Tasks", icon: <CheckSquare size={16} /> },
   { id: "chat", label: "Chat", icon: <MessageCircle size={16} /> },
@@ -252,6 +254,9 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [selectedCaseId, setSelectedCaseId] = useState("");
   const [messages, setMessages] = useState<MessageItem[]>([]);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
+  const [resultUploadFile, setResultUploadFile] = useState<File | null>(null);
+  const [resultUploadName, setResultUploadName] = useState("");
+  const [resultUploadStatus, setResultUploadStatus] = useState("");
   const [docRequests, setDocRequests] = useState<DocRequestItem[]>([]);
   const [clientIntakeDone, setClientIntakeDone] = useState(false);
   const [tasks, setTasks] = useState<TaskItem[]>([]);
@@ -457,6 +462,10 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const caseTasks = useMemo(
     () => (selectedCase ? tasks.filter((t) => t.caseId === selectedCase.id) : []),
     [tasks, selectedCase?.id]
+  );
+  const resultDocuments = useMemo(
+    () => documents.filter((d) => (d.category || "general") === "result"),
+    [documents]
   );
   const communicationSearchList = useMemo(() => {
     const query = commSearch.trim().toLowerCase();
@@ -807,6 +816,34 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     const payload = await res.json();
     setDocuments((prev) => [...prev, payload.document as DocumentItem]);
     form.reset();
+  }
+
+  async function uploadResultDocument() {
+    if (!selectedCase) return;
+    if (!resultUploadFile) {
+      setResultUploadStatus("Choose a file first.");
+      return;
+    }
+    setResultUploadStatus("Uploading result...");
+    const formData = new FormData();
+    formData.append("file", resultUploadFile);
+    formData.append("name", resultUploadName.trim() || resultUploadFile.name);
+    formData.append("category", "result");
+    const res = await apiFetch(`/cases/${selectedCase.id}/documents`, {
+      method: "POST",
+      body: formData
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setResultUploadStatus(String(payload.error || "Could not upload result."));
+      return;
+    }
+    if (payload.document) {
+      setDocuments((prev) => [...prev, payload.document as DocumentItem]);
+    }
+    setResultUploadFile(null);
+    setResultUploadName("");
+    setResultUploadStatus("Result uploaded and available in client portal.");
   }
 
   async function syncLeadsFromSheet() {
@@ -1750,6 +1787,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
             <section className="rounded-2xl border-2 border-slate-500 bg-white p-3 shadow-sm">
               <div className="grid gap-2 sm:grid-cols-4">
                 <button onClick={() => setClientScreen("overview")} className={`rounded-lg border-2 px-3 py-2 text-sm font-semibold ${clientScreen !== "chat" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-700"}`}>Tasks</button>
+                <button onClick={() => setClientScreen("results")} className={`rounded-lg border-2 px-3 py-2 text-sm font-semibold ${clientScreen === "results" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-700"}`}>Results</button>
                 <button onClick={() => setClientScreen("chat")} className={`rounded-lg border-2 px-3 py-2 text-sm font-semibold ${clientScreen === "chat" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-700"}`}>Chat</button>
               </div>
             </section>
@@ -2031,8 +2069,8 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
             ) : null}
           </>
         ) : null}
-        <section className="rounded-2xl border-2 border-slate-500 bg-white p-4 shadow-sm">
-          <h3 className="font-semibold">Contact Us</h3>
+                <section className="rounded-2xl border-2 border-slate-500 bg-white p-4 shadow-sm">
+                  <h3 className="font-semibold">Contact Us</h3>
           <p className="mt-1 text-sm text-slate-700">For case processing call at <span className="font-semibold">{processingSupportPhone}</span>.</p>
           <a
             href="https://www.franco.app"
@@ -2309,10 +2347,34 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                     ))}
                     {teamUsers.length === 0 ? <p className="px-3 py-2 text-xs text-slate-500">No team members found.</p> : null}
                   </div>
-                </section>
-              ) : null}
-            </>
-          ) : null}
+              </section>
+            ) : null}
+
+            {clientScreen === "results" ? (
+              <section className="rounded-2xl border-2 border-slate-500 bg-white p-4 shadow-sm">
+                <button onClick={() => setClientScreen("overview")} className="mb-2 rounded border border-slate-300 px-2 py-1 text-xs font-semibold">Back to Tasks</button>
+                <h3 className="text-base font-semibold">Your Results</h3>
+                <p className="mt-1 text-xs text-slate-500">Any completed result shared by Newton Immigration will appear here.</p>
+                <div className="mt-3 space-y-2">
+                  {resultDocuments.map((d) => (
+                    <article key={d.id} className="rounded border border-slate-200 p-2">
+                      <p className="text-sm font-semibold">{d.name}</p>
+                      <p className="text-xs text-slate-500">{new Date(d.createdAt).toLocaleString()}</p>
+                      {d.link ? (
+                        <a href={d.link} target="_blank" className="text-xs text-blue-700 underline">
+                          Open Result
+                        </a>
+                      ) : null}
+                    </article>
+                  ))}
+                  {resultDocuments.length === 0 ? (
+                    <p className="text-xs text-slate-500">No results shared yet.</p>
+                  ) : null}
+                </div>
+              </section>
+            ) : null}
+          </>
+        ) : null}
 
           {screen === "cases" ? (
             <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
@@ -2906,76 +2968,64 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                   </article>
                 ) : null}
 
-                {selectedCase ? (
-                  <article className="rounded-lg border-2 border-slate-300 p-3">
-                    <p className="text-sm font-semibold">Invite Link</p>
-                    <p className="mt-1 text-xs text-slate-500">Set application and amount, then generate one client link.</p>
-                    <div className="mt-2 grid gap-2 md:grid-cols-2">
-                      <select
-                        value={setupFormType}
-                        onChange={(e) => setSetupFormType(e.target.value)}
-                        className="rounded border border-slate-300 px-2 py-2 text-xs"
-                      >
-                        {APPLICATION_TYPES.map((appType) => (
-                          <option key={appType} value={appType}>
-                            {appType}
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        value={setupRetainerAmount}
-                        onChange={(e) => setSetupRetainerAmount(e.target.value)}
-                        placeholder="Retainer amount (CAD)"
-                        className="rounded border border-slate-300 px-2 py-2 text-xs"
-                      />
-                      <input
-                        value={setupInteracInstructions}
-                        onChange={(e) => setSetupInteracInstructions(e.target.value)}
-                        placeholder="Interac instructions"
-                        className="rounded border border-slate-300 px-2 py-2 text-xs md:col-span-2"
-                      />
-                      <input
-                        value={inviteEmail}
-                        onChange={(e) => setInviteEmail(e.target.value)}
-                        placeholder="Client email (optional)"
-                        className="rounded border border-slate-300 px-2 py-2 text-xs md:col-span-2"
-                      />
-                      <input
-                        value={invitePhone}
-                        onChange={(e) => setInvitePhone(e.target.value)}
-                        placeholder="Client phone (optional)"
-                        className="rounded border border-slate-300 px-2 py-2 text-xs md:col-span-2"
-                      />
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <button onClick={() => void sendPaymentLinkForCase()} className="rounded bg-emerald-600 px-3 py-2 text-xs font-semibold text-white">
-                        Create Invite + Payment Link
-                      </button>
-                      <button onClick={() => void shareInvite("copy")} className="rounded border border-slate-300 px-3 py-2 text-xs font-semibold">
-                        Copy
-                      </button>
-                      <button onClick={() => void shareInvite("email")} className="rounded border border-slate-300 px-3 py-2 text-xs font-semibold">
-                        Email
-                      </button>
-                      <button onClick={() => void shareInvite("whatsapp")} className="rounded border border-slate-300 px-3 py-2 text-xs font-semibold">
-                        WhatsApp
-                      </button>
-                      <button onClick={() => void shareInvite("sms")} className="rounded border border-slate-300 px-3 py-2 text-xs font-semibold">
-                        SMS
-                      </button>
-                    </div>
-                    {inviteStatus ? <p className="mt-2 text-xs text-slate-700">{inviteStatus}</p> : null}
-                    {paymentLinkStatus ? <p className="mt-1 text-xs text-slate-700">{paymentLinkStatus}</p> : null}
-                    {inviteShareStatus ? <p className="mt-1 text-xs text-slate-700">{inviteShareStatus}</p> : null}
-                    {inviteUrl ? (
-                      <p className="mt-2 break-all text-xs text-blue-700 underline">
-                        {inviteUrl}
-                      </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Invite link actions were moved to Cases tab (Case Detail → Client Link Actions).
+                </p>
+              </div>
+            </section>
+          ) : null}
+
+          {screen === "results" ? (
+            <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
+              <h3 className="text-base font-semibold">Results</h3>
+              <p className="mt-1 text-xs text-slate-500">Upload and send final results directly to the client portal.</p>
+              <select
+                value={selectedCase?.id ?? ""}
+                onChange={(e) => setSelectedCaseId(e.target.value)}
+                className="mt-2 w-full rounded-lg border-2 border-slate-300 px-2 py-2 text-sm"
+              >
+                {visibleCases.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.id} - {c.client}
+                  </option>
+                ))}
+              </select>
+              <div className="mt-3 rounded border border-slate-200 p-3 text-xs">
+                <p className="font-semibold">Upload Result File</p>
+                <div className="mt-2 grid gap-2 md:grid-cols-3">
+                  <input
+                    value={resultUploadName}
+                    onChange={(e) => setResultUploadName(e.target.value)}
+                    className="rounded border border-slate-300 px-2 py-2"
+                    placeholder="Result title (optional)"
+                  />
+                  <input
+                    type="file"
+                    onChange={(e) => setResultUploadFile(e.target.files?.[0] || null)}
+                    className="rounded border border-slate-300 px-2 py-2"
+                  />
+                  <button
+                    onClick={() => void uploadResultDocument()}
+                    className="rounded bg-slate-900 px-3 py-2 font-semibold text-white"
+                  >
+                    Upload to Client Portal
+                  </button>
+                </div>
+                {resultUploadStatus ? <p className="mt-2 text-slate-700">{resultUploadStatus}</p> : null}
+              </div>
+              <div className="mt-3 space-y-2">
+                {resultDocuments.map((d) => (
+                  <article key={d.id} className="rounded border border-slate-200 p-3 text-xs">
+                    <p className="font-semibold">{d.name}</p>
+                    <p className="text-slate-500">{new Date(d.createdAt).toLocaleString()}</p>
+                    {d.link ? (
+                      <a href={d.link} target="_blank" className="text-blue-700 underline">
+                        Open Result
+                      </a>
                     ) : null}
                   </article>
-                ) : (
-                  <p className="mt-1 text-xs text-slate-500">Create or select a case to generate the invite link.</p>
-                )}
+                ))}
+                {resultDocuments.length === 0 ? <p className="text-xs text-slate-500">No results uploaded for this case yet.</p> : null}
               </div>
             </section>
           ) : null}

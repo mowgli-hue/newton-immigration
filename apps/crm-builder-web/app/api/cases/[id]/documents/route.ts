@@ -93,6 +93,8 @@ export async function POST(
     const formData = await request.formData();
     const maybeFile = formData.get("file");
     const customName = String(formData.get("name") ?? "").trim();
+    const categoryRaw = String(formData.get("category") ?? "").trim().toLowerCase();
+    const category = categoryRaw === "result" ? "result" : "general";
     const requestId = String(formData.get("requestId") ?? "").trim();
 
     if (!(maybeFile instanceof File)) {
@@ -153,6 +155,7 @@ export async function POST(
       companyId: user.companyId,
       caseId: params.id,
       name: customName || maybeFile.name || finalName,
+      category,
       link: finalLink,
       status: "received"
     });
@@ -208,6 +211,8 @@ export async function POST(
   const body = await request.json().catch(() => ({}));
   const name = String(body.name ?? "").trim();
   const link = String(body.link ?? "").trim();
+  const categoryRaw = String(body.category ?? "").trim().toLowerCase();
+  const category = categoryRaw === "result" ? "result" : "general";
   const status = String(body.status ?? "pending") as "pending" | "received";
   const requestId = String(body.requestId ?? "").trim();
 
@@ -219,6 +224,7 @@ export async function POST(
     companyId: user.companyId,
     caseId: params.id,
     name,
+    category,
     link,
     status
   });

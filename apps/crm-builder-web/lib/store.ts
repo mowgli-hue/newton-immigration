@@ -55,6 +55,7 @@ const defaultStore: AppStore = {
       companyId: "CMP-1",
       caseId: "CASE-1021",
       name: "Passport Bio Page",
+      category: "general",
       status: "received",
       link: "https://drive.google.com/newton/docs/passport",
       createdAt: new Date().toISOString()
@@ -139,7 +140,10 @@ function migrateStore(raw: Partial<AppStore>): AppStore {
     users,
     cases,
     messages: raw.messages ?? defaultStore.messages,
-    documents: raw.documents ?? defaultStore.documents,
+    documents: (raw.documents ?? defaultStore.documents).map((d) => ({
+      ...d,
+      category: d.category ?? "general"
+    })),
     tasks: raw.tasks ?? [],
     notifications: raw.notifications ?? [],
     sessions: raw.sessions ?? [],
@@ -1347,6 +1351,7 @@ export async function addDocument(input: {
   companyId: string;
   caseId: string;
   name: string;
+  category?: "general" | "result";
   status: DocumentItem["status"];
   link: string;
 }): Promise<DocumentItem> {
@@ -1356,6 +1361,7 @@ export async function addDocument(input: {
     companyId: input.companyId,
     caseId: input.caseId,
     name: input.name,
+    category: input.category ?? "general",
     status: input.status,
     link: input.link,
     createdAt: new Date().toISOString()
