@@ -4,11 +4,14 @@ import { canStaffAccessCase, canUseCommunications } from "@/lib/rbac";
 import { createClientInvite, getCase, getLatestClientInviteForCase } from "@/lib/store";
 
 function baseUrlFromRequest(request: NextRequest) {
-  const explicitBase = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_BASE_URL;
-  if (explicitBase) return explicitBase.replace(/\/$/, "");
+  const preferRequestHost =
+    String(process.env.INVITE_URL_USE_REQUEST_HOST || "true").toLowerCase() === "true";
+  const explicitBase = (process.env.NEXT_PUBLIC_APP_URL || process.env.APP_BASE_URL || "").replace(/\/$/, "");
   const proto = request.headers.get("x-forwarded-proto") || "http";
   const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || "localhost:3006";
-  return `${proto}://${host}`;
+  const requestBase = `${proto}://${host}`;
+  if (preferRequestHost || !explicitBase) return requestBase;
+  return explicitBase;
 }
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
