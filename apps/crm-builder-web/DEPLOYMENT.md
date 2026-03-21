@@ -54,3 +54,50 @@ This keeps all current features working (invites, questionnaires, checklists, do
 
 - Current storage is now configurable via `FLOWDESK_STORE_PATH` and can persist on mounted volume.
 - For later scale/multi-instance, move to Supabase/Postgres for full DB-backed storage.
+
+## Phase 2: PostgreSQL Cutover (Staged, No Big-Bang)
+
+### New Environment Variables
+
+- `DATA_BACKEND=file|postgres`
+- `DATABASE_URL=postgres://...`
+- keep:
+  - `FLOWDESK_DATA_DIR=/data`
+  - `FLOWDESK_STORE_PATH=/data/store.json`
+
+### Migration Commands
+
+From `apps/crm-builder-web`:
+
+1. Backup current JSON store:
+   - `npm run db:export:store`
+2. Apply schema to PostgreSQL:
+   - `npm run db:migrate:init`
+3. Migrate JSON data into PostgreSQL:
+   - `npm run db:migrate:store`
+
+### Staging Rollout
+
+1. Clone production data volume snapshot or use latest backup.
+2. Run migration commands in **staging**.
+3. Set `DATA_BACKEND=postgres` in staging only.
+4. Verify:
+   - login
+   - create case
+   - invite
+   - docs
+   - results
+   - communications logs
+
+### Production Rollout
+
+1. Freeze deployments briefly.
+2. Run backup + migrate commands on latest data.
+3. Set `DATA_BACKEND=postgres`.
+4. Redeploy.
+5. Keep file backup for rollback.
+
+### Readiness Endpoint
+
+Admin can verify storage posture:
+- `GET /api/system/readiness`
