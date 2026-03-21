@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { applySessionCookie } from "@/lib/auth";
 import { addAuditLog, createSessionWithContext, findCompanyById, findUserByCredentials } from "@/lib/store";
+import { createPreAuthToken, verifyTotp } from "@/lib/mfa";
 import { isValidEmail, normalizeEmail } from "@/lib/validation";
 
 export async function POST(request: Request) {
@@ -10,6 +11,7 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const email = normalizeEmail(body.email);
   const password = String(body.password ?? "");
+  const mfaCode = String(body.mfaCode ?? "").trim();
 
   if (!email || !password) {
     return NextResponse.json({ error: "Email and password are required." }, { status: 400 });
@@ -21,6 +23,63 @@ export async function POST(request: Request) {
   const user = await findUserByCredentials(email, password);
   if (!user) {
     return NextResponse.json({ error: "Invalid credentials." }, { status: 401 });
+  }
+
+  const forceStaffMfa =
+    String(process.env.FORCE_STAFF_MFA || (process.env.NODE_ENV === "production" ? "true" : "false")).toLowerCase() ===
+    "true";
+  const isStaff = user.userType === "staff";
+  if (isStaff && forceStaffMfa) {
+    if (!user.mfaEnabled || !String(user.mfaSecret || "").trim()) {
+      const preAuthToken = createPreAuthToken({
+        userId: user.id,
+        companyId: user.companyId,
+        purpose: "mfa_setup",
+        ttlSeconds: 15 * 60
+      });
+      return NextResponse.json(
+        {
+          error: "MFA setup required.",
+          mfaSetupRequired: true,
+          preAuthToken
+        },
+        { status: 403 }
+      );
+    }
+
+    if (!mfaCode) {
+      const preAuthToken = createPreAuthToken({
+        userId: user.id,
+        companyId: user.companyId,
+        purpose: "mfa_login",
+        ttlSeconds: 10 * 60
+      });
+      return NextResponse.json(
+        {
+          error: "MFA code required.",
+          mfaRequired: true,
+          preAuthToken
+        },
+        { status: 401 }
+      );
+    }
+
+    const ok = verifyTotp(String(user.mfaSecret || ""), mfaCode, { window: 1 });
+    if (!ok) {
+      await addAuditLog({
+        companyId: user.companyId,
+        actorUserId: user.id,
+        actorName: user.name,
+        action: "auth.mfa.failed",
+        resourceType: "user",
+        resourceId: user.id,
+        metadata: {
+          email: user.email,
+          ipAddress: ipAddress || "unknown"
+        }
+      });
+      return NextResponse.json({ error: "Invalid MFA code." }, { status: 401 });
+    }
   }
 
   const session = await createSessionWithContext(user, { ipAddress, userAgent });

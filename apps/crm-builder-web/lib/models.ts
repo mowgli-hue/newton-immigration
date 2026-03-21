@@ -213,6 +213,10 @@ export type AppUser = {
   userType: UserType;
   active?: boolean;
   password: string;
+  mfaEnabled?: boolean;
+  mfaSecret?: string;
+  mfaEnabledAt?: string;
+  mfaLastVerifiedAt?: string;
   workspaceDriveLink?: string;
   workspaceDriveFolderId?: string;
   caseId?: string;

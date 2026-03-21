@@ -89,6 +89,10 @@ async function loadFromNormalizedTables(): Promise<Partial<AppStore>> {
       userType: r.user_type,
       active: r.active !== false,
       password: r.password_hash,
+      mfaEnabled: Boolean(r.mfa_enabled),
+      mfaSecret: r.mfa_secret || undefined,
+      mfaEnabledAt: r.mfa_enabled_at ? toIso(r.mfa_enabled_at) : undefined,
+      mfaLastVerifiedAt: r.mfa_last_verified_at ? toIso(r.mfa_last_verified_at) : undefined,
       workspaceDriveLink: r.workspace_drive_link || undefined,
       workspaceDriveFolderId: r.workspace_drive_folder_id || undefined,
       caseId: r.case_id || undefined

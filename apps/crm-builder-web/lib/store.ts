@@ -114,7 +114,11 @@ function migrateStore(raw: Partial<AppStore>): AppStore {
         ? (u.userType === "client" ? "Client" : "Processing")
         : u.role,
     userType: u.userType ?? "staff",
-    active: u.active !== false
+    active: u.active !== false,
+    mfaEnabled: Boolean(u.mfaEnabled),
+    mfaSecret: u.mfaSecret ?? undefined,
+    mfaEnabledAt: u.mfaEnabledAt ?? undefined,
+    mfaLastVerifiedAt: u.mfaLastVerifiedAt ?? undefined
   }));
 
   const clients: ClientMaster[] = (raw.clients ?? []).map((c, idx) => ({
@@ -1681,6 +1685,27 @@ export async function resetUserPassword(companyId: string, userId: string, passw
   const idx = store.users.findIndex((u) => u.companyId === companyId && u.id === userId);
   if (idx === -1) return null;
   store.users[idx] = { ...store.users[idx], password: await hashPassword(password) };
+  await writeStore(store);
+  return store.users[idx];
+}
+
+export async function updateUserMfa(
+  companyId: string,
+  userId: string,
+  patch: { mfaEnabled?: boolean; mfaSecret?: string; mfaLastVerifiedAt?: string }
+): Promise<AppUser | null> {
+  const store = await readStore();
+  const idx = store.users.findIndex((u) => u.companyId === companyId && u.id === userId);
+  if (idx === -1) return null;
+  const current = store.users[idx];
+  const nextEnabled = patch.mfaEnabled !== undefined ? Boolean(patch.mfaEnabled) : Boolean(current.mfaEnabled);
+  store.users[idx] = {
+    ...current,
+    mfaEnabled: nextEnabled,
+    mfaSecret: patch.mfaSecret !== undefined ? patch.mfaSecret : current.mfaSecret,
+    mfaEnabledAt: nextEnabled ? (current.mfaEnabledAt || new Date().toISOString()) : undefined,
+    mfaLastVerifiedAt: patch.mfaLastVerifiedAt ?? current.mfaLastVerifiedAt
+  };
   await writeStore(store);
   return store.users[idx];
 }
