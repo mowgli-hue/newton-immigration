@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
-import { addTask, listTasks } from "@/lib/store";
+import { canStaffAccessCase } from "@/lib/rbac";
+import { addTask, listCases, listTasks } from "@/lib/store";
 
 export async function GET(request: NextRequest) {
   const user = await getCurrentUserFromRequest(request);
@@ -8,7 +9,14 @@ export async function GET(request: NextRequest) {
 
   const caseId = request.nextUrl.searchParams.get("caseId") || undefined;
   const tasks = await listTasks(user.companyId, caseId);
-  return NextResponse.json({ tasks });
+  if (user.userType !== "staff") return NextResponse.json({ tasks: [] });
+  const allCases = await listCases(user.companyId);
+  const allowedCaseIds = new Set(
+    allCases
+      .filter((c) => canStaffAccessCase(user.role, user.name, c.assignedTo))
+      .map((c) => c.id)
+  );
+  return NextResponse.json({ tasks: tasks.filter((t) => allowedCaseIds.has(t.caseId)) });
 }
 
 export async function POST(request: NextRequest) {

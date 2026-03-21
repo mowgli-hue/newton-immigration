@@ -43,3 +43,23 @@ export function canUseCommunications(role: Role): boolean {
   return role === "Admin" || role === "Marketing";
 }
 
+function normalize(value: string): string {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+export function isCaseAssignedToUser(assignedTo: string | undefined, userName: string): boolean {
+  const assigned = normalize(assignedTo || "");
+  const user = normalize(userName || "");
+  if (!assigned || assigned === "unassigned" || !user) return false;
+  if (assigned === user) return true;
+  return user.includes(assigned) || assigned.includes(user);
+}
+
+export function canStaffAccessCase(role: Role, userName: string, caseAssignedTo?: string): boolean {
+  if (role === "Client") return false;
+  if (role === "Processing") return isCaseAssignedToUser(caseAssignedTo, userName);
+  return true;
+}

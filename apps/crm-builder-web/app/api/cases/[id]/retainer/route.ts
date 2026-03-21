@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
+import { canStaffAccessCase, canUseCommunications } from "@/lib/rbac";
 import { getCase, signCaseRetainer, syncCaseAutomation, updateCaseRetainerSetup } from "@/lib/store";
 
 const SIGN_TYPES = new Set(["initials", "signature", "typed"]);
@@ -12,6 +13,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   if (!caseItem) return NextResponse.json({ error: "Case not found" }, { status: 404 });
   if (user.userType === "client" && user.caseId !== caseItem.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (user.userType === "staff") {
+    if (!canUseCommunications(user.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (!canStaffAccessCase(user.role, user.name, caseItem.assignedTo)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
   if (!caseItem.retainerSentAt) {
     return NextResponse.json({ error: "Retainer has not been sent yet." }, { status: 400 });
@@ -52,6 +59,12 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   const user = await getCurrentUserFromRequest(request);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (user.userType !== "staff") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!canUseCommunications(user.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const caseItem = await getCase(user.companyId, params.id);
+  if (!caseItem) return NextResponse.json({ error: "Case not found" }, { status: 404 });
+  if (!canStaffAccessCase(user.role, user.name, caseItem.assignedTo)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const body = await request.json().catch(() => ({}));
   const formType = body?.formType !== undefined ? String(body.formType) : undefined;

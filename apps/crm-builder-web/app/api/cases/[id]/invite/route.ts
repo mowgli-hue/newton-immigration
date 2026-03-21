@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
-import { createClientInvite, getLatestClientInviteForCase } from "@/lib/store";
+import { canStaffAccessCase, canUseCommunications } from "@/lib/rbac";
+import { createClientInvite, getCase, getLatestClientInviteForCase } from "@/lib/store";
 
 function baseUrlFromRequest(request: NextRequest) {
   const explicitBase = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_BASE_URL;
@@ -14,6 +15,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   const user = await getCurrentUserFromRequest(request);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (user.userType !== "staff") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!canUseCommunications(user.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const caseItem = await getCase(user.companyId, params.id);
+  if (!caseItem) return NextResponse.json({ error: "Case not found" }, { status: 404 });
+  if (!canStaffAccessCase(user.role, user.name, caseItem.assignedTo)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const body = await request.json().catch(() => ({}));
   const email = body?.email ? String(body.email).trim() : undefined;
@@ -37,6 +44,12 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   const user = await getCurrentUserFromRequest(request);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (user.userType !== "staff") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!canUseCommunications(user.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const caseItem = await getCase(user.companyId, params.id);
+  if (!caseItem) return NextResponse.json({ error: "Case not found" }, { status: 404 });
+  if (!canStaffAccessCase(user.role, user.name, caseItem.assignedTo)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const invite = await getLatestClientInviteForCase(user.companyId, params.id);
   if (!invite) return NextResponse.json({ invite: null, inviteUrl: "" });

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
+import { canStaffAccessCase } from "@/lib/rbac";
 import {
   addCaseDocRequest,
   addMessage,
@@ -18,6 +19,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   if (user.userType === "client" && user.caseId !== caseItem.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  if (user.userType === "staff" && !canStaffAccessCase(user.role, user.name, caseItem.assignedTo)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const requests = await listCaseDocRequests(user.companyId, params.id);
   return NextResponse.json({ requests });
@@ -30,6 +34,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
   const caseItem = await getCase(user.companyId, params.id);
   if (!caseItem) return NextResponse.json({ error: "Case not found" }, { status: 404 });
+  if (!canStaffAccessCase(user.role, user.name, caseItem.assignedTo)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const body = await request.json().catch(() => ({}));
   const title = String(body.title || "").trim();
@@ -74,6 +81,9 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   if (user.userType === "client" && user.caseId !== caseItem.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  if (user.userType === "staff" && !canStaffAccessCase(user.role, user.name, caseItem.assignedTo)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const body = await request.json().catch(() => ({}));
   const requestId = String(body.requestId || "").trim();
@@ -98,4 +108,3 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
   return NextResponse.json({ case: updated, requests: updated.docRequests ?? [] });
 }
-

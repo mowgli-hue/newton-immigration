@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
+import { canStaffAccessCase } from "@/lib/rbac";
 import { maybeAutoRunImm5710 } from "@/lib/imm5710-runner";
 import {
   addTask,
@@ -18,6 +19,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
   const caseItem = await getCase(user.companyId, params.id);
   if (!caseItem) return NextResponse.json({ error: "Case not found" }, { status: 404 });
+  if (!canStaffAccessCase(user.role, user.name, caseItem.assignedTo)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const formType = caseItem.formType.toLowerCase();
   if (!formType.includes("pgwp") && !formType.includes("imm5710")) {

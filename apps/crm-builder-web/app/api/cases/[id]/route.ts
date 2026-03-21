@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
 import { stageOrder } from "@/lib/data";
+import { canStaffAccessCase } from "@/lib/rbac";
 import { buildCaseFolderNameWithApp, createCaseDriveStructure, extractDriveFolderId } from "@/lib/google-drive";
 import { getCase, resolveCaseDriveRootLink, updateCaseLinks, updateCaseProcessing, updateCaseStage } from "@/lib/store";
 
@@ -17,6 +18,11 @@ export async function PATCH(
   }
 
   const body = await request.json().catch(() => ({}));
+  const currentCase = await getCase(user.companyId, params.id);
+  if (!currentCase) return NextResponse.json({ error: "Case not found" }, { status: 404 });
+  if (!canStaffAccessCase(user.role, user.name, currentCase.assignedTo)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   const stage = String(body.stage ?? "");
   const assignedTo = body?.assignedTo !== undefined ? String(body.assignedTo) : undefined;
   const processingStatusRaw = body?.processingStatus !== undefined ? String(body.processingStatus) : undefined;
@@ -92,6 +98,9 @@ export async function GET(
   }
 
   if (user.userType === "client" && user.caseId !== found.id) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (user.userType === "staff" && !canStaffAccessCase(user.role, user.name, found.assignedTo)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

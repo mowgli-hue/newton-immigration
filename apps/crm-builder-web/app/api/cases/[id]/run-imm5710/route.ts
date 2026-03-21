@@ -2,6 +2,7 @@ import { accessSync, constants } from "node:fs";
 import { join } from "node:path";
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
+import { canStaffAccessCase } from "@/lib/rbac";
 import { startImm5710Automation } from "@/lib/imm5710-runner";
 import { getCase, updateCaseImm5710Automation } from "@/lib/store";
 import { getDataDir } from "@/lib/storage-paths";
@@ -13,6 +14,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
   const caseItem = await getCase(user.companyId, params.id);
   if (!caseItem) return NextResponse.json({ error: "Case not found" }, { status: 404 });
+  if (!canStaffAccessCase(user.role, user.name, caseItem.assignedTo)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const readyPackagePath = join(getDataDir(), "ready_packages", `${caseItem.id}_pgwp.json`);
   try {

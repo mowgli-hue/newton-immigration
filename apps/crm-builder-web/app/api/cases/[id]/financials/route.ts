@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
-import { canUseAccounting } from "@/lib/rbac";
-import { addCaseMilestone, addInvoice, recordCasePayment, toggleMilestone, updateCaseFinancials } from "@/lib/store";
+import { canStaffAccessCase, canUseAccounting } from "@/lib/rbac";
+import { addCaseMilestone, addInvoice, getCase, recordCasePayment, toggleMilestone, updateCaseFinancials } from "@/lib/store";
 
 export async function PATCH(
   request: NextRequest,
@@ -11,6 +11,9 @@ export async function PATCH(
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (user.userType !== "staff") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   if (!canUseAccounting(user.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const caseItem = await getCase(user.companyId, params.id);
+  if (!caseItem) return NextResponse.json({ error: "Case not found" }, { status: 404 });
+  if (!canStaffAccessCase(user.role, user.name, caseItem.assignedTo)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await request.json().catch(() => ({}));
   const updated = await updateCaseFinancials(user.companyId, params.id, {
@@ -30,6 +33,9 @@ export async function POST(
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (user.userType !== "staff") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   if (!canUseAccounting(user.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const caseItem = await getCase(user.companyId, params.id);
+  if (!caseItem) return NextResponse.json({ error: "Case not found" }, { status: 404 });
+  if (!canStaffAccessCase(user.role, user.name, caseItem.assignedTo)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await request.json().catch(() => ({}));
   const actionRaw = String(body.action ?? "").trim();

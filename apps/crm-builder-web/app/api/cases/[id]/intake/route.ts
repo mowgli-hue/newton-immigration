@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { getCurrentUserFromRequest } from "@/lib/auth";
+import { canStaffAccessCase } from "@/lib/rbac";
 import { maybeAutoRunImm5710 } from "@/lib/imm5710-runner";
 import { buildReadyPackage, writeReadyPackageToDisk } from "@/lib/ready-package";
 import { getCase, listDocuments, syncCaseAutomation, updateCaseImm5710Automation, updateCasePgwpIntake } from "@/lib/store";
@@ -216,6 +217,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   if (user.userType === "client" && user.caseId !== caseItem.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  if (user.userType === "staff" && !canStaffAccessCase(user.role, user.name, caseItem.assignedTo)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   return NextResponse.json({ intake: caseItem.pgwpIntake ?? {}, formType: caseItem.formType });
 }
@@ -227,6 +231,9 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   const caseItem = await getCase(user.companyId, params.id);
   if (!caseItem) return NextResponse.json({ error: "Case not found" }, { status: 404 });
   if (user.userType === "client" && user.caseId !== caseItem.id) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (user.userType === "staff" && !canStaffAccessCase(user.role, user.name, caseItem.assignedTo)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

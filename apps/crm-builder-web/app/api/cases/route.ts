@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
-import { canCreateCase } from "@/lib/rbac";
+import { canCreateCase, canStaffAccessCase } from "@/lib/rbac";
 import { createCase, listCases, resolveCaseDriveRootLink, updateCaseLinks } from "@/lib/store";
 import { buildCaseFolderNameWithApp, createCaseDriveStructure, extractDriveFolderId } from "@/lib/google-drive";
 
@@ -20,8 +20,12 @@ export async function GET(request: NextRequest) {
   }
 
   const cases = await listCases(user.companyId);
+  const scopedCases =
+    user.userType === "staff"
+      ? cases.filter((c) => canStaffAccessCase(user.role, user.name, c.assignedTo))
+      : cases;
   return NextResponse.json({
-    cases,
+    cases: scopedCases,
     user: { id: user.id, role: user.role, name: user.name, userType: user.userType }
   });
 }
