@@ -479,6 +479,25 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       return candidate.includes(q);
     });
   }, [cases, viewRole, caseSearch, caseStatusFilter]);
+  const roleScopedCases = useMemo(() => filterCasesByRole(cases, viewRole), [cases, viewRole]);
+  const caseSearchSuggestions = useMemo(() => {
+    const q = caseSearch.trim().toLowerCase();
+    if (!q) return [] as CaseItem[];
+    const scored = roleScopedCases
+      .filter((c) => {
+        const candidate = `${c.id} ${c.client} ${c.formType} ${c.assignedTo || ""}`.toLowerCase();
+        return candidate.includes(q);
+      })
+      .sort((a, b) => {
+        const aNew = (a.caseStatus || "lead") === "lead" || (a.caseStatus || "lead") === "active";
+        const bNew = (b.caseStatus || "lead") === "lead" || (b.caseStatus || "lead") === "active";
+        if (aNew !== bNew) return aNew ? -1 : 1;
+        const aTs = new Date(a.updatedAt || a.createdAt || 0).getTime();
+        const bTs = new Date(b.updatedAt || b.createdAt || 0).getTime();
+        return bTs - aTs;
+      });
+    return scored.slice(0, 50);
+  }, [roleScopedCases, caseSearch]);
   const selectedCase = visibleCases.find((c) => c.id === selectedCaseId) ?? visibleCases[0] ?? null;
   const clientRelatedCases = useMemo(() => {
     if (!selectedCase) return [] as CaseItem[];
@@ -2825,6 +2844,25 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                         <option value="other">Other</option>
                       </select>
                     </div>
+                    {caseSearchSuggestions.length > 0 ? (
+                      <select
+                        className="mt-2 w-full rounded border border-slate-300 px-2 py-2 text-xs"
+                        defaultValue=""
+                        onChange={(e) => {
+                          const caseId = e.target.value;
+                          if (!caseId) return;
+                          setSelectedCaseId(caseId);
+                          setCaseBoardView("all_cases");
+                        }}
+                      >
+                        <option value="">Select from search results...</option>
+                        {caseSearchSuggestions.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.id} - {c.client} - {c.formType}
+                          </option>
+                        ))}
+                      </select>
+                    ) : null}
                   </div>
                   <div className="mt-2 grid max-h-[58vh] gap-2 overflow-auto pr-1">
                     {activeCaseBoardList.map((c) => (
