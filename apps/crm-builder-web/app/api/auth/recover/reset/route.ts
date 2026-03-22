@@ -24,20 +24,24 @@ export async function POST(request: Request) {
   const email = normalizeEmail(body.email);
   const password = String(body.password || "");
 
-  const limitCheck = await consumeAuthRateLimit({
-    key: `auth:recover:${ipAddress}`,
-    maxAttempts: Number(process.env.AUTH_RECOVERY_MAX_ATTEMPTS || 5),
-    windowSeconds: Number(process.env.AUTH_RECOVERY_WINDOW_SECONDS || 600)
-  });
-  if (!limitCheck.allowed) {
-    const response = NextResponse.json(
-      { error: "Too many recovery attempts. Please retry shortly." },
-      { status: 429 }
-    );
-    if (limitCheck.retryAfterSeconds) {
-      response.headers.set("Retry-After", String(limitCheck.retryAfterSeconds));
+  try {
+    const limitCheck = await consumeAuthRateLimit({
+      key: `auth:recover:${ipAddress}`,
+      maxAttempts: Number(process.env.AUTH_RECOVERY_MAX_ATTEMPTS || 5),
+      windowSeconds: Number(process.env.AUTH_RECOVERY_WINDOW_SECONDS || 600)
+    });
+    if (!limitCheck.allowed) {
+      const response = NextResponse.json(
+        { error: "Too many recovery attempts. Please retry shortly." },
+        { status: 429 }
+      );
+      if (limitCheck.retryAfterSeconds) {
+        response.headers.set("Retry-After", String(limitCheck.retryAfterSeconds));
+      }
+      return response;
     }
-    return response;
+  } catch {
+    // Keep recovery available even if rate-limit persistence is unavailable.
   }
 
   if (!token || token !== recoveryToken) {
@@ -66,18 +70,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  await addAuditLog({
-    companyId: updated.companyId,
-    actorUserId: "system",
-    actorName: "Recovery",
-    action: "auth.recovery_reset",
-    resourceType: "user",
-    resourceId: updated.id,
-    metadata: {
-      email: updated.email,
-      ipAddress
-    }
-  });
+  try {
+    await addAuditLog({
+      companyId: updated.companyId,
+      actorUserId: "system",
+      actorName: "Recovery",
+      action: "auth.recovery_reset",
+      resourceType: "user",
+      resourceId: updated.id,
+      metadata: {
+        email: updated.email,
+        ipAddress
+      }
+    });
+  } catch {
+    // Do not fail password recovery if audit persistence is temporarily unavailable.
+  }
 
   return NextResponse.json({ ok: true });
 }
