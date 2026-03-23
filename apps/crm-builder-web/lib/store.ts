@@ -1715,6 +1715,39 @@ export async function getUserById(companyId: string, userId: string): Promise<Ap
   return store.users.find((u) => u.companyId === companyId && u.id === userId) ?? null;
 }
 
+export async function getUserByEmail(email: string): Promise<AppUser | null> {
+  const store = await readStore();
+  const normalized = String(email || "").trim().toLowerCase();
+  if (!normalized) return null;
+  return store.users.find((u) => String(u.email || "").trim().toLowerCase() === normalized) ?? null;
+}
+
+export async function emergencyResetUserAccessByEmail(input: {
+  email: string;
+  password: string;
+  clearMfa?: boolean;
+  activate?: boolean;
+}): Promise<AppUser | null> {
+  const store = await readStore();
+  const normalized = String(input.email || "").trim().toLowerCase();
+  const idx = store.users.findIndex((u) => String(u.email || "").trim().toLowerCase() === normalized);
+  if (idx === -1) return null;
+  const current = store.users[idx];
+  const clearMfa = input.clearMfa !== false;
+  const activate = input.activate !== false;
+  store.users[idx] = {
+    ...current,
+    active: activate ? true : current.active,
+    password: await hashPassword(input.password),
+    mfaEnabled: clearMfa ? false : current.mfaEnabled,
+    mfaSecret: clearMfa ? undefined : current.mfaSecret,
+    mfaEnabledAt: clearMfa ? undefined : current.mfaEnabledAt,
+    mfaLastVerifiedAt: clearMfa ? undefined : current.mfaLastVerifiedAt
+  };
+  await writeStore(store);
+  return store.users[idx];
+}
+
 export async function setUserActive(
   companyId: string,
   userId: string,
@@ -2006,6 +2039,27 @@ export async function markNotificationRead(companyId: string, userId: string, id
   store.notifications[idx] = { ...store.notifications[idx], read: true };
   await writeStore(store);
   return store.notifications[idx];
+}
+
+export async function addNotification(input: {
+  companyId: string;
+  userId: string;
+  type: "deadline" | "missing_doc" | "ai_alert";
+  message: string;
+}): Promise<NotificationItem> {
+  const store = await readStore();
+  const notice: NotificationItem = {
+    id: `NTF-${store.notifications.length + 1}`,
+    companyId: input.companyId,
+    userId: input.userId,
+    type: input.type,
+    message: input.message,
+    read: false,
+    createdAt: new Date().toISOString()
+  };
+  store.notifications.unshift(notice);
+  await writeStore(store);
+  return notice;
 }
 
 export async function addAuditLog(input: {

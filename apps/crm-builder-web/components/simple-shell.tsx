@@ -470,6 +470,26 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   }, []);
 
   useEffect(() => {
+    if (!sessionUser || sessionUser.userType !== "staff") return;
+    let cancelled = false;
+    const tick = async () => {
+      const res = await apiFetch("/notifications", { cache: "no-store" });
+      if (!res.ok || cancelled) return;
+      const payload = await res.json().catch(() => ({}));
+      if (cancelled) return;
+      setNotifications((payload.notifications || []) as NotificationItem[]);
+    };
+    const timer = setInterval(() => {
+      void tick();
+    }, 20000);
+    void tick();
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [sessionUser?.id, sessionUser?.userType]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
     const token =
       new URLSearchParams(window.location.search).get("invite") ||

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
-import { createCase, listCases } from "@/lib/store";
+import { addNotification, createCase, listCases, listUsers } from "@/lib/store";
 
 type LeadRow = {
   name: string;
@@ -9,6 +9,18 @@ type LeadRow = {
   formType: string;
   sourceLeadKey: string;
 };
+
+function parseCsvUrls(input: unknown): string[] {
+  if (Array.isArray(input)) {
+    return input.map((x) => String(x || "").trim()).filter(Boolean);
+  }
+  const raw = String(input || "").trim();
+  if (!raw) return [];
+  return raw
+    .split(/[\n,;]+/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
 
 function normalizeHeaderName(name: string): string {
   return name.toLowerCase().trim().replace(/\s+/g, " ");
@@ -140,44 +152,55 @@ export async function POST(request: NextRequest) {
   if (user.userType !== "staff") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await request.json().catch(() => ({}));
-  const csvUrl =
-    String(body?.csvUrl || process.env.LEADS_SHEET_CSV_URL || process.env.NEXT_PUBLIC_LEADS_SHEET_CSV_URL || "").trim();
+  const csvUrls = [
+    ...parseCsvUrls(body?.csvUrls),
+    ...parseCsvUrls(body?.csvUrl),
+    ...parseCsvUrls(process.env.LEADS_SHEET_CSV_URLS),
+    ...parseCsvUrls(process.env.LEADS_SHEET_CSV_URL),
+    ...parseCsvUrls(process.env.NEXT_PUBLIC_LEADS_SHEET_CSV_URL)
+  ];
+  const uniqueCsvUrls = Array.from(new Set(csvUrls));
 
-  if (!csvUrl) {
+  if (uniqueCsvUrls.length === 0) {
     return NextResponse.json(
-      { error: "CSV URL required. Set LEADS_SHEET_CSV_URL or pass csvUrl in request body." },
+      { error: "CSV URL required. Set LEADS_SHEET_CSV_URL(S) or pass csvUrl/csvUrls in request body." },
       { status: 400 }
     );
   }
-
-  let csvText = "";
-  try {
-    const response = await fetch(csvUrl, { cache: "no-store" });
-    if (!response.ok) {
-      return NextResponse.json(
-        { error: `Could not fetch sheet CSV (${response.status}). Check sharing/export access.` },
-        { status: 400 }
-      );
+  const allRows: LeadRow[] = [];
+  for (const csvUrl of uniqueCsvUrls) {
+    try {
+      const response = await fetch(csvUrl, { cache: "no-store" });
+      if (!response.ok) {
+        continue;
+      }
+      const csvText = await response.text();
+      allRows.push(...buildLeadRows(csvText));
+    } catch {
+      continue;
     }
-    csvText = await response.text();
-  } catch {
-    return NextResponse.json({ error: "Could not fetch Google Sheet CSV URL." }, { status: 400 });
   }
-
-  const leadRows = buildLeadRows(csvText);
+  if (allRows.length === 0) {
+    return NextResponse.json({ error: "Could not fetch any Google Sheet CSV sources." }, { status: 400 });
+  }
+  const dedupRows = Array.from(
+    new Map(allRows.map((r) => [r.sourceLeadKey, r])).values()
+  );
   const existing = await listCases(user.companyId);
   const existingKeys = new Set(existing.map((c) => c.sourceLeadKey).filter(Boolean));
+  const staffUsers = await listUsers(user.companyId);
+  const activeStaff = staffUsers.filter((u) => u.userType === "staff" && u.active !== false);
 
   let createdCount = 0;
   let skippedCount = 0;
 
-  for (const row of leadRows) {
+  for (const row of dedupRows) {
     if (!row.sourceLeadKey || existingKeys.has(row.sourceLeadKey)) {
       skippedCount += 1;
       continue;
     }
 
-    await createCase({
+    const created = await createCase({
       companyId: user.companyId,
       client: row.name,
       formType: row.formType,
@@ -187,11 +210,23 @@ export async function POST(request: NextRequest) {
     });
     existingKeys.add(row.sourceLeadKey);
     createdCount += 1;
+    const alertMessage = `New case from Sheets: ${created.id} (${created.client} - ${created.formType}).`;
+    await Promise.all(
+      activeStaff.map((u) =>
+        addNotification({
+          companyId: user.companyId,
+          userId: u.id,
+          type: "ai_alert",
+          message: alertMessage
+        })
+      )
+    );
   }
 
   return NextResponse.json({
     ok: true,
-    sourceRows: leadRows.length,
+    sourceRows: dedupRows.length,
+    sourceCount: uniqueCsvUrls.length,
     created: createdCount,
     skipped: skippedCount
   });

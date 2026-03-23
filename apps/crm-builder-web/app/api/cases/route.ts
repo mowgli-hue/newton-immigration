@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
 import { canCreateCase, canStaffAccessCase } from "@/lib/rbac";
-import { addAuditLog, createCase, listCases, resolveCaseDriveRootLink, updateCaseLinks } from "@/lib/store";
+import {
+  addAuditLog,
+  addNotification,
+  createCase,
+  listCases,
+  listUsers,
+  resolveCaseDriveRootLink,
+  updateCaseLinks
+} from "@/lib/store";
 import { buildCaseFolderNameWithApp, createCaseDriveStructure, extractDriveFolderId } from "@/lib/google-drive";
 import { boundedText, isReasonablePhone, isValidEmail, normalizeEmail, normalizePhone } from "@/lib/validation";
 
@@ -104,6 +112,20 @@ export async function POST(request: NextRequest) {
       client: created.client
     }
   });
+  const staffUsers = await listUsers(user.companyId);
+  const alertMessage = `New case created: ${created.id} (${created.client} - ${created.formType}).`;
+  await Promise.all(
+    staffUsers
+      .filter((u) => u.userType === "staff" && u.active !== false)
+      .map((u) =>
+        addNotification({
+          companyId: user.companyId,
+          userId: u.id,
+          type: "ai_alert",
+          message: alertMessage
+        })
+      )
+  );
   const driveRootChoice = await resolveCaseDriveRootLink(user.companyId, created.id);
   const driveRoot = driveRootChoice.link || "";
   let drive: { linked: boolean; reason?: string; error?: string } = {
