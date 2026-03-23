@@ -2599,8 +2599,8 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
 
       {error ? <section className="rounded-xl border-2 border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</section> : null}
 
-      <section className="grid gap-4 lg:grid-cols-[220px_1fr]">
-        <aside className="rounded-2xl border-2 border-slate-300 bg-white p-3">
+      <section className="grid gap-4 lg:grid-cols-[220px_1fr] lg:items-start">
+        <aside className="rounded-2xl border-2 border-slate-300 bg-white p-3 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-auto">
           <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
             {company ? `${company.name} Workspace` : "Company Workspace"}
           </p>
