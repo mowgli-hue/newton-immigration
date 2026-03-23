@@ -8,8 +8,8 @@ type LoginViewProps = {
 };
 
 export function LoginView({ onLoginSuccess }: LoginViewProps) {
-  const [email, setEmail] = useState("admin@flowdesk.local");
-  const [password, setPassword] = useState("admin123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [mfaCode, setMfaCode] = useState("");
   const [preAuthToken, setPreAuthToken] = useState("");
   const [setupToken, setSetupToken] = useState("");
@@ -18,10 +18,7 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
   const [mfaStep, setMfaStep] = useState<"none" | "setup" | "verify">("none");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [showSignup, setShowSignup] = useState(false);
   const [inviteToken, setInviteToken] = useState("");
-  const [companyName, setCompanyName] = useState("");
-  const [adminName, setAdminName] = useState("");
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -118,36 +115,12 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
     }
   }
 
-  async function handleCompanySignup(event: FormEvent) {
-    event.preventDefault();
-    setError("");
-    setLoading(true);
-
-    try {
-      const response = await apiFetch("/companies/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ companyName, adminName, email, password })
-      });
-
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        setError(payload.error ?? "Company signup failed");
-        return;
-      }
-
-      await onLoginSuccess();
-    } finally {
-      setLoading(false);
-    }
-  }
-
   return (
     <section className="mx-auto w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-soft">
       <h1 className="text-xl font-semibold text-ink">Sign In</h1>
       <p className="mt-1 text-sm text-slate-600">Use your workspace account to open CRM simple mode.</p>
 
-      {!showSignup && mfaStep === "none" ? (
+      {mfaStep === "none" ? (
         <form className="mt-4 space-y-3" onSubmit={handleSubmit}>
           <label className="block text-sm">
             <span className="text-xs font-medium text-slate-600">Email</span>
@@ -183,7 +156,7 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
         </form>
       ) : null}
 
-      {!showSignup && mfaStep === "setup" ? (
+      {mfaStep === "setup" ? (
         <form className="mt-4 space-y-3" onSubmit={handleMfaEnable}>
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
             <p className="font-semibold text-slate-800">Set up MFA (Authenticator app)</p>
@@ -217,7 +190,7 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
         </form>
       ) : null}
 
-      {!showSignup && mfaStep === "verify" ? (
+      {mfaStep === "verify" ? (
         <form className="mt-4 space-y-3" onSubmit={handleMfaVerify}>
           <label className="block text-sm">
             <span className="text-xs font-medium text-slate-600">Authenticator code</span>
@@ -238,77 +211,7 @@ export function LoginView({ onLoginSuccess }: LoginViewProps) {
             {loading ? "Verifying..." : "Verify and Sign In"}
           </button>
         </form>
-      ) : (
-        <form className="mt-4 space-y-3" onSubmit={handleCompanySignup}>
-          <label className="block text-sm">
-            <span className="text-xs font-medium text-slate-600">Company Name</span>
-            <input
-              value={companyName}
-              onChange={(e) => setCompanyName(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
-              required
-            />
-          </label>
-          <label className="block text-sm">
-            <span className="text-xs font-medium text-slate-600">Admin Name</span>
-            <input
-              value={adminName}
-              onChange={(e) => setAdminName(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
-              required
-            />
-          </label>
-          <label className="block text-sm">
-            <span className="text-xs font-medium text-slate-600">Admin Email</span>
-            <input
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
-              type="email"
-              required
-            />
-          </label>
-          <label className="block text-sm">
-            <span className="text-xs font-medium text-slate-600">Password</span>
-            <input
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
-              type="password"
-              required
-            />
-          </label>
-
-          {error ? <p className="text-xs text-danger">{error}</p> : null}
-
-          <button
-            disabled={loading}
-            className="w-full rounded-lg bg-emerald-700 px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
-            type="submit"
-          >
-            {loading ? "Creating..." : "Create Company Account"}
-          </button>
-        </form>
-      )}
-
-      <button
-        onClick={() => {
-          setShowSignup((v) => !v);
-          setMfaStep("none");
-          setMfaCode("");
-          setPreAuthToken("");
-          setSetupToken("");
-          setError("");
-        }}
-        className="mt-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700"
-      >
-        {showSignup ? "Back to Sign In" : "Create New Company"}
-      </button>
-
-      <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-        Demo users: `admin@flowdesk.local` / `admin123`, `owner@flowdesk.local` / `owner123`,
-        `reviewer@flowdesk.local` / `reviewer123`, `client@flowdesk.local` / `client123`
-      </div>
+      ) : null}
 
       <div className="mt-3 rounded-lg border border-slate-200 p-3">
         <p className="text-xs font-semibold text-slate-600">Have client invite token?</p>
