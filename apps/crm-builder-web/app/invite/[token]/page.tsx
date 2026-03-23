@@ -58,7 +58,7 @@ export default function InvitePage({ params }: { params: { token: string } }) {
         return;
       }
       const slug = String(body?.company?.slug || "");
-      router.push(slug ? `/portal/${slug}` : "/");
+      router.push(slug ? `/portal/${slug}?client=1` : "/");
       router.refresh();
     } finally {
       setSubmitting(false);

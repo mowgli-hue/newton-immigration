@@ -389,6 +389,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     process.env.NEXT_PUBLIC_LEADS_SHEET_CSV_URL || ""
   );
   const [leadSyncStatus, setLeadSyncStatus] = useState("");
+  const [clientPortalAccess, setClientPortalAccess] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [isLocalRuntime, setIsLocalRuntime] = useState(true);
@@ -497,6 +498,12 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       new URLSearchParams(window.location.search).get("token");
     if (!token) return;
     window.location.replace(`/invite/${encodeURIComponent(token)}`);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    setClientPortalAccess(params.get("client") === "1");
   }, []);
 
   useEffect(() => {
@@ -2208,6 +2215,25 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
 
   // Client portal view
   if (sessionUser.userType === "client") {
+    if (!clientPortalAccess) {
+      return (
+        <main className="mx-auto flex max-w-5xl flex-col gap-4 px-4 py-6 md:px-6 md:py-8">
+          <Header {...headerProps} />
+          <section className="rounded-2xl border-2 border-amber-300 bg-amber-50 p-4">
+            <h2 className="text-lg font-semibold text-amber-900">Open Client Portal from Secure Link</h2>
+            <p className="mt-1 text-sm text-amber-900">
+              This URL is for staff workspace. Please open the secure client invite link sent by Newton Immigration.
+            </p>
+            <button
+              onClick={() => void logout()}
+              className="mt-3 rounded-lg border border-amber-700 bg-white px-3 py-2 text-sm font-semibold text-amber-900"
+            >
+              Sign Out
+            </button>
+          </section>
+        </main>
+      );
+    }
     const c = cases[0];
     const companyName = company?.name || "Your Company";
     const caseChecklist: RequiredDocItem[] = c ? getChecklistForFormType(c.formType) : [];
