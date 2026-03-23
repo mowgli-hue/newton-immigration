@@ -139,7 +139,7 @@ async function saveIntakeAnswersPdf(input: {
   caseId: string;
   intake: PgwpIntakeData;
 }): Promise<{ localPath: string; driveLink?: string }> {
-  const caseItem = await getCase(input.companyId, input.caseId);
+  let caseItem = await getCase(input.companyId, input.caseId);
   if (!caseItem) throw new Error("Case not found for intake PDF.");
 
   const lines: string[] = [
@@ -164,8 +164,28 @@ async function saveIntakeAnswersPdf(input: {
   const localPath = join(outDir, `${caseItem.id}_intake_answers.pdf`);
   await writeFile(localPath, pdf);
 
-  const driveFolderId = extractDriveFolderId(caseItem.applicationFormsLink || caseItem.docsUploadLink || "");
-  if (!driveFolderId) return { localPath };
+  let driveFolderId = extractDriveFolderId(caseItem.applicationFormsLink || caseItem.docsUploadLink || "");
+  if (!driveFolderId) {
+    const choice = await resolveCaseDriveRootLink(input.companyId, input.caseId);
+    const rootId = extractDriveFolderId(String(choice.link || ""));
+    if (rootId) {
+      const structure = await createCaseDriveStructure(
+        rootId,
+        buildCaseFolderNameWithApp(caseItem.id, caseItem.client, caseItem.formType)
+      );
+      await updateCaseLinks(input.companyId, input.caseId, {
+        docsUploadLink: structure.subfolders.clientDocuments.webViewLink,
+        applicationFormsLink: structure.subfolders.applicationForms.webViewLink,
+        submittedFolderLink: structure.subfolders.submitted.webViewLink,
+        correspondenceFolderLink: structure.subfolders.correspondence.webViewLink
+      });
+      caseItem = (await getCase(input.companyId, input.caseId)) || caseItem;
+      driveFolderId = structure.subfolders.applicationForms.id;
+    }
+  }
+  if (!driveFolderId) {
+    throw new Error("Drive folder is not linked for this case. Add Main Google Drive Link in Settings.");
+  }
 
   const uploaded = await uploadFileToDriveFolder({
     folderId: driveFolderId,
