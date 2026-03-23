@@ -22,6 +22,15 @@ import {
   extractDriveFolderId,
   uploadFileToDriveFolder
 } from "@/lib/google-drive";
+import {
+  buildS3ObjectKey,
+  fromS3StoredLink,
+  getSignedDownloadUrl,
+  isS3StorageEnabled,
+  isS3StoredLink,
+  putObjectToS3,
+  toS3StoredLink
+} from "@/lib/object-storage";
 
 function sanitizeFilename(name: string): string {
   const cleaned = name.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -76,7 +85,23 @@ export async function GET(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const documents = await listDocuments(user.companyId, params.id);
+  const documentsRaw = await listDocuments(user.companyId, params.id);
+  const documents = await Promise.all(
+    documentsRaw.map(async (d) => {
+      if (!isS3StoredLink(d.link)) return d;
+      try {
+        const key = fromS3StoredLink(d.link);
+        if (!key) return d;
+        const signedUrl = await getSignedDownloadUrl({
+          key,
+          expiresInSeconds: Number(process.env.S3_SIGNED_URL_EXPIRES || 300)
+        });
+        return { ...d, link: signedUrl };
+      } catch {
+        return d;
+      }
+    })
+  );
   await addAuditLog({
     companyId: user.companyId,
     actorUserId: user.id,
@@ -127,16 +152,37 @@ export async function POST(
       return NextResponse.json({ error: "File too large (max 25MB)." }, { status: 400 });
     }
 
+    const buffer = Buffer.from(await maybeFile.arrayBuffer());
     const original = sanitizeFilename(maybeFile.name || "document.bin");
     const finalName = `${Date.now()}_${original}`;
-    const caseFolder = join(process.cwd(), "public", "uploads", "cases", params.id);
-    await mkdir(caseFolder, { recursive: true });
-    const savePath = join(caseFolder, finalName);
-    const buffer = Buffer.from(await maybeFile.arrayBuffer());
-    await writeFile(savePath, buffer);
+    let finalLink = "";
+    if (isS3StorageEnabled()) {
+      const key = buildS3ObjectKey({
+        companyId: user.companyId,
+        caseId: params.id,
+        fileName: finalName
+      });
+      try {
+        await putObjectToS3({
+          key,
+          content: buffer,
+          contentType: maybeFile.type || "application/octet-stream"
+        });
+        finalLink = toS3StoredLink(key);
+      } catch (error) {
+        return NextResponse.json(
+          { error: `S3 upload failed: ${(error as Error).message}` },
+          { status: 500 }
+        );
+      }
+    } else {
+      const caseFolder = join(process.cwd(), "public", "uploads", "cases", params.id);
+      await mkdir(caseFolder, { recursive: true });
+      const savePath = join(caseFolder, finalName);
+      await writeFile(savePath, buffer);
+      finalLink = `/uploads/cases/${params.id}/${finalName}`;
+    }
 
-    const publicLink = `/uploads/cases/${params.id}/${finalName}`;
-    let finalLink = publicLink;
     let driveUpload: { success: boolean; reason?: string; error?: string; link?: string } = {
       success: false,
       reason: "not_attempted"
@@ -166,7 +212,7 @@ export async function POST(
           fileBuffer: buffer,
           mimeType: maybeFile.type || "application/octet-stream"
         });
-        finalLink = driveFile.webViewLink;
+        // Keep primary secure storage link (S3/local) in database and only mark Drive mirror status.
         driveUpload = { success: true, link: driveFile.webViewLink };
       } catch {
         // Keep local public link as fallback.
