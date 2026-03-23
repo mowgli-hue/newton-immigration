@@ -257,6 +257,10 @@ function questionnaireUrl(link: string | undefined, caseId: string) {
   return clean;
 }
 
+function clientAccessLinkFromPayload(payload: any) {
+  return String(payload?.portalInviteUrl || payload?.inviteUrl || "");
+}
+
 type SimpleShellProps = {
   expectedSlug?: string;
 };
@@ -458,6 +462,16 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
 
   useEffect(() => {
     void loadSession();
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const token =
+      new URLSearchParams(window.location.search).get("invite") ||
+      new URLSearchParams(window.location.search).get("invite_token") ||
+      new URLSearchParams(window.location.search).get("token");
+    if (!token) return;
+    window.location.replace(`/invite/${encodeURIComponent(token)}`);
   }, []);
 
   useEffect(() => {
@@ -714,7 +728,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     const res = await apiFetch(`/cases/${caseId}/invite`, { cache: "no-store" });
     const payload = await res.json().catch(() => ({}));
     if (!res.ok) return;
-    setInviteUrl(String(payload.inviteUrl || ""));
+    setInviteUrl(clientAccessLinkFromPayload(payload));
   }
 
   useEffect(() => {
@@ -1087,7 +1101,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       setInviteStatus(String(payload.error || "Could not create invite"));
       return;
     }
-    const url = String(payload.inviteUrl || "");
+    const url = clientAccessLinkFromPayload(payload);
     setInviteUrl(url);
     setInviteStatus("Invite link ready. Send this to client.");
     await logOutboundCommunication({
@@ -1329,7 +1343,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       return;
     }
 
-    const url = String(invitePayload.inviteUrl || "");
+    const url = clientAccessLinkFromPayload(invitePayload);
     setInviteUrl(url);
     setInviteStatus("Invite link generated.");
 
@@ -1456,8 +1470,8 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       body: JSON.stringify({ email: inviteEmail.trim() || undefined })
     });
     const invitePayload = await inviteRes.json().catch(() => ({}));
-    if (inviteRes.ok && invitePayload.inviteUrl) {
-      const generatedInviteUrl = String(invitePayload.inviteUrl);
+    const generatedInviteUrl = clientAccessLinkFromPayload(invitePayload);
+    if (inviteRes.ok && generatedInviteUrl) {
       setInviteUrl(generatedInviteUrl);
       setInviteStatus("Client link created.");
       setSetupStatus("Retainer + client link created. Send link to client.");

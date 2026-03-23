@@ -36,8 +36,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       email
     });
 
-    const inviteUrl = `${baseUrlFromRequest(request)}/invite/${invite.token}`;
-    return NextResponse.json({ invite, inviteUrl }, { status: 201 });
+    const base = baseUrlFromRequest(request);
+    const inviteUrl = `${base}/invite/${invite.token}`;
+    const portalInviteUrl = `${base}/portal/${company.slug}?invite=${invite.token}`;
+    return NextResponse.json({ invite, inviteUrl, portalInviteUrl }, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 400 });
   }
@@ -57,6 +59,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   const invite = await getLatestClientInviteForCase(user.companyId, params.id);
   if (!invite) return NextResponse.json({ invite: null, inviteUrl: "" });
 
-  const inviteUrl = `${baseUrlFromRequest(request)}/invite/${invite.token}`;
-  return NextResponse.json({ invite, inviteUrl });
+  const base = baseUrlFromRequest(request);
+  const inviteUrl = `${base}/invite/${invite.token}`;
+  const portalInviteUrl = `${base}/portal/${company.slug}?invite=${invite.token}`;
+  return NextResponse.json({ invite, inviteUrl, portalInviteUrl });
 }
