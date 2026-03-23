@@ -110,7 +110,7 @@ type DocRequestItem = {
   documentId?: string;
 };
 type CaseDetailTab = "overview" | "profile" | "documents" | "tasks" | "communication";
-type CaseBoardView = "home" | "new_cases" | "under_review_cases" | "urgent_cases" | "all_cases";
+type CaseBoardView = "home" | "new_cases" | "assigned_cases" | "under_review_cases" | "urgent_cases" | "all_cases";
 
 type PgwpDraft = {
   applicationType: "PGWP";
@@ -332,6 +332,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [diagnosticsReport, setDiagnosticsReport] = useState<DiagnosticsReport | null>(null);
   const [caseSearch, setCaseSearch] = useState("");
   const [caseStatusFilter, setCaseStatusFilter] = useState<"all" | "docs_pending" | "under_review" | "submitted" | "other">("all");
+  const [caseAssignedFilter, setCaseAssignedFilter] = useState<string>("all");
   const [accountingSearch, setAccountingSearch] = useState("");
   const [accountingPaymentFilter, setAccountingPaymentFilter] = useState<"all" | "pending" | "paid">("all");
   const [accountingAmount, setAccountingAmount] = useState<Record<string, string>>({});
@@ -422,7 +423,11 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       const casePayload = await caseRes.json();
       const loadedCases = casePayload.cases as CaseItem[];
       setCases(loadedCases);
-      if (loadedCases.length > 0) setSelectedCaseId((prev) => prev || loadedCases[0].id);
+      if (loadedCases.length > 0) {
+        setSelectedCaseId((prev) =>
+          prev && loadedCases.some((c) => c.id === prev) ? prev : ""
+        );
+      }
 
       const [taskRes, noticeRes] = await Promise.all([
         apiFetch("/tasks", { cache: "no-store" }),
@@ -513,7 +518,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       });
     return scored.slice(0, 50);
   }, [roleScopedCases, caseSearch]);
-  const selectedCase = visibleCases.find((c) => c.id === selectedCaseId) ?? visibleCases[0] ?? null;
+  const selectedCase = roleScopedCases.find((c) => c.id === selectedCaseId) ?? null;
   const clientRelatedCases = useMemo(() => {
     if (!selectedCase) return [] as CaseItem[];
     const scoped = cases.filter((c) => c.companyId === selectedCase.companyId);
@@ -546,7 +551,17 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     () =>
       visibleCases.filter((c) => {
         const status = c.caseStatus || "lead";
-        return status === "active" || status === "lead";
+        const isAssigned = String(c.assignedTo || "Unassigned") !== "Unassigned";
+        return (status === "active" || status === "lead") && !isAssigned;
+      }),
+    [visibleCases]
+  );
+  const assignedCasesList = useMemo(
+    () =>
+      visibleCases.filter((c) => {
+        const status = c.caseStatus || "lead";
+        const isAssigned = String(c.assignedTo || "Unassigned") !== "Unassigned";
+        return (status === "active" || status === "lead") && isAssigned;
       }),
     [visibleCases]
   );
@@ -563,10 +578,15 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   );
   const activeCaseBoardList = useMemo(() => {
     if (caseBoardView === "new_cases") return newCasesList;
+    if (caseBoardView === "assigned_cases") return assignedCasesList;
     if (caseBoardView === "under_review_cases") return underReviewCasesList;
     if (caseBoardView === "urgent_cases") return visibleCases.filter((c) => isUrgentCase(c));
     return visibleCases;
-  }, [caseBoardView, newCasesList, underReviewCasesList, visibleCases]);
+  }, [caseBoardView, newCasesList, assignedCasesList, underReviewCasesList, visibleCases]);
+  const activeCaseBoardListFiltered = useMemo(() => {
+    if (caseAssignedFilter === "all") return activeCaseBoardList;
+    return activeCaseBoardList.filter((c) => String(c.assignedTo || "Unassigned") === caseAssignedFilter);
+  }, [activeCaseBoardList, caseAssignedFilter]);
   const caseTasks = useMemo(
     () => (selectedCase ? tasks.filter((t) => t.caseId === selectedCase.id) : []),
     [tasks, selectedCase?.id]
@@ -2863,11 +2883,16 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
               {caseBoardView === "home" ? (
                 <>
                   <h3 className="text-base font-semibold">Case Screens</h3>
-                  <div className="mt-3 grid gap-3 md:grid-cols-4">
+                  <div className="mt-3 grid gap-3 md:grid-cols-5">
                     <button onClick={() => setCaseBoardView("new_cases")} className="rounded-xl border-2 border-slate-300 bg-white p-4 text-left">
                       <p className="text-xs text-slate-500">Queue</p>
                       <p className="mt-1 text-lg font-semibold">New Cases</p>
                       <p className="text-xs text-slate-500">{newCasesList.length} case(s)</p>
+                    </button>
+                    <button onClick={() => setCaseBoardView("assigned_cases")} className="rounded-xl border-2 border-slate-300 bg-white p-4 text-left">
+                      <p className="text-xs text-slate-500">Queue</p>
+                      <p className="mt-1 text-lg font-semibold">Assigned Cases</p>
+                      <p className="text-xs text-slate-500">{assignedCasesList.length} case(s)</p>
                     </button>
                     <button onClick={() => setCaseBoardView("under_review_cases")} className="rounded-xl border-2 border-slate-300 bg-white p-4 text-left">
                       <p className="text-xs text-slate-500">Queue</p>
@@ -2892,6 +2917,8 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                     <h3 className="text-base font-semibold">
                       {caseBoardView === "new_cases"
                         ? "New Cases"
+                        : caseBoardView === "assigned_cases"
+                          ? "Assigned Cases"
                         : caseBoardView === "under_review_cases"
                           ? "Under Review Cases"
                           : caseBoardView === "urgent_cases"
@@ -2903,13 +2930,25 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                     </button>
                   </div>
                   <div className="mt-3">
-                    <div className="grid gap-2 md:grid-cols-2">
+                    <div className="grid gap-2 md:grid-cols-3">
                       <input
                         value={caseSearch}
                         onChange={(e) => setCaseSearch(e.target.value)}
                         className="w-full rounded border border-slate-300 px-2 py-2 text-xs"
                         placeholder="Search by case id, client, application, assignee"
                       />
+                      <select
+                        value={caseAssignedFilter}
+                        onChange={(e) => setCaseAssignedFilter(e.target.value)}
+                        className="w-full rounded border border-slate-300 px-2 py-2 text-xs"
+                      >
+                        <option value="all">All assignees</option>
+                        {PROCESSING_TEAM_MEMBERS.filter((m) => m !== "Unassigned").map((member) => (
+                          <option key={member} value={member}>
+                            {member}
+                          </option>
+                        ))}
+                      </select>
                       <select
                         value={caseStatusFilter}
                         onChange={(e) =>
@@ -2947,7 +2986,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                     ) : null}
                   </div>
                   <div className="mt-2 grid max-h-[58vh] gap-2 overflow-auto pr-1">
-                    {activeCaseBoardList.map((c) => (
+                    {activeCaseBoardListFiltered.map((c) => (
                       <article
                         key={c.id}
                         className={`rounded-lg border p-3 text-left text-xs ${
@@ -3040,7 +3079,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                         </div>
                       </article>
                     ))}
-                    {activeCaseBoardList.length === 0 ? (
+                    {activeCaseBoardListFiltered.length === 0 ? (
                       <p className="text-xs text-slate-500">No cases in this screen.</p>
                     ) : null}
                   </div>
@@ -3420,7 +3459,11 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
 
                   </div>
                 </>
-              ) : null}
+              ) : (
+                <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+                  Select a case from the list first to open Case Detail and send client link.
+                </div>
+              )}
             </section>
           ) : null}
 
