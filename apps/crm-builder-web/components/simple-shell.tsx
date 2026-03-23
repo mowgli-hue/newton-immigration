@@ -1986,8 +1986,8 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   }
 
   async function signRetainer(caseId: string) {
-    if (!retainerName.trim() || !retainerSignatureValue.trim() || !retainerAccepted) {
-      setRetainerStatus("Enter name, signature/initials, and accept terms.");
+    if (!retainerAccepted) {
+      setRetainerStatus("Please accept terms to continue.");
       return;
     }
 
@@ -1995,9 +1995,9 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        signerName: retainerName.trim(),
-        signatureType: retainerSignatureType,
-        signatureValue: retainerSignatureValue.trim(),
+        signerName: sessionUser?.name || "Client",
+        signatureType: "typed",
+        signatureValue: "I AGREE",
         acceptedTerms: retainerAccepted
       })
     });
@@ -2307,20 +2307,13 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                     })()}.
                   </div>
                 ) : c.retainerSentAt ? (
-                  <div className="mt-3 grid gap-2 md:grid-cols-2">
-                    <input value={retainerName} onChange={(e) => setRetainerName(e.target.value)} className="rounded-lg border-2 border-slate-300 px-3 py-2 text-sm" placeholder="Full legal name" />
-                    <select value={retainerSignatureType} onChange={(e) => setRetainerSignatureType(e.target.value as "initials" | "signature" | "typed")} className="rounded-lg border-2 border-slate-300 px-3 py-2 text-sm">
-                      <option value="typed">Typed Name</option>
-                      <option value="initials">Initials</option>
-                      <option value="signature">Signature</option>
-                    </select>
-                    <input value={retainerSignatureValue} onChange={(e) => setRetainerSignatureValue(e.target.value)} className="rounded-lg border-2 border-slate-300 px-3 py-2 text-sm md:col-span-2" placeholder={retainerSignatureType === "initials" ? "Enter initials (e.g. JY)" : retainerSignatureType === "signature" ? "Type signature as you sign" : "Type your full name as e-sign"} />
-                    <label className="md:col-span-2 inline-flex items-center gap-2 text-sm text-slate-700">
+                  <div className="mt-3 grid gap-2">
+                    <label className="inline-flex items-center gap-2 text-sm text-slate-700">
                       <input type="checkbox" checked={retainerAccepted} onChange={(e) => setRetainerAccepted(e.target.checked)} />
                       I accept the retainer terms and authorize {companyName} to proceed.
                     </label>
-                    <button onClick={() => void signRetainer(c.id)} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white md:col-span-2">E-Sign Retainer</button>
-                    {retainerStatus ? <p className="md:col-span-2 text-xs text-slate-600">{retainerStatus}</p> : null}
+                    <button onClick={() => void signRetainer(c.id)} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white">I Agree and Continue</button>
+                    {retainerStatus ? <p className="text-xs text-slate-600">{retainerStatus}</p> : null}
                   </div>
                 ) : null}
               </section>
@@ -2521,21 +2514,25 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
             ) : null}
           </>
         ) : null}
-                <section className="rounded-2xl border-2 border-slate-500 bg-white p-4 shadow-sm">
-                  <h3 className="font-semibold">Contact Us</h3>
-          <p className="mt-1 text-sm text-slate-700">For case processing call at <span className="font-semibold">{processingSupportPhone}</span>.</p>
-          <a
-            href="https://www.franco.app"
-            target="_blank"
-            rel="noreferrer"
-            className="mt-3 inline-flex items-center gap-2 rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-xs text-slate-700"
-          >
-            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-[10px] font-bold text-white">
-              F
-            </span>
-            Want to learn French to smoothen your immigration journey? Visit franco.app
-          </a>
-        </section>
+            <section className="rounded-2xl border-2 border-slate-500 bg-white p-4 shadow-sm">
+              <h3 className="font-semibold">Contact Us</h3>
+              <p className="mt-1 text-sm text-slate-700">
+                For case processing call at <span className="font-semibold">{processingSupportPhone}</span>.
+              </p>
+            </section>
+            <a
+              href="https://www.franco.app"
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-2xl border-2 border-blue-300 bg-blue-50 p-4 shadow-sm"
+            >
+              <p className="text-base font-semibold text-blue-900">
+                Want to learn French for your immigration journey?
+              </p>
+              <p className="mt-1 text-sm text-blue-800">
+                Visit franco.app for structured French practice and support.
+              </p>
+            </a>
       </main>
     );
   }
@@ -2890,7 +2887,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                     </article>
                   ))}
                   {resultDocuments.length === 0 ? (
-                    <p className="text-xs text-slate-500">No results shared yet.</p>
+                    <p className="text-xs text-slate-500">Your application is processing. When there is an update, you will see it here.</p>
                   ) : null}
                 </div>
               </section>
