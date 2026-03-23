@@ -22,20 +22,24 @@ export async function POST(request: Request) {
   }
 
   const limiterKey = `auth:login:${email}:${ipAddress || "unknown"}`;
-  const limitCheck = await consumeAuthRateLimit({
-    key: limiterKey,
-    maxAttempts: Number(process.env.AUTH_LOGIN_MAX_ATTEMPTS || 8),
-    windowSeconds: Number(process.env.AUTH_LOGIN_WINDOW_SECONDS || 300)
-  });
-  if (!limitCheck.allowed) {
-    const response = NextResponse.json(
-      { error: "Too many login attempts. Please retry shortly." },
-      { status: 429 }
-    );
-    if (limitCheck.retryAfterSeconds) {
-      response.headers.set("Retry-After", String(limitCheck.retryAfterSeconds));
+  try {
+    const limitCheck = await consumeAuthRateLimit({
+      key: limiterKey,
+      maxAttempts: Number(process.env.AUTH_LOGIN_MAX_ATTEMPTS || 8),
+      windowSeconds: Number(process.env.AUTH_LOGIN_WINDOW_SECONDS || 300)
+    });
+    if (!limitCheck.allowed) {
+      const response = NextResponse.json(
+        { error: "Too many login attempts. Please retry shortly." },
+        { status: 429 }
+      );
+      if (limitCheck.retryAfterSeconds) {
+        response.headers.set("Retry-After", String(limitCheck.retryAfterSeconds));
+      }
+      return response;
     }
-    return response;
+  } catch {
+    // Keep authentication available even if rate-limit persistence is unavailable.
   }
 
   const user = await findUserByCredentials(email, password);
@@ -101,7 +105,11 @@ export async function POST(request: Request) {
   }
 
   const session = await createSessionWithContext(user, { ipAddress, userAgent });
-  await clearAuthRateLimit(limiterKey);
+  try {
+    await clearAuthRateLimit(limiterKey);
+  } catch {
+    // Ignore clear failures if auth rate-limit table is unavailable.
+  }
   const company = await findCompanyById(user.companyId);
   const response = NextResponse.json({
     user: {
@@ -115,19 +123,23 @@ export async function POST(request: Request) {
   });
 
   applySessionCookie(response, session.token);
-  await addAuditLog({
-    companyId: user.companyId,
-    actorUserId: user.id,
-    actorName: user.name,
-    action: "auth.login",
-    resourceType: "case",
-    resourceId: user.id,
-    metadata: {
-      email: user.email,
-      userType: user.userType,
-      ipAddress: ipAddress || "unknown"
-    }
-  });
+  try {
+    await addAuditLog({
+      companyId: user.companyId,
+      actorUserId: user.id,
+      actorName: user.name,
+      action: "auth.login",
+      resourceType: "case",
+      resourceId: user.id,
+      metadata: {
+        email: user.email,
+        userType: user.userType,
+        ipAddress: ipAddress || "unknown"
+      }
+    });
+  } catch {
+    // Ignore audit failures to avoid blocking login.
+  }
 
   return response;
 }
