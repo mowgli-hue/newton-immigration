@@ -1535,7 +1535,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       setAccountingStatus("Enter a valid paid amount.");
       return;
     }
-    setAccountingStatus("Recording payment...");
+    setAccountingStatus("Recording received amount...");
     const res = await apiFetch(`/cases/${caseId}/financials`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1546,10 +1546,38 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       setAccountingStatus(String(payload.error || "Could not record payment."));
       return;
     }
-    const updated = payload.case as CaseItem;
+    let updated = payload.case as CaseItem;
     setCases((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
     setAccountingAmount((prev) => ({ ...prev, [caseId]: "" }));
-    setAccountingStatus(`Payment recorded for ${updated.id}.`);
+    const total = Number(updated.servicePackage?.retainerAmount || updated.totalCharges || 0);
+    const paid = Number((updated as CaseItem & { amountPaid?: number }).amountPaid || 0);
+    const remaining = Math.max(0, total - paid);
+
+    if (remaining > 0) {
+      setAccountingStatus(
+        `Amount recorded for ${updated.id}. Remaining $${remaining}. Payment stays pending until full amount is received.`
+      );
+      return;
+    }
+
+    setAccountingStatus("Amount recorded. Confirming full payment...");
+    const confirmRes = await apiFetch(`/cases/${caseId}/retainer`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paymentStatus: "paid" })
+    });
+    const confirmPayload = await confirmRes.json().catch(() => ({}));
+    if (!confirmRes.ok) {
+      setAccountingStatus(
+        `Amount recorded for ${updated.id}, but could not mark paid: ${String(
+          confirmPayload.error || "unknown error"
+        )}`
+      );
+      return;
+    }
+    updated = confirmPayload.case as CaseItem;
+    setCases((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+    setAccountingStatus(`Payment confirmed for ${updated.id}.`);
   }
 
   async function createDriveFolderForCase() {
@@ -3849,13 +3877,13 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                               }))
                             }
                             className="w-44 rounded border border-slate-300 px-2 py-2 text-xs"
-                            placeholder="Amount received now"
+                            placeholder="Amount received"
                           />
                           <button
                             onClick={() => void recordAccountingPayment(c.id)}
                             className="rounded bg-emerald-600 px-3 py-2 text-xs font-semibold text-white"
                           >
-                            Record Payment
+                            Confirm Payment
                           </button>
                         </div>
                       </article>
