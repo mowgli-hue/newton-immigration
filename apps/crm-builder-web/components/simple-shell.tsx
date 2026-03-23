@@ -310,7 +310,6 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [retainerName, setRetainerName] = useState("");
   const [retainerSignatureType, setRetainerSignatureType] = useState<"initials" | "signature" | "typed">("typed");
   const [retainerSignatureValue, setRetainerSignatureValue] = useState("");
-  const [retainerAccepted, setRetainerAccepted] = useState(false);
   const [retainerStatus, setRetainerStatus] = useState("");
   const [commClientName, setCommClientName] = useState("");
   const [commFormType, setCommFormType] = useState("PGWP");
@@ -1993,11 +1992,6 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   }
 
   async function signRetainer(caseId: string) {
-    if (!retainerAccepted) {
-      setRetainerStatus("Please accept terms to continue.");
-      return;
-    }
-
     const res = await apiFetch(`/cases/${caseId}/retainer`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2005,7 +1999,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
         signerName: sessionUser?.name || "Client",
         signatureType: "typed",
         signatureValue: "I AGREE",
-        acceptedTerms: retainerAccepted
+        acceptedTerms: true
       })
     });
     const payload = await res.json().catch(() => ({}));
@@ -2334,10 +2328,6 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                   </div>
                 ) : c.retainerSentAt ? (
                   <div className="mt-3 grid gap-2">
-                    <label className="inline-flex items-center gap-2 text-sm text-slate-700">
-                      <input type="checkbox" checked={retainerAccepted} onChange={(e) => setRetainerAccepted(e.target.checked)} />
-                      I accept the retainer terms and authorize {companyName} to proceed.
-                    </label>
                     <button onClick={() => void signRetainer(c.id)} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white">I Agree and Continue</button>
                     {retainerStatus ? <p className="text-xs text-slate-600">{retainerStatus}</p> : null}
                   </div>
