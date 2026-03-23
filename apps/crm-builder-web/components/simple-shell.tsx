@@ -3570,69 +3570,6 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                 </article>
 
                 <article className="rounded-lg border-2 border-slate-300 p-3">
-                  <p className="text-sm font-semibold">Payment Confirmation</p>
-                  <p className="mt-1 text-xs text-slate-500">Search case and confirm Interac payment here.</p>
-                  <div className="mt-2 grid gap-2 md:grid-cols-2">
-                    <input
-                      value={commSearch}
-                      onChange={(e) => setCommSearch(e.target.value)}
-                      placeholder="Search by case ID, client name, or application type"
-                      className="w-full rounded border border-slate-300 px-2 py-2 text-xs"
-                    />
-                    <select
-                      value={commPaymentFilter}
-                      onChange={(e) => setCommPaymentFilter(e.target.value as "all" | "pending" | "paid")}
-                      className="w-full rounded border border-slate-300 px-2 py-2 text-xs"
-                    >
-                      <option value="all">All payments</option>
-                      <option value="pending">Pending only</option>
-                      <option value="paid">Paid only</option>
-                    </select>
-                  </div>
-                  <div className="mt-2 max-h-48 space-y-2 overflow-auto rounded border border-slate-200 p-2">
-                    {communicationSearchList.map((c) => (
-                      <div key={c.id} className="rounded border border-slate-200 p-2 text-xs">
-                        {(() => {
-                          const total = Number(c.servicePackage?.retainerAmount || 0);
-                          const paid = Number(c.amountPaid || 0);
-                          const remaining = Math.max(0, total - paid);
-                          const status = remaining <= 0 && total > 0 ? "paid" : c.paymentStatus || "pending";
-                          return (
-                            <>
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <button
-                            onClick={() => setSelectedCaseId(c.id)}
-                            className="font-semibold text-blue-700 underline"
-                          >
-                            {c.id} - {c.client}
-                          </button>
-                          <span className={`rounded px-2 py-1 text-[10px] font-semibold ${status === "paid" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
-                            {status}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-slate-500">{c.formType}</p>
-                        <p className="mt-1 text-slate-500">Paid ${paid} / Total ${total} / Remaining ${remaining}</p>
-                        {status !== "paid" ? (
-                          <button
-                            onClick={() => void confirmInteracReceivedForCase(c.id, "communications")}
-                            className="mt-2 rounded bg-emerald-600 px-2 py-1 font-semibold text-white"
-                          >
-                            Confirm Payment
-                          </button>
-                        ) : null}
-                            </>
-                          );
-                        })()}
-                      </div>
-                    ))}
-                    {communicationSearchList.length === 0 ? (
-                      <p className="text-xs text-slate-500">No matching cases found.</p>
-                    ) : null}
-                  </div>
-                  {commPaymentStatus ? <p className="mt-2 text-xs text-slate-700">{commPaymentStatus}</p> : null}
-                </article>
-
-                <article className="rounded-lg border-2 border-slate-300 p-3">
                   <p className="text-sm font-semibold">Create Case</p>
                   <p className="mt-1 text-xs text-slate-500">Create a new client case before generating invite/payment link.</p>
                   <div className="mt-2 grid gap-2 md:grid-cols-7">
