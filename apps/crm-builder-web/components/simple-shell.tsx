@@ -2299,7 +2299,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                 </button>
                 {!c.retainerSentAt ? (
                   <div className="mt-3 rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
-                    Retainer has not been sent by team yet.
+                    Retainer auto-enabled for this secure invite.
                   </div>
                 ) : null}
                 <div className="mt-3 max-h-72 overflow-auto rounded border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-700">
@@ -2326,12 +2326,12 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                       return signedBy.toLowerCase() === c.client.toLowerCase() ? signedBy : c.client;
                     })()}.
                   </div>
-                ) : c.retainerSentAt ? (
+                ) : (
                   <div className="mt-3 grid gap-2">
                     <button onClick={() => void signRetainer(c.id)} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white">I Agree and Continue</button>
                     {retainerStatus ? <p className="text-xs text-slate-600">{retainerStatus}</p> : null}
                   </div>
-                ) : null}
+                )}
               </section>
             ) : null}
 
