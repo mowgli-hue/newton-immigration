@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
 import { canStaffAccessCase, canUseCommunications } from "@/lib/rbac";
-import { createClientInvite, getCase, getLatestClientInviteForCase } from "@/lib/store";
+import { createClientInvite, findCompanyById, getCase, getLatestClientInviteForCase } from "@/lib/store";
 
 function baseUrlFromRequest(request: NextRequest) {
   const preferRequestHost =
@@ -29,6 +29,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   const email = body?.email ? String(body.email).trim() : undefined;
 
   try {
+    const company = await findCompanyById(user.companyId);
+    if (!company) return NextResponse.json({ error: "Company not found" }, { status: 404 });
+
     const invite = await createClientInvite({
       companyId: user.companyId,
       caseId: params.id,
@@ -58,6 +61,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
   const invite = await getLatestClientInviteForCase(user.companyId, params.id);
   if (!invite) return NextResponse.json({ invite: null, inviteUrl: "" });
+  const company = await findCompanyById(user.companyId);
+  if (!company) return NextResponse.json({ error: "Company not found" }, { status: 404 });
 
   const base = baseUrlFromRequest(request);
   const inviteUrl = `${base}/invite/${invite.token}`;
