@@ -1,14 +1,10 @@
 import { randomUUID } from "node:crypto";
+import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const STORAGE_BACKEND = String(process.env.STORAGE_BACKEND || "local").toLowerCase();
 
 let s3Client: any = null;
-let awsModulesPromise: Promise<{
-  S3Client: any;
-  PutObjectCommand: any;
-  GetObjectCommand: any;
-  getSignedUrl: (client: any, command: any, options: { expiresIn: number }) => Promise<string>;
-}> | null = null;
 
 export function isS3StorageEnabled() {
   return STORAGE_BACKEND === "s3";
@@ -20,31 +16,8 @@ function requiredEnv(name: string) {
   return value;
 }
 
-async function loadAwsModules() {
-  if (!awsModulesPromise) {
-    const s3Pkg = "@aws-sdk/client-s3";
-    const signerPkg = "@aws-sdk/s3-request-presigner";
-    awsModulesPromise = Promise.all([import(s3Pkg), import(signerPkg)])
-      .then(([s3, signer]) => ({
-        S3Client: (s3 as any).S3Client,
-        PutObjectCommand: (s3 as any).PutObjectCommand,
-        GetObjectCommand: (s3 as any).GetObjectCommand,
-        getSignedUrl: (signer as any).getSignedUrl
-      }))
-      .catch((error) => {
-        throw new Error(
-          `S3 SDK packages are missing. Install @aws-sdk/client-s3 and @aws-sdk/s3-request-presigner. ${String(
-            (error as Error)?.message || ""
-          )}`.trim()
-        );
-      });
-  }
-  return awsModulesPromise;
-}
-
 async function getS3Client() {
   if (!s3Client) {
-    const { S3Client } = await loadAwsModules();
     const region = requiredEnv("S3_REGION");
     const accessKeyId = requiredEnv("S3_ACCESS_KEY_ID");
     const secretAccessKey = requiredEnv("S3_SECRET_ACCESS_KEY");
@@ -92,7 +65,6 @@ export async function putObjectToS3(input: {
   content: Buffer;
   contentType?: string;
 }) {
-  const { PutObjectCommand } = await loadAwsModules();
   const client = await getS3Client();
   const bucket = getS3Bucket();
   await client.send(
@@ -110,7 +82,6 @@ export async function getSignedUploadUrl(input: {
   contentType?: string;
   expiresInSeconds?: number;
 }) {
-  const { PutObjectCommand, getSignedUrl } = await loadAwsModules();
   const client = await getS3Client();
   const bucket = getS3Bucket();
   const command = new PutObjectCommand({
@@ -126,7 +97,6 @@ export async function getSignedDownloadUrl(input: {
   key: string;
   expiresInSeconds?: number;
 }) {
-  const { GetObjectCommand, getSignedUrl } = await loadAwsModules();
   const client = await getS3Client();
   const bucket = getS3Bucket();
   const command = new GetObjectCommand({
