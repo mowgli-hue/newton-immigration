@@ -20,10 +20,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
   }
-  if (!caseItem.retainerSentAt) {
-    return NextResponse.json({ error: "Retainer has not been sent yet." }, { status: 400 });
-  }
-
   const body = await request.json().catch(() => ({}));
   const signerName = String(body.signerName ?? "").trim();
   const signatureType = String(body.signatureType ?? "typed").trim();

@@ -1250,12 +1250,12 @@ export async function signCaseRetainer(input: {
   const store = await readStore();
   const idx = store.cases.findIndex((c) => c.companyId === input.companyId && c.id === input.caseId);
   if (idx === -1) return null;
-  if (!store.cases[idx].retainerSentAt) return null;
   if (store.cases[idx].retainerSigned) return store.cases[idx];
 
   store.cases[idx] = {
     ...store.cases[idx],
     updatedAt: new Date().toISOString(),
+    retainerSentAt: store.cases[idx].retainerSentAt || new Date().toISOString(),
     retainerSigned: true,
     retainerRecord: {
       signedAt: new Date().toISOString(),
