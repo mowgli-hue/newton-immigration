@@ -162,16 +162,10 @@ const EMPTY_FORM: IntakeForm = {
 
 const APPLICATION_PROMPTS: Record<string, string[]> = {
   pgwp: [
-    "Have you used any other name? (Yes/No, details if yes)",
-    "Current marital status",
-    "If married/common-law: spouse full name and date of marriage",
-    "Any previous marriage/common-law? (details if yes)",
-    "Current mailing address and phone number",
-    "Date/place/purpose of first entry to Canada",
     "Any recent entry to Canada? (date + reason)",
-    "Any refusal, criminal history, or medical history? (details if yes)",
-    "Employment history (include foreign experience)",
-    "Education after 12th (if any)"
+    "Any gaps, breaks, or part-time semesters during studies? (explain)",
+    "Previous colleges attended in Canada (if any)",
+    "Any academic probation or transfer history? (explain)"
   ],
   trv_inside: [
     "Have you used any other name? (Yes/No, details if yes)",
