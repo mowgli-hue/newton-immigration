@@ -15,9 +15,8 @@ export async function POST(request: Request, { params }: { params: { token: stri
   const email =
     emailRaw ||
     `client-${params.token.slice(0, 8)}-${Date.now()}@flowdesk.local`;
-  const password =
-    passwordRaw ||
-    `fd_${params.token.slice(0, 10)}_${Math.random().toString(36).slice(2, 10)}`;
+  const autoPassword = `Fd${params.token.slice(0, 6)}A${Math.floor(1000 + Math.random() * 9000)}z`;
+  const password = passwordRaw || autoPassword;
   const strength = validatePasswordStrength(password);
   if (!strength.ok) {
     return NextResponse.json({ error: strength.reason || "Weak password." }, { status: 400 });
