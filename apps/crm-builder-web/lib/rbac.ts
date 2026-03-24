@@ -5,13 +5,14 @@ export type AppScreen =
   | "cases"
   | "communications"
   | "results"
+  | "submission"
   | "accounting"
   | "tasks"
   | "chat"
   | "files";
 
 const STAFF_ROLE_TAB_ACCESS: Record<Exclude<Role, "Client">, AppScreen[]> = {
-  Admin: ["dashboard", "cases", "communications", "results", "accounting", "tasks", "chat", "files"],
+  Admin: ["dashboard", "cases", "communications", "results", "submission", "accounting", "tasks", "chat", "files"],
   Marketing: ["dashboard", "communications", "results", "accounting"],
   Processing: ["dashboard", "cases", "tasks", "files", "chat"],
   ProcessingLead: ["dashboard", "cases", "tasks", "files", "chat"],

@@ -35,6 +35,10 @@ export async function PATCH(
   ) as "docs_pending" | "under_review" | "submitted" | "other" | undefined;
   const processingStatusOther =
     body?.processingStatusOther !== undefined ? boundedText(body.processingStatusOther, 200) : undefined;
+  const applicationNumber =
+    body?.applicationNumber !== undefined ? boundedText(body.applicationNumber, 120) : undefined;
+  const submittedAt =
+    body?.submittedAt !== undefined ? String(body.submittedAt) : undefined;
   const finalOutcomeRaw = body?.finalOutcome !== undefined ? String(body.finalOutcome).trim().toLowerCase() : undefined;
   const finalOutcome = (
     finalOutcomeRaw &&
@@ -50,6 +54,8 @@ export async function PATCH(
     assignedTo !== undefined ||
     processingStatus !== undefined ||
     processingStatusOther !== undefined ||
+    applicationNumber !== undefined ||
+    submittedAt !== undefined ||
     finalOutcome !== undefined ||
     decisionDate !== undefined ||
     remarks !== undefined
@@ -58,6 +64,8 @@ export async function PATCH(
       assignedTo,
       processingStatus,
       processingStatusOther,
+      applicationNumber,
+      submittedAt,
       finalOutcome,
       decisionDate,
       remarks

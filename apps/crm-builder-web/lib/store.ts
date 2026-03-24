@@ -17,9 +17,11 @@ import {
   NotificationItem,
   OutboundMessageItem,
   PgwpIntakeData,
+  Role,
   Session,
   Stage,
-  TaskItem
+  TaskItem,
+  UserType
 } from "@/lib/models";
 import { sampleCases, seedCompany, seedUsers } from "@/lib/data";
 import { getMissingChecklistDocs } from "@/lib/application-checklists";
@@ -82,6 +84,22 @@ const defaultStore: AppStore = {
   invites: []
 };
 
+function normalizeRuntimeRole(value: unknown): Role {
+  const v = String(value || "").trim().toLowerCase();
+  if (v === "admin") return "Admin";
+  if (v === "marketing") return "Marketing";
+  if (v === "processing") return "Processing";
+  if (v === "processinglead" || v === "processing lead") return "ProcessingLead";
+  if (v === "reviewer") return "Reviewer";
+  if (v === "client") return "Client";
+  return "Processing";
+}
+
+function normalizeRuntimeUserType(value: unknown): UserType {
+  const v = String(value || "").trim().toLowerCase();
+  return v === "client" ? "client" : "staff";
+}
+
 function normalizeClientCode(value: string) {
   const trimmed = String(value || "").trim().toUpperCase();
   if (!/^CLT-\d+$/.test(trimmed)) return "";
@@ -111,9 +129,9 @@ function migrateStore(raw: Partial<AppStore>): AppStore {
     companyId: u.companyId ?? companies[0].id,
     role:
       u.role === "Owner"
-        ? (u.userType === "client" ? "Client" : "Processing")
-        : u.role,
-    userType: u.userType ?? "staff",
+        ? (normalizeRuntimeUserType(u.userType) === "client" ? "Client" : "Processing")
+        : normalizeRuntimeRole(u.role),
+    userType: normalizeRuntimeUserType(u.userType),
     active: u.active !== false,
     mfaEnabled: Boolean(u.mfaEnabled),
     mfaSecret: u.mfaSecret ?? undefined,
@@ -220,6 +238,7 @@ function migrateStore(raw: Partial<AppStore>): AppStore {
           : "Send Interac e-Transfer with case number."),
       paymentStatus: c.paymentStatus ?? (c.retainerSigned ? "paid" : "pending"),
       paymentPaidAt: c.paymentPaidAt ?? undefined,
+      applicationNumber: c.applicationNumber ?? undefined,
       submittedAt: c.submittedAt ?? undefined,
       decisionDate: c.decisionDate ?? undefined,
       finalOutcome: c.finalOutcome ?? undefined,
@@ -883,6 +902,7 @@ export async function resetCompanyDataToSingleCase(input: {
     interacInstructions: "Send Interac e-Transfer with case number.",
     paymentStatus: "pending",
     amountPaid: 0,
+    applicationNumber: undefined,
     totalCharges: 0,
     irccFees: 0,
     irccFeePayer: "client_card",
@@ -1362,6 +1382,8 @@ export async function updateCaseProcessing(
     assignedTo?: string;
     processingStatus?: "docs_pending" | "under_review" | "submitted" | "other";
     processingStatusOther?: string;
+    applicationNumber?: string;
+    submittedAt?: string;
     finalOutcome?: "approved" | "refused" | "request_letter" | "withdrawn";
     decisionDate?: string;
     remarks?: string;
@@ -1378,12 +1400,31 @@ export async function updateCaseProcessing(
       ? (patch.processingStatusOther ?? current.processingStatusOther ?? "").trim() || undefined
       : undefined;
 
+  const nextStageFromProcessing =
+    nextStatus === "submitted"
+      ? "Submitted"
+      : nextStatus === "under_review"
+        ? "Under Review"
+        : nextStatus === "docs_pending"
+          ? "Assigned"
+          : current.stage;
+
   store.cases[idx] = {
     ...current,
     assignedTo:
       patch.assignedTo !== undefined ? patch.assignedTo.trim() || "Unassigned" : current.assignedTo,
     processingStatus: nextStatus,
     processingStatusOther: nextOther,
+    applicationNumber:
+      patch.applicationNumber !== undefined
+        ? patch.applicationNumber.trim() || undefined
+        : current.applicationNumber,
+    submittedAt:
+      patch.submittedAt !== undefined
+        ? patch.submittedAt.trim() || undefined
+        : nextStatus === "submitted"
+          ? current.submittedAt ?? new Date().toISOString()
+          : current.submittedAt,
     finalOutcome: patch.finalOutcome !== undefined ? patch.finalOutcome : current.finalOutcome,
     decisionDate:
       patch.decisionDate !== undefined
@@ -1393,8 +1434,11 @@ export async function updateCaseProcessing(
       patch.remarks !== undefined
         ? (patch.remarks.trim() || undefined)
         : current.remarks,
+    stage: patch.finalOutcome ? "Decision" : nextStageFromProcessing,
     updatedAt: new Date().toISOString()
   };
+
+  store.cases[idx].caseStatus = inferCaseStatusFromStage(store.cases[idx].stage);
 
   await writeStore(store);
   return store.cases[idx];

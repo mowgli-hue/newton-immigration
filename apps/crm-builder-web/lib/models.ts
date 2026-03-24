@@ -149,6 +149,7 @@ export type CaseItem = {
   interacInstructions?: string;
   paymentStatus?: "pending" | "paid" | "not_required";
   paymentPaidAt?: string;
+  applicationNumber?: string;
   amountPaid?: number;
   totalCharges?: number;
   irccFees?: number;

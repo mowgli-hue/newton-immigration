@@ -239,6 +239,7 @@ const tabs: { id: Screen; label: string; icon: ReactNode }[] = [
   { id: "cases", label: "Cases", icon: <Users size={16} /> },
   { id: "communications", label: "Communications", icon: <MessageCircle size={16} /> },
   { id: "results", label: "Results", icon: <FileText size={16} /> },
+  { id: "submission", label: "Submission", icon: <FileText size={16} /> },
   { id: "accounting", label: "Accounting", icon: <FileText size={16} /> },
   { id: "tasks", label: "Tasks", icon: <CheckSquare size={16} /> },
   { id: "chat", label: "Chat", icon: <MessageCircle size={16} /> },
@@ -292,6 +293,12 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [resultDecisionDate, setResultDecisionDate] = useState("");
   const [resultRemarks, setResultRemarks] = useState("");
   const [resultDecisionStatus, setResultDecisionStatus] = useState("");
+  const [resultShareStatus, setResultShareStatus] = useState("");
+  const [resultSendEmail, setResultSendEmail] = useState("");
+  const [resultSendPhone, setResultSendPhone] = useState("");
+  const [submissionSearch, setSubmissionSearch] = useState("");
+  const [submissionApplicationNumber, setSubmissionApplicationNumber] = useState("");
+  const [submissionStatus, setSubmissionStatus] = useState("");
   const [docRequests, setDocRequests] = useState<DocRequestItem[]>([]);
   const [clientIntakeDone, setClientIntakeDone] = useState(false);
   const [tasks, setTasks] = useState<TaskItem[]>([]);
@@ -634,6 +641,20 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
         return bTs - aTs;
       });
   }, [visibleCases, resultSearch]);
+  const submissionCaseOptions = useMemo(() => {
+    const query = submissionSearch.trim().toLowerCase();
+    return visibleCases
+      .filter((c) => (c.processingStatus || "docs_pending") !== "submitted")
+      .filter((c) => {
+        if (!query) return true;
+        return `${c.id} ${c.client} ${c.formType} ${c.applicationNumber || ""}`.toLowerCase().includes(query);
+      })
+      .sort((a, b) => {
+        const aTs = new Date(a.updatedAt || a.createdAt || 0).getTime();
+        const bTs = new Date(b.updatedAt || b.createdAt || 0).getTime();
+        return bTs - aTs;
+      });
+  }, [visibleCases, submissionSearch]);
   const communicationSearchList = useMemo(() => {
     const query = commSearch.trim().toLowerCase();
     const byPayment =
@@ -825,6 +846,11 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     setResultDecisionDate(selectedCase.decisionDate || "");
     setResultRemarks(selectedCase.remarks || "");
     setResultDecisionStatus("");
+    setResultShareStatus("");
+    setResultSendEmail(String(selectedCase.leadEmail || ""));
+    setResultSendPhone(String(selectedCase.leadPhone || ""));
+    setSubmissionApplicationNumber(selectedCase.applicationNumber || "");
+    setSubmissionStatus("");
   }, [selectedCase?.id]);
 
   useEffect(() => {
@@ -1113,6 +1139,108 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     const updated = payload.case as CaseItem;
     setCases((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
     setResultDecisionStatus(`Saved result for ${updated.id}.`);
+  }
+
+  function buildResultMessage(caseItem: CaseItem) {
+    const outcome =
+      caseItem.finalOutcome === "approved"
+        ? "approved"
+        : caseItem.finalOutcome === "refused"
+          ? "refused"
+          : caseItem.finalOutcome === "request_letter"
+            ? "request letter issued"
+            : "updated";
+    const resultLink = resultDocuments[0]?.link || "";
+    const lines = [
+      `Hi ${caseItem.client},`,
+      "",
+      `Your case ${caseItem.id} (${caseItem.formType}) is ${outcome}.`
+    ];
+    if (caseItem.applicationNumber) {
+      lines.push(`Application number: ${caseItem.applicationNumber}`);
+    }
+    if (resultLink) {
+      lines.push("", `Result document: ${resultLink}`);
+    }
+    if (caseItem.finalOutcome === "approved") {
+      lines.push("", "Congratulations, we got your permit approved.");
+      lines.push("If you found our service helpful, please share your review:");
+      lines.push("https://g.page/r/CYTdpFJ-nDr7EAE/review");
+    }
+    lines.push("", "Newton Immigration Team");
+    return lines.join("\n");
+  }
+
+  async function sendResultUpdate(channel: "email" | "whatsapp" | "sms") {
+    if (!selectedCase) return;
+    setResultShareStatus("Sending result update...");
+    const message = buildResultMessage(selectedCase);
+    const email = resultSendEmail.trim() || String(selectedCase.leadEmail || "").trim();
+    const phone = resultSendPhone.trim() || String(selectedCase.leadPhone || "").trim();
+
+    if (channel === "email") {
+      if (!email) {
+        setResultShareStatus("Enter client email first.");
+        return;
+      }
+      const dispatchStatus = await tryServerDispatch("email", email, message);
+      if (dispatchStatus === "sent") {
+        setResultShareStatus("Result email sent.");
+        return;
+      }
+      setResultShareStatus("Email provider not configured. Opened local email app.");
+      window.open(
+        `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(`Case result update - ${selectedCase.id}`)}&body=${encodeURIComponent(message)}`,
+        "_blank"
+      );
+      return;
+    }
+
+    const cleanedPhone = channel === "whatsapp" ? normalizePhoneForWa(phone) : phone.replace(/[^\d+]/g, "");
+    if (!cleanedPhone) {
+      setResultShareStatus("Enter client phone number first.");
+      return;
+    }
+    const dispatchStatus = await tryServerDispatch(channel, cleanedPhone, message);
+    if (dispatchStatus === "sent") {
+      setResultShareStatus(channel === "whatsapp" ? "Result WhatsApp sent." : "Result SMS sent.");
+      return;
+    }
+    if (channel === "whatsapp") {
+      window.open(`https://wa.me/${cleanedPhone}?text=${encodeURIComponent(message)}`, "_blank");
+      setResultShareStatus("WhatsApp opened. Provider not configured for server send.");
+    } else {
+      window.open(`sms:${cleanedPhone}?body=${encodeURIComponent(message)}`, "_blank");
+      setResultShareStatus("SMS app opened. Provider not configured for server send.");
+    }
+  }
+
+  async function submitCaseWithApplicationNumber() {
+    if (!selectedCase) return;
+    const appNo = submissionApplicationNumber.trim();
+    if (!appNo) {
+      setSubmissionStatus("Application number is required.");
+      return;
+    }
+    setSubmissionStatus("Submitting case...");
+    const res = await apiFetch(`/cases/${selectedCase.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        processingStatus: "submitted",
+        applicationNumber: appNo,
+        submittedAt: new Date().toISOString()
+      })
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setSubmissionStatus(String(payload.error || "Could not submit case."));
+      return;
+    }
+    const updated = payload.case as CaseItem;
+    setCases((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+    setSubmissionStatus(`Submitted ${updated.id} with application number ${appNo}.`);
+    setSubmissionApplicationNumber("");
   }
 
   async function syncLeadsFromSheet() {
@@ -1458,7 +1586,14 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     patch: Partial<
       Pick<
         CaseItem,
-        "assignedTo" | "processingStatus" | "processingStatusOther" | "finalOutcome" | "decisionDate" | "remarks"
+        | "assignedTo"
+        | "processingStatus"
+        | "processingStatusOther"
+        | "applicationNumber"
+        | "submittedAt"
+        | "finalOutcome"
+        | "decisionDate"
+        | "remarks"
       >
     >
   ) {
@@ -3091,6 +3226,9 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                             <p className="font-semibold">
                               {c.updatedAt ? new Date(c.updatedAt).toLocaleDateString() : "-"}
                             </p>
+                            {c.applicationNumber ? (
+                              <p className="text-[11px] text-slate-600">App#: {c.applicationNumber}</p>
+                            ) : null}
                           </div>
                           <div>
                             <p className="text-[11px] text-slate-500">Payment Method</p>
@@ -3787,6 +3925,44 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                 </div>
                 {resultUploadStatus ? <p className="mt-2 text-slate-700">{resultUploadStatus}</p> : null}
               </div>
+              <div className="mt-3 rounded border border-slate-200 p-3 text-xs">
+                <p className="font-semibold">Send Result Update</p>
+                <div className="mt-2 grid gap-2 md:grid-cols-3">
+                  <input
+                    value={resultSendEmail}
+                    onChange={(e) => setResultSendEmail(e.target.value)}
+                    className="rounded border border-slate-300 px-2 py-2"
+                    placeholder="Client email (optional override)"
+                  />
+                  <input
+                    value={resultSendPhone}
+                    onChange={(e) => setResultSendPhone(e.target.value)}
+                    className="rounded border border-slate-300 px-2 py-2"
+                    placeholder="Client phone (optional override)"
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => void sendResultUpdate("email")}
+                      className="rounded border border-slate-300 px-3 py-2 font-semibold"
+                    >
+                      Send Email
+                    </button>
+                    <button
+                      onClick={() => void sendResultUpdate("whatsapp")}
+                      className="rounded border border-slate-300 px-3 py-2 font-semibold"
+                    >
+                      Send WhatsApp
+                    </button>
+                    <button
+                      onClick={() => void sendResultUpdate("sms")}
+                      className="rounded border border-slate-300 px-3 py-2 font-semibold"
+                    >
+                      Send SMS
+                    </button>
+                  </div>
+                </div>
+                {resultShareStatus ? <p className="mt-2 text-slate-700">{resultShareStatus}</p> : null}
+              </div>
               <div className="mt-3 space-y-2">
                 {resultDocuments.map((d) => (
                   <article key={d.id} className="rounded border border-slate-200 p-3 text-xs">
@@ -3800,6 +3976,63 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                   </article>
                 ))}
                 {resultDocuments.length === 0 ? <p className="text-xs text-slate-500">No results uploaded for this case yet.</p> : null}
+              </div>
+            </section>
+          ) : null}
+
+          {screen === "submission" ? (
+            <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
+              <h3 className="text-base font-semibold">Submission</h3>
+              <p className="mt-1 text-xs text-slate-500">
+                Select a pending case, enter application number, then mark it submitted.
+              </p>
+              <input
+                value={submissionSearch}
+                onChange={(e) => setSubmissionSearch(e.target.value)}
+                className="mt-2 w-full rounded border border-slate-300 px-2 py-2 text-xs"
+                placeholder="Search case by ID, name, or application type"
+              />
+              <select
+                value={selectedCase?.id ?? ""}
+                onChange={(e) => setSelectedCaseId(e.target.value)}
+                className="mt-2 w-full rounded-lg border-2 border-slate-300 px-2 py-2 text-sm"
+              >
+                {submissionCaseOptions.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.id} - {c.client} - {c.formType}
+                  </option>
+                ))}
+              </select>
+              <div className="mt-3 grid gap-2 md:grid-cols-3">
+                <input
+                  value={submissionApplicationNumber}
+                  onChange={(e) => setSubmissionApplicationNumber(e.target.value)}
+                  className="rounded border border-slate-300 px-2 py-2 text-xs"
+                  placeholder="Application number"
+                />
+                <button
+                  onClick={() => void submitCaseWithApplicationNumber()}
+                  className="rounded bg-slate-900 px-3 py-2 text-xs font-semibold text-white"
+                >
+                  Mark Submitted
+                </button>
+                <div className="rounded border border-slate-200 px-2 py-2 text-xs">
+                  {selectedCase?.applicationNumber ? `Current: ${selectedCase.applicationNumber}` : "No application number yet"}
+                </div>
+              </div>
+              {submissionStatus ? <p className="mt-2 text-xs text-slate-700">{submissionStatus}</p> : null}
+              <div className="mt-4 space-y-2">
+                {visibleCases
+                  .filter((c) => (c.processingStatus || "docs_pending") === "submitted")
+                  .slice(0, 30)
+                  .map((c) => (
+                    <article key={c.id} className="rounded border border-slate-200 p-2 text-xs">
+                      <p className="font-semibold">{c.id} - {c.client} - {c.formType}</p>
+                      <p className="text-slate-600">
+                        Application No: {c.applicationNumber || "-"} | Submitted: {c.submittedAt ? new Date(c.submittedAt).toLocaleDateString() : "-"}
+                      </p>
+                    </article>
+                  ))}
               </div>
             </section>
           ) : null}
