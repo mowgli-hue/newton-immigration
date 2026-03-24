@@ -108,9 +108,7 @@ export async function POST(request: NextRequest) {
   if (!applicationNumber) {
     return NextResponse.json({ error: "applicationNumber is required" }, { status: 400 });
   }
-  if (!clientName) {
-    return NextResponse.json({ error: "clientName is required" }, { status: 400 });
-  }
+  if (!clientName) clientName = "Legacy Client";
   if (!["approved", "refused", "request_letter", "other"].includes(outcome)) {
     return NextResponse.json({ error: "Invalid outcome" }, { status: 400 });
   }
@@ -129,4 +127,3 @@ export async function POST(request: NextRequest) {
   });
   return NextResponse.json({ item }, { status: 201 });
 }
-

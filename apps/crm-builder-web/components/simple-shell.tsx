@@ -757,17 +757,25 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     const caseNo = resultCaseNumberInput.trim().toLowerCase();
     if (!appNo && !caseNo) return null;
     const matches = visibleCases.filter((c) => {
-      const byApp = appNo
-        ? String(c.applicationNumber || "")
-            .trim()
-            .toLowerCase() === appNo
-        : false;
+      const byApp =
+        appNo &&
+        String(c.applicationNumber || "")
+          .trim()
+          .toLowerCase() === appNo &&
+        ((c.processingStatus || "docs_pending") === "submitted" ||
+          c.stage === "Submitted" ||
+          c.stage === "Decision" ||
+          Boolean(c.submittedAt));
       const byCase = caseNo ? String(c.id || "").trim().toLowerCase() === caseNo : false;
       return byApp || byCase;
     });
     if (matches.length === 1) return matches[0];
     return null;
   }, [visibleCases, resultApplicationNumber, resultCaseNumberInput]);
+  const resultAutoCategory = useMemo(() => {
+    if (!resultApplicationNumber.trim() && !resultCaseNumberInput.trim()) return "";
+    return resultLinkedCase ? "new" : "old";
+  }, [resultLinkedCase, resultApplicationNumber, resultCaseNumberInput]);
   const submissionCaseOptions = useMemo(() => {
     const query = submissionSearch.trim().toLowerCase();
     return visibleCases
@@ -1330,11 +1338,15 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
 
   async function submitLegacyResult() {
     const appNo = resultApplicationNumber.trim();
-    const client = legacyResultClientName.trim();
-    if (!appNo || !client) {
-      setLegacyResultStatus("Application number and client name are required.");
+    if (!appNo) {
+      setLegacyResultStatus("Application number is required.");
       return;
     }
+    if (resultLinkedCase) {
+      setLegacyResultStatus("This application number is already in submitted cases (new/portal). Use Decision/Upload above.");
+      return;
+    }
+    const client = legacyResultClientName.trim() || "Legacy Client";
     setLegacyResultStatus("Saving legacy result...");
     const form = new FormData();
     form.append("applicationNumber", appNo);
@@ -4598,6 +4610,11 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                     Phone: {resultLinkedCase.leadPhone || "N/A"} | Application No: {resultLinkedCase.applicationNumber || "N/A"}
                   </div>
                 ) : null}
+                {resultAutoCategory ? (
+                  <p className={`mt-2 text-xs font-semibold ${resultAutoCategory === "new" ? "text-emerald-700" : "text-amber-700"}`}>
+                    Auto category: {resultAutoCategory === "new" ? "NEW (portal/submitted case found)" : "OLD (not found in submitted cases)"}
+                  </p>
+                ) : null}
               </div>
               <div className="mt-3 rounded border border-slate-200 p-3 text-xs">
                 <p className="font-semibold">Regular Results (Old Clients, Not in Portal)</p>
@@ -4607,7 +4624,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                     value={legacyResultClientName}
                     onChange={(e) => setLegacyResultClientName(e.target.value)}
                     className="rounded border border-slate-300 px-2 py-2"
-                    placeholder="Client name"
+                    placeholder="Client name (optional)"
                   />
                   <input
                     value={legacyResultPhone}
@@ -4640,7 +4657,8 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                 />
                 <button
                   onClick={() => void submitLegacyResult()}
-                  className="mt-2 rounded bg-slate-900 px-3 py-2 font-semibold text-white"
+                  disabled={resultAutoCategory === "new"}
+                  className="mt-2 rounded bg-slate-900 px-3 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Save Regular Result
                 </button>
