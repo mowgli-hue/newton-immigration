@@ -18,29 +18,44 @@ const STAFF_ROLE_TAB_ACCESS: Record<Exclude<Role, "Client">, AppScreen[]> = {
   Reviewer: ["dashboard", "cases", "tasks", "files", "chat"]
 };
 
+function normalizeRole(role: Role | string): Role {
+  const value = String(role || "").trim().toLowerCase();
+  if (value === "admin") return "Admin";
+  if (value === "marketing") return "Marketing";
+  if (value === "processing") return "Processing";
+  if (value === "processinglead" || value === "processing lead") return "ProcessingLead";
+  if (value === "reviewer") return "Reviewer";
+  if (value === "client") return "Client";
+  return "Client";
+}
+
 export function isStaffRole(role: Role): role is Exclude<Role, "Client"> {
-  return role !== "Client";
+  return normalizeRole(role) !== "Client";
 }
 
 export function tabsForRole(role: Role): AppScreen[] {
-  if (!isStaffRole(role)) return [];
-  return STAFF_ROLE_TAB_ACCESS[role] || [];
+  const normalized = normalizeRole(role);
+  if (normalized === "Client") return [];
+  return STAFF_ROLE_TAB_ACCESS[normalized] || [];
 }
 
 export function canManageUsers(role: Role): boolean {
-  return role === "Admin";
+  return normalizeRole(role) === "Admin";
 }
 
 export function canCreateCase(role: Role): boolean {
-  return role === "Admin" || role === "Marketing" || role === "ProcessingLead";
+  const normalized = normalizeRole(role);
+  return normalized === "Admin" || normalized === "Marketing" || normalized === "ProcessingLead";
 }
 
 export function canUseAccounting(role: Role): boolean {
-  return role === "Admin" || role === "Marketing";
+  const normalized = normalizeRole(role);
+  return normalized === "Admin" || normalized === "Marketing";
 }
 
 export function canUseCommunications(role: Role): boolean {
-  return role === "Admin" || role === "Marketing";
+  const normalized = normalizeRole(role);
+  return normalized === "Admin" || normalized === "Marketing";
 }
 
 function normalize(value: string): string {
@@ -59,7 +74,8 @@ export function isCaseAssignedToUser(assignedTo: string | undefined, userName: s
 }
 
 export function canStaffAccessCase(role: Role, userName: string, caseAssignedTo?: string): boolean {
-  if (role === "Client") return false;
-  if (role === "Processing") return isCaseAssignedToUser(caseAssignedTo, userName);
+  const normalized = normalizeRole(role);
+  if (normalized === "Client") return false;
+  if (normalized === "Processing") return isCaseAssignedToUser(caseAssignedTo, userName);
   return true;
 }
