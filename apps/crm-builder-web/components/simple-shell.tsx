@@ -335,6 +335,8 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [resultUploadName, setResultUploadName] = useState("");
   const [resultUploadStatus, setResultUploadStatus] = useState("");
   const [resultSearch, setResultSearch] = useState("");
+  const [resultApplicationNumber, setResultApplicationNumber] = useState("");
+  const [resultCaseNumberInput, setResultCaseNumberInput] = useState("");
   const [resultOutcome, setResultOutcome] = useState<"" | "approved" | "refused" | "request_letter">("");
   const [resultDecisionDate, setResultDecisionDate] = useState("");
   const [resultRemarks, setResultRemarks] = useState("");
@@ -726,6 +728,22 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
         return bTs - aTs;
       });
   }, [visibleCases, resultSearch]);
+  const resultLinkedCase = useMemo(() => {
+    const appNo = resultApplicationNumber.trim().toLowerCase();
+    const caseNo = resultCaseNumberInput.trim().toLowerCase();
+    if (!appNo && !caseNo) return null;
+    const matches = visibleCases.filter((c) => {
+      const byApp = appNo
+        ? String(c.applicationNumber || "")
+            .trim()
+            .toLowerCase() === appNo
+        : false;
+      const byCase = caseNo ? String(c.id || "").trim().toLowerCase() === caseNo : false;
+      return byApp || byCase;
+    });
+    if (matches.length === 1) return matches[0];
+    return null;
+  }, [visibleCases, resultApplicationNumber, resultCaseNumberInput]);
   const submissionCaseOptions = useMemo(() => {
     const query = submissionSearch.trim().toLowerCase();
     return visibleCases
@@ -1144,7 +1162,11 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   }
 
   async function uploadResultDocument() {
-    if (!selectedCase) return;
+    const targetCase = resultLinkedCase || selectedCase;
+    if (!targetCase) {
+      setResultUploadStatus("Enter application number/case ID or select a case first.");
+      return;
+    }
     if (!resultUploadFile) {
       setResultUploadStatus("Choose a file first.");
       return;
@@ -1154,7 +1176,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     formData.append("file", resultUploadFile);
     formData.append("name", resultUploadName.trim() || resultUploadFile.name);
     formData.append("category", "result");
-    const res = await apiFetch(`/cases/${selectedCase.id}/documents`, {
+    const res = await apiFetch(`/cases/${targetCase.id}/documents`, {
       method: "POST",
       body: formData
     });
@@ -1166,20 +1188,25 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     if (payload.document) {
       setDocuments((prev) => [...prev, payload.document as DocumentItem]);
     }
-    await loadCaseDetail(selectedCase.id);
+    setSelectedCaseId(targetCase.id);
+    await loadCaseDetail(targetCase.id);
     setResultUploadFile(null);
     setResultUploadName("");
-    setResultUploadStatus("Result uploaded and available in client portal.");
+    setResultUploadStatus(`Result uploaded for ${targetCase.id} and available in client portal.`);
   }
 
   async function saveCaseResultDecision() {
-    if (!selectedCase) return;
+    const targetCase = resultLinkedCase || selectedCase;
+    if (!targetCase) {
+      setResultDecisionStatus("Enter application number/case ID or select a case first.");
+      return;
+    }
     if (!resultOutcome) {
       setResultDecisionStatus("Select a decision first.");
       return;
     }
     setResultDecisionStatus("Saving decision...");
-    const res = await apiFetch(`/cases/${selectedCase.id}`, {
+    const res = await apiFetch(`/cases/${targetCase.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1195,6 +1222,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     }
     const updated = payload.case as CaseItem;
     setCases((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+    setSelectedCaseId(updated.id);
     setResultDecisionStatus(`Saved result for ${updated.id}.`);
   }
 
@@ -1229,11 +1257,15 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   }
 
   async function sendResultUpdate(channel: "email" | "whatsapp" | "sms") {
-    if (!selectedCase) return;
+    const targetCase = resultLinkedCase || selectedCase;
+    if (!targetCase) {
+      setResultShareStatus("Enter application number/case ID or select a case first.");
+      return;
+    }
     setResultShareStatus("Sending result update...");
-    const message = buildResultMessage(selectedCase);
-    const email = resultSendEmail.trim() || String(selectedCase.leadEmail || "").trim();
-    const phone = resultSendPhone.trim() || String(selectedCase.leadPhone || "").trim();
+    const message = buildResultMessage(targetCase);
+    const email = resultSendEmail.trim() || String(targetCase.leadEmail || "").trim();
+    const phone = resultSendPhone.trim() || String(targetCase.leadPhone || "").trim();
 
     if (channel === "email") {
       if (!email) {
@@ -1247,7 +1279,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       }
       setResultShareStatus("Email provider not configured. Opened local email app.");
       window.open(
-        `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(`Case result update - ${selectedCase.id}`)}&body=${encodeURIComponent(message)}`,
+        `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(`Case result update - ${targetCase.id}`)}&body=${encodeURIComponent(message)}`,
         "_blank"
       );
       return;
@@ -4478,6 +4510,39 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
             <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
               <h3 className="text-base font-semibold">Results</h3>
               <p className="mt-1 text-xs text-slate-500">Upload and send final results directly to the client portal.</p>
+              <div className="mt-3 rounded border border-slate-200 p-3 text-xs">
+                <p className="font-semibold">Daily Result Intake (Auto Link)</p>
+                <p className="mt-1 text-slate-500">Enter application number or case ID. System links case + client automatically and shows phone.</p>
+                <div className="mt-2 grid gap-2 md:grid-cols-3">
+                  <input
+                    value={resultApplicationNumber}
+                    onChange={(e) => setResultApplicationNumber(e.target.value)}
+                    className="rounded border border-slate-300 px-2 py-2"
+                    placeholder="Application number"
+                  />
+                  <input
+                    value={resultCaseNumberInput}
+                    onChange={(e) => setResultCaseNumberInput(e.target.value)}
+                    className="rounded border border-slate-300 px-2 py-2"
+                    placeholder="Case ID (optional)"
+                  />
+                  <button
+                    onClick={() => {
+                      if (resultLinkedCase) setSelectedCaseId(resultLinkedCase.id);
+                    }}
+                    className="rounded border border-slate-300 px-3 py-2 font-semibold"
+                  >
+                    Use Linked Case
+                  </button>
+                </div>
+                {resultLinkedCase ? (
+                  <div className="mt-2 rounded border border-emerald-300 bg-emerald-50 p-2 text-emerald-900">
+                    Linked: {resultLinkedCase.id} - {resultLinkedCase.client} - {resultLinkedCase.formType}
+                    <br />
+                    Phone: {resultLinkedCase.leadPhone || "N/A"} | Application No: {resultLinkedCase.applicationNumber || "N/A"}
+                  </div>
+                ) : null}
+              </div>
               <input
                 value={resultSearch}
                 onChange={(e) => setResultSearch(e.target.value)}
@@ -4485,7 +4550,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                 placeholder="Search case by ID, name, or application type"
               />
               <select
-                value={selectedCase?.id ?? ""}
+                value={(resultLinkedCase?.id || selectedCase?.id) ?? ""}
                 onChange={(e) => setSelectedCaseId(e.target.value)}
                 className="mt-2 w-full rounded-lg border-2 border-slate-300 px-2 py-2 text-sm"
               >
