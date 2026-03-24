@@ -381,12 +381,17 @@ export type LegacyResultItem = {
   clientName: string;
   phone?: string;
   applicationNumber: string;
+  resultDate: string;
+  autoCategory: "new" | "old";
   outcome: "approved" | "refused" | "request_letter" | "other";
   notes?: string;
   fileName?: string;
   fileLink?: string;
   matchedCaseId?: string;
   matchedClientId?: string;
+  informedToClient?: boolean;
+  informedAt?: string;
+  informedByName?: string;
   createdByUserId: string;
   createdByName: string;
   createdAt: string;

@@ -20,6 +20,7 @@ import {
   buildCaseFolderNameWithApp,
   createCaseDriveStructure,
   extractDriveFolderId,
+  getOrCreateDriveSubfolder,
   uploadFileToDriveFolder
 } from "@/lib/google-drive";
 import {
@@ -140,6 +141,13 @@ export async function POST(
     const customName = String(formData.get("name") ?? "").trim();
     const categoryRaw = String(formData.get("category") ?? "").trim().toLowerCase();
     const category = categoryRaw === "result" ? "result" : "general";
+    const driveFolderTypeRaw = String(formData.get("driveFolderType") ?? "")
+      .trim()
+      .toLowerCase();
+    const driveFolderType =
+      driveFolderTypeRaw === "submission" || driveFolderTypeRaw === "results"
+        ? driveFolderTypeRaw
+        : "default";
     const requestId = String(formData.get("requestId") ?? "").trim();
 
     if (!(maybeFile instanceof File)) {
@@ -203,7 +211,17 @@ export async function POST(
         driveUpload = { success: false, reason: "drive_folder_setup_failed" };
       }
     }
-    const driveFolderId = extractDriveFolderId(targetCase.docsUploadLink || "");
+    let driveFolderId = extractDriveFolderId(targetCase.docsUploadLink || "");
+    const submittedFolderId = extractDriveFolderId(targetCase.submittedFolderLink || "");
+    if (submittedFolderId && (driveFolderType === "submission" || driveFolderType === "results")) {
+      try {
+        const subfolderName = driveFolderType === "submission" ? "Submission" : "Results";
+        const folder = await getOrCreateDriveSubfolder(submittedFolderId, subfolderName);
+        driveFolderId = folder.id;
+      } catch {
+        // fallback to default docs folder
+      }
+    }
     if (driveFolderId) {
       try {
         const driveFile = await uploadFileToDriveFolder({
@@ -240,6 +258,7 @@ export async function POST(
       metadata: {
         caseId: params.id,
         category,
+        driveFolderType,
         name: doc.name
       }
     });

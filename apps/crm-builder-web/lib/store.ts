@@ -305,10 +305,23 @@ function migrateStore(raw: Partial<AppStore>): AppStore {
     })),
     tasks: raw.tasks ?? [],
     notifications: raw.notifications ?? [],
-    legacyResults: (raw.legacyResults ?? []).map((r) => ({
-      ...r,
-      createdAt: r.createdAt ?? new Date().toISOString()
-    })),
+    legacyResults: (raw.legacyResults ?? []).map((r) => {
+      const createdAt = r.createdAt ?? new Date().toISOString();
+      const resultDate = String((r as LegacyResultItem).resultDate || "").trim() || createdAt.slice(0, 10);
+      const matchedCaseId = (r as LegacyResultItem).matchedCaseId;
+      return {
+        ...r,
+        clientName: String((r as LegacyResultItem).clientName || "").trim() || "Legacy Client",
+        resultDate,
+        autoCategory: ((r as LegacyResultItem).autoCategory || (matchedCaseId ? "new" : "old")) as
+          | "new"
+          | "old",
+        informedToClient: Boolean((r as LegacyResultItem).informedToClient),
+        informedAt: (r as LegacyResultItem).informedAt ?? undefined,
+        informedByName: (r as LegacyResultItem).informedByName ?? undefined,
+        createdAt
+      };
+    }),
     sessions: raw.sessions ?? [],
     invites: raw.invites ?? []
   };
@@ -1920,7 +1933,7 @@ export async function listLegacyResults(companyId: string): Promise<LegacyResult
   const store = await readStore();
   return store.legacyResults
     .filter((r) => r.companyId === companyId)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    .sort((a, b) => `${b.resultDate}T${b.createdAt}`.localeCompare(`${a.resultDate}T${a.createdAt}`));
 }
 
 export async function addLegacyResult(input: {
@@ -1928,6 +1941,7 @@ export async function addLegacyResult(input: {
   clientName: string;
   phone?: string;
   applicationNumber: string;
+  resultDate?: string;
   outcome: LegacyResultItem["outcome"];
   notes?: string;
   fileName?: string;
@@ -1948,19 +1962,26 @@ export async function addLegacyResult(input: {
   const matchedClient = matchedCase
     ? store.clients.find((c) => c.companyId === input.companyId && c.id === matchedCase.clientId)
     : undefined;
+  const resultDate = String(input.resultDate || "").trim() || new Date().toISOString().slice(0, 10);
+  const autoCategory: LegacyResultItem["autoCategory"] = matchedCase ? "new" : "old";
 
   const item: LegacyResultItem = {
     id: `LRES-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     companyId: input.companyId,
-    clientName: String(input.clientName || "").trim() || "Client",
-    phone: String(input.phone || "").trim() || undefined,
+    clientName: String(input.clientName || "").trim() || matchedCase?.client || "Legacy Client",
+    phone: String(input.phone || "").trim() || matchedCase?.leadPhone || matchedClient?.phone || undefined,
     applicationNumber: String(input.applicationNumber || "").trim(),
+    resultDate,
+    autoCategory,
     outcome: input.outcome,
     notes: String(input.notes || "").trim() || undefined,
     fileName: String(input.fileName || "").trim() || undefined,
     fileLink: String(input.fileLink || "").trim() || undefined,
     matchedCaseId: matchedCase?.id,
     matchedClientId: matchedClient?.id,
+    informedToClient: false,
+    informedAt: undefined,
+    informedByName: undefined,
     createdByUserId: input.createdByUserId,
     createdByName: input.createdByName,
     createdAt: new Date().toISOString()
@@ -1968,6 +1989,26 @@ export async function addLegacyResult(input: {
   store.legacyResults.unshift(item);
   await writeStore(store);
   return item;
+}
+
+export async function markLegacyResultInformed(input: {
+  companyId: string;
+  resultId: string;
+  informedByName: string;
+}): Promise<LegacyResultItem | null> {
+  const store = await readStore();
+  const idx = store.legacyResults.findIndex(
+    (r) => r.companyId === input.companyId && r.id === input.resultId
+  );
+  if (idx === -1) return null;
+  store.legacyResults[idx] = {
+    ...store.legacyResults[idx],
+    informedToClient: true,
+    informedAt: new Date().toISOString(),
+    informedByName: input.informedByName
+  };
+  await writeStore(store);
+  return store.legacyResults[idx];
 }
 
 export async function listCaseDocRequests(companyId: string, caseId: string): Promise<NonNullable<CaseItem["docRequests"]>> {

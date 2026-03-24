@@ -86,11 +86,17 @@ type LegacyResultItem = {
   clientName: string;
   phone?: string;
   applicationNumber: string;
+  resultDate: string;
+  autoCategory: "new" | "old";
   outcome: "approved" | "refused" | "request_letter" | "other";
   notes?: string;
   fileName?: string;
   fileLink?: string;
   matchedCaseId?: string;
+  matchedClientId?: string;
+  informedToClient?: boolean;
+  informedAt?: string;
+  informedByName?: string;
   createdAt: string;
 };
 type CustomPortalSection = {
@@ -358,6 +364,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [resultSendPhone, setResultSendPhone] = useState("");
   const [legacyResultClientName, setLegacyResultClientName] = useState("");
   const [legacyResultPhone, setLegacyResultPhone] = useState("");
+  const [legacyResultDate, setLegacyResultDate] = useState(new Date().toISOString().slice(0, 10));
   const [legacyResultOutcome, setLegacyResultOutcome] = useState<"approved" | "refused" | "request_letter" | "other">("other");
   const [legacyResultNotes, setLegacyResultNotes] = useState("");
   const [legacyResultFile, setLegacyResultFile] = useState<File | null>(null);
@@ -366,6 +373,11 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [submissionSearch, setSubmissionSearch] = useState("");
   const [submissionApplicationNumber, setSubmissionApplicationNumber] = useState("");
   const [submissionStatus, setSubmissionStatus] = useState("");
+  const [submissionUploadType, setSubmissionUploadType] = useState<"submission_letter" | "wp_extension_letter">(
+    "submission_letter"
+  );
+  const [submissionUploadFile, setSubmissionUploadFile] = useState<File | null>(null);
+  const [submissionUploadStatus, setSubmissionUploadStatus] = useState("");
   const [docRequests, setDocRequests] = useState<DocRequestItem[]>([]);
   const [clientIntakeDone, setClientIntakeDone] = useState(false);
   const [tasks, setTasks] = useState<TaskItem[]>([]);
@@ -776,6 +788,16 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     if (!resultApplicationNumber.trim() && !resultCaseNumberInput.trim()) return "";
     return resultLinkedCase ? "new" : "old";
   }, [resultLinkedCase, resultApplicationNumber, resultCaseNumberInput]);
+  const todayIsoDate = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const todaysResults = useMemo(
+    () =>
+      legacyResults.filter((r) => String(r.resultDate || "").slice(0, 10) === todayIsoDate),
+    [legacyResults, todayIsoDate]
+  );
+  const notInformedResults = useMemo(
+    () => legacyResults.filter((r) => !r.informedToClient),
+    [legacyResults]
+  );
   const submissionCaseOptions = useMemo(() => {
     const query = submissionSearch.trim().toLowerCase();
     return visibleCases
@@ -1342,14 +1364,11 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       setLegacyResultStatus("Application number is required.");
       return;
     }
-    if (resultLinkedCase) {
-      setLegacyResultStatus("This application number is already in submitted cases (new/portal). Use Decision/Upload above.");
-      return;
-    }
     const client = legacyResultClientName.trim() || "Legacy Client";
     setLegacyResultStatus("Saving legacy result...");
     const form = new FormData();
     form.append("applicationNumber", appNo);
+    form.append("resultDate", legacyResultDate || todayIsoDate);
     form.append("clientName", client);
     form.append("phone", legacyResultPhone.trim());
     form.append("outcome", legacyResultOutcome);
@@ -1369,7 +1388,28 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     setLegacyResults((prev) => [item, ...prev]);
     setLegacyResultFile(null);
     setLegacyResultNotes("");
-    setLegacyResultStatus(`Saved legacy result for ${item.clientName}.`);
+    setLegacyResultStatus(
+      item.autoCategory === "new"
+        ? `Saved and linked to ${item.matchedCaseId || "case"} automatically.`
+        : `Saved old-client result for ${item.clientName}.`
+    );
+  }
+
+  async function markResultInformed(resultId: string) {
+    setLegacyResultStatus("Updating informed status...");
+    const res = await apiFetch("/results/legacy", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ resultId })
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setLegacyResultStatus(String(payload.error || "Could not update informed status."));
+      return;
+    }
+    const updated = payload.item as LegacyResultItem;
+    setLegacyResults((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+    setLegacyResultStatus("Marked as sent to client.");
   }
 
   async function submitCaseWithApplicationNumber() {
@@ -1398,6 +1438,40 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     setCases((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
     setSubmissionStatus(`Submitted ${updated.id} with application number ${appNo}.`);
     setSubmissionApplicationNumber("");
+  }
+
+  async function uploadSubmissionDocument() {
+    if (!selectedCase) {
+      setSubmissionUploadStatus("Select a case first.");
+      return;
+    }
+    if (!submissionUploadFile) {
+      setSubmissionUploadStatus("Choose a file first.");
+      return;
+    }
+    setSubmissionUploadStatus("Uploading to submission folder...");
+    const formData = new FormData();
+    formData.append("file", submissionUploadFile);
+    formData.append(
+      "name",
+      submissionUploadType === "submission_letter" ? "Submission Letter" : "WP Extension Letter"
+    );
+    formData.append("driveFolderType", "submission");
+    formData.append("category", "general");
+    const res = await apiFetch(`/cases/${selectedCase.id}/documents`, {
+      method: "POST",
+      body: formData
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setSubmissionUploadStatus(String(payload.error || "Could not upload submission document."));
+      return;
+    }
+    if (payload.document) {
+      setDocuments((prev) => [...prev, payload.document as DocumentItem]);
+    }
+    setSubmissionUploadFile(null);
+    setSubmissionUploadStatus("Uploaded successfully to submission folder.");
   }
 
   async function syncLeadsFromSheet() {
@@ -4577,10 +4651,11 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
           {screen === "results" ? (
             <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
               <h3 className="text-base font-semibold">Results</h3>
-              <p className="mt-1 text-xs text-slate-500">Upload and send final results directly to the client portal.</p>
+              <p className="mt-1 text-xs text-slate-500">
+                Daily result upload by application number. System auto-links NEW cases and tracks who is informed.
+              </p>
               <div className="mt-3 rounded border border-slate-200 p-3 text-xs">
-                <p className="font-semibold">Daily Result Intake (Auto Link)</p>
-                <p className="mt-1 text-slate-500">Enter application number or case ID. System links case + client automatically and shows phone.</p>
+                <p className="font-semibold">Daily Result Upload</p>
                 <div className="mt-2 grid gap-2 md:grid-cols-3">
                   <input
                     value={resultApplicationNumber}
@@ -4589,48 +4664,10 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                     placeholder="Application number"
                   />
                   <input
-                    value={resultCaseNumberInput}
-                    onChange={(e) => setResultCaseNumberInput(e.target.value)}
+                    type="date"
+                    value={legacyResultDate}
+                    onChange={(e) => setLegacyResultDate(e.target.value)}
                     className="rounded border border-slate-300 px-2 py-2"
-                    placeholder="Case ID (optional)"
-                  />
-                  <button
-                    onClick={() => {
-                      if (resultLinkedCase) setSelectedCaseId(resultLinkedCase.id);
-                    }}
-                    className="rounded border border-slate-300 px-3 py-2 font-semibold"
-                  >
-                    Use Linked Case
-                  </button>
-                </div>
-                {resultLinkedCase ? (
-                  <div className="mt-2 rounded border border-emerald-300 bg-emerald-50 p-2 text-emerald-900">
-                    Linked: {resultLinkedCase.id} - {resultLinkedCase.client} - {resultLinkedCase.formType}
-                    <br />
-                    Phone: {resultLinkedCase.leadPhone || "N/A"} | Application No: {resultLinkedCase.applicationNumber || "N/A"}
-                  </div>
-                ) : null}
-                {resultAutoCategory ? (
-                  <p className={`mt-2 text-xs font-semibold ${resultAutoCategory === "new" ? "text-emerald-700" : "text-amber-700"}`}>
-                    Auto category: {resultAutoCategory === "new" ? "NEW (portal/submitted case found)" : "OLD (not found in submitted cases)"}
-                  </p>
-                ) : null}
-              </div>
-              <div className="mt-3 rounded border border-slate-200 p-3 text-xs">
-                <p className="font-semibold">Regular Results (Old Clients, Not in Portal)</p>
-                <p className="mt-1 text-slate-500">Use this when result is for clients not on portal/cases. It is saved in result register.</p>
-                <div className="mt-2 grid gap-2 md:grid-cols-4">
-                  <input
-                    value={legacyResultClientName}
-                    onChange={(e) => setLegacyResultClientName(e.target.value)}
-                    className="rounded border border-slate-300 px-2 py-2"
-                    placeholder="Client name (optional)"
-                  />
-                  <input
-                    value={legacyResultPhone}
-                    onChange={(e) => setLegacyResultPhone(e.target.value)}
-                    className="rounded border border-slate-300 px-2 py-2"
-                    placeholder="Client phone"
                   />
                   <select
                     value={legacyResultOutcome}
@@ -4642,6 +4679,20 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                     <option value="refused">Refused</option>
                     <option value="request_letter">Request Letter</option>
                   </select>
+                </div>
+                <div className="mt-2 grid gap-2 md:grid-cols-3">
+                  <input
+                    value={legacyResultClientName}
+                    onChange={(e) => setLegacyResultClientName(e.target.value)}
+                    className="rounded border border-slate-300 px-2 py-2"
+                    placeholder="Client name (optional)"
+                  />
+                  <input
+                    value={legacyResultPhone}
+                    onChange={(e) => setLegacyResultPhone(e.target.value)}
+                    className="rounded border border-slate-300 px-2 py-2"
+                    placeholder="Phone (optional)"
+                  />
                   <input
                     type="file"
                     onChange={(e) => setLegacyResultFile(e.target.files?.[0] || null)}
@@ -4655,157 +4706,82 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                   rows={2}
                   placeholder="Notes (optional)"
                 />
+                {resultAutoCategory ? (
+                  <p className={`mt-2 text-xs font-semibold ${resultAutoCategory === "new" ? "text-emerald-700" : "text-amber-700"}`}>
+                    Auto category: {resultAutoCategory === "new" ? "NEW (linked to portal case)" : "OLD (no submitted case match)"}
+                  </p>
+                ) : null}
+                {resultLinkedCase ? (
+                  <div className="mt-2 rounded border border-emerald-300 bg-emerald-50 p-2 text-emerald-900">
+                    Linked case: {resultLinkedCase.id} - {resultLinkedCase.client} - {resultLinkedCase.formType}
+                    <br />
+                    Client ID: {resultLinkedCase.clientId || "N/A"} | Phone: {resultLinkedCase.leadPhone || "N/A"}
+                  </div>
+                ) : null}
                 <button
                   onClick={() => void submitLegacyResult()}
-                  disabled={resultAutoCategory === "new"}
-                  className="mt-2 rounded bg-slate-900 px-3 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  className="mt-2 rounded bg-slate-900 px-3 py-2 font-semibold text-white"
                 >
-                  Save Regular Result
+                  Upload Daily Result
                 </button>
                 {legacyResultStatus ? <p className="mt-2 text-slate-700">{legacyResultStatus}</p> : null}
-                <div className="mt-3 max-h-40 space-y-2 overflow-auto rounded border border-slate-200 p-2">
-                  {legacyResults.slice(0, 20).map((item) => (
+              </div>
+
+              <div className="mt-3 rounded border-2 border-amber-300 bg-amber-50 p-3 text-xs">
+                <p className="font-semibold text-amber-900">Today&apos;s Results ({todaysResults.length})</p>
+                <p className="mt-1 text-amber-900">Highlighted daily list. NEW entries auto-link to case + client portal result.</p>
+                <div className="mt-2 max-h-56 space-y-2 overflow-auto rounded border border-amber-200 bg-white p-2">
+                  {todaysResults.map((item) => (
                     <article key={item.id} className="rounded border border-slate-200 p-2">
-                      <p className="font-semibold">{item.applicationNumber} - {item.clientName}</p>
-                      <p className="text-slate-500">
-                        {item.outcome} • {item.phone || "No phone"} • {new Date(item.createdAt).toLocaleString()}
+                      <p className="font-semibold">
+                        {item.applicationNumber} • {item.clientName}
                       </p>
-                      {item.matchedCaseId ? <p className="text-emerald-700">Matched case: {item.matchedCaseId}</p> : null}
+                      <p className="text-slate-500">
+                        {item.resultDate} • {item.outcome} • {item.autoCategory.toUpperCase()}
+                      </p>
+                      <p className="text-slate-500">
+                        {item.matchedCaseId ? `Case: ${item.matchedCaseId}` : "Old client result"} • {item.matchedClientId ? `Client ID: ${item.matchedClientId}` : "Client ID: N/A"}
+                      </p>
                       {item.fileLink ? (
                         <a href={item.fileLink} target="_blank" className="text-blue-700 underline">
-                          Open file
+                          Open uploaded result
                         </a>
                       ) : null}
+                      <div className="mt-2">
+                        {item.informedToClient ? (
+                          <p className="text-emerald-700">
+                            Sent to client {item.informedAt ? `on ${new Date(item.informedAt).toLocaleString()}` : ""}.
+                          </p>
+                        ) : (
+                          <button
+                            onClick={() => void markResultInformed(item.id)}
+                            className="rounded border border-slate-300 px-2 py-1 font-semibold"
+                          >
+                            Send to Client (Mark Sent)
+                          </button>
+                        )}
+                      </div>
                     </article>
                   ))}
-                  {legacyResults.length === 0 ? <p className="text-slate-500">No regular results saved yet.</p> : null}
+                  {todaysResults.length === 0 ? <p className="text-slate-500">No results uploaded today.</p> : null}
                 </div>
               </div>
-              <input
-                value={resultSearch}
-                onChange={(e) => setResultSearch(e.target.value)}
-                className="mt-2 w-full rounded border border-slate-300 px-2 py-2 text-xs"
-                placeholder="Search case by ID, name, or application type"
-              />
-              <select
-                value={(resultLinkedCase?.id || selectedCase?.id) ?? ""}
-                onChange={(e) => setSelectedCaseId(e.target.value)}
-                className="mt-2 w-full rounded-lg border-2 border-slate-300 px-2 py-2 text-sm"
-              >
-                {resultCaseOptions.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.id} - {c.client} - {c.formType}
-                  </option>
-                ))}
-              </select>
-              <div className="mt-3 rounded border border-slate-200 p-3 text-xs">
-                <p className="font-semibold">Decision Update</p>
-                <div className="mt-2 grid gap-2 md:grid-cols-4">
-                  <select
-                    value={resultOutcome}
-                    onChange={(e) => setResultOutcome(e.target.value as "" | "approved" | "refused" | "request_letter")}
-                    className="rounded border border-slate-300 px-2 py-2"
-                  >
-                    <option value="">Select decision</option>
-                    <option value="approved">Approved</option>
-                    <option value="refused">Refused</option>
-                    <option value="request_letter">Request Letter</option>
-                  </select>
-                  <input
-                    type="date"
-                    value={resultDecisionDate}
-                    onChange={(e) => setResultDecisionDate(e.target.value)}
-                    className="rounded border border-slate-300 px-2 py-2"
-                  />
-                  <input
-                    value={resultRemarks}
-                    onChange={(e) => setResultRemarks(e.target.value)}
-                    className="rounded border border-slate-300 px-2 py-2"
-                    placeholder="Remarks (optional)"
-                  />
-                  <button
-                    onClick={() => void saveCaseResultDecision()}
-                    className="rounded bg-slate-900 px-3 py-2 font-semibold text-white"
-                  >
-                    Save Decision
-                  </button>
+
+              <div className="mt-3 rounded border border-rose-200 bg-rose-50 p-3 text-xs">
+                <p className="font-semibold text-rose-900">Client IDs Not Informed Yet ({notInformedResults.length})</p>
+                <div className="mt-2 max-h-48 space-y-2 overflow-auto rounded border border-rose-200 bg-white p-2">
+                  {notInformedResults.map((item) => (
+                    <article key={item.id} className="rounded border border-slate-200 p-2">
+                      <p className="font-semibold">
+                        {item.matchedClientId || "N/A"} • {item.applicationNumber}
+                      </p>
+                      <p className="text-slate-500">
+                        {item.clientName} • {item.matchedCaseId || "old-client"} • {item.resultDate}
+                      </p>
+                    </article>
+                  ))}
+                  {notInformedResults.length === 0 ? <p className="text-slate-500">All uploaded results are marked informed.</p> : null}
                 </div>
-                {resultDecisionStatus ? <p className="mt-2 text-slate-700">{resultDecisionStatus}</p> : null}
-              </div>
-              <div className="mt-3 rounded border border-slate-200 p-3 text-xs">
-                <p className="font-semibold">Upload Result File</p>
-                <div className="mt-2 grid gap-2 md:grid-cols-3">
-                  <input
-                    value={resultUploadName}
-                    onChange={(e) => setResultUploadName(e.target.value)}
-                    className="rounded border border-slate-300 px-2 py-2"
-                    placeholder="Result title (optional)"
-                  />
-                  <input
-                    type="file"
-                    onChange={(e) => setResultUploadFile(e.target.files?.[0] || null)}
-                    className="rounded border border-slate-300 px-2 py-2"
-                  />
-                  <button
-                    onClick={() => void uploadResultDocument()}
-                    className="rounded bg-slate-900 px-3 py-2 font-semibold text-white"
-                  >
-                    Upload to Client Portal
-                  </button>
-                </div>
-                {resultUploadStatus ? <p className="mt-2 text-slate-700">{resultUploadStatus}</p> : null}
-              </div>
-              <div className="mt-3 rounded border border-slate-200 p-3 text-xs">
-                <p className="font-semibold">Send Result Update</p>
-                <div className="mt-2 grid gap-2 md:grid-cols-3">
-                  <input
-                    value={resultSendEmail}
-                    onChange={(e) => setResultSendEmail(e.target.value)}
-                    className="rounded border border-slate-300 px-2 py-2"
-                    placeholder="Client email (optional override)"
-                  />
-                  <input
-                    value={resultSendPhone}
-                    onChange={(e) => setResultSendPhone(e.target.value)}
-                    className="rounded border border-slate-300 px-2 py-2"
-                    placeholder="Client phone (optional override)"
-                  />
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={() => void sendResultUpdate("email")}
-                      className="rounded border border-slate-300 px-3 py-2 font-semibold"
-                    >
-                      Send Email
-                    </button>
-                    <button
-                      onClick={() => void sendResultUpdate("whatsapp")}
-                      className="rounded border border-slate-300 px-3 py-2 font-semibold"
-                    >
-                      Send WhatsApp
-                    </button>
-                    <button
-                      onClick={() => void sendResultUpdate("sms")}
-                      className="rounded border border-slate-300 px-3 py-2 font-semibold"
-                    >
-                      Send SMS
-                    </button>
-                  </div>
-                </div>
-                {resultShareStatus ? <p className="mt-2 text-slate-700">{resultShareStatus}</p> : null}
-              </div>
-              <div className="mt-3 space-y-2">
-                {resultDocuments.map((d) => (
-                  <article key={d.id} className="rounded border border-slate-200 p-3 text-xs">
-                    <p className="font-semibold">{d.name}</p>
-                    <p className="text-slate-500">{new Date(d.createdAt).toLocaleString()}</p>
-                    {d.link ? (
-                      <a href={d.link} target="_blank" className="text-blue-700 underline">
-                        Open Result
-                      </a>
-                    ) : null}
-                  </article>
-                ))}
-                {resultDocuments.length === 0 ? <p className="text-xs text-slate-500">No results uploaded for this case yet.</p> : null}
               </div>
             </section>
           ) : null}
@@ -4849,6 +4825,36 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                 <div className="rounded border border-slate-200 px-2 py-2 text-xs">
                   {selectedCase?.applicationNumber ? `Current: ${selectedCase.applicationNumber}` : "No application number yet"}
                 </div>
+              </div>
+              <div className="mt-3 rounded border border-slate-200 p-3 text-xs">
+                <p className="font-semibold">Upload Submission Document</p>
+                <p className="mt-1 text-slate-500">Files are stored in Drive under: Submitted / Submission.</p>
+                <div className="mt-2 grid gap-2 md:grid-cols-3">
+                  <select
+                    value={submissionUploadType}
+                    onChange={(e) =>
+                      setSubmissionUploadType(
+                        e.target.value as "submission_letter" | "wp_extension_letter"
+                      )
+                    }
+                    className="rounded border border-slate-300 px-2 py-2"
+                  >
+                    <option value="submission_letter">Submission Letter</option>
+                    <option value="wp_extension_letter">WP Extension Letter</option>
+                  </select>
+                  <input
+                    type="file"
+                    onChange={(e) => setSubmissionUploadFile(e.target.files?.[0] || null)}
+                    className="rounded border border-slate-300 px-2 py-2"
+                  />
+                  <button
+                    onClick={() => void uploadSubmissionDocument()}
+                    className="rounded bg-slate-900 px-3 py-2 font-semibold text-white"
+                  >
+                    Upload Document
+                  </button>
+                </div>
+                {submissionUploadStatus ? <p className="mt-2 text-slate-700">{submissionUploadStatus}</p> : null}
               </div>
               {submissionStatus ? <p className="mt-2 text-xs text-slate-700">{submissionStatus}</p> : null}
               <div className="mt-4 space-y-2">
