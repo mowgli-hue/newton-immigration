@@ -14,7 +14,8 @@ export async function PATCH(
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (user.userType !== "staff") {
+  const isStaffLike = user.userType === "staff" || user.role !== "Client";
+  if (!isStaffLike) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -156,10 +157,11 @@ export async function GET(
     return NextResponse.json({ error: "Case not found" }, { status: 404 });
   }
 
-  if (user.userType === "client" && user.caseId !== found.id) {
+  const isClientOnly = user.userType === "client" && user.role === "Client";
+  if (isClientOnly && user.caseId !== found.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (user.userType === "staff" && !canStaffAccessCase(user.role, user.name, found.assignedTo)) {
+  if (!isClientOnly && !canStaffAccessCase(user.role, user.name, found.assignedTo)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

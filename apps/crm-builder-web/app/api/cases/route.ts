@@ -44,7 +44,8 @@ export async function POST(request: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (user.userType !== "staff") {
+  const isStaffLike = user.userType === "staff" || user.role !== "Client";
+  if (!isStaffLike) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   if (!canCreateCase(user.role)) {
