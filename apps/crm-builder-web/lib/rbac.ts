@@ -16,7 +16,7 @@ const STAFF_ROLE_TAB_ACCESS: Record<Exclude<Role, "Client">, AppScreen[]> = {
   Admin: ["dashboard", "cases", "communications", "results", "submission", "accounting", "tasks", "chat", "files", "settings"],
   Marketing: ["dashboard", "communications", "results", "accounting"],
   Processing: ["dashboard", "cases", "tasks", "files", "chat"],
-  ProcessingLead: ["dashboard", "cases", "tasks", "files", "chat"],
+  ProcessingLead: ["dashboard", "cases", "tasks", "files", "chat", "settings"],
   Reviewer: ["dashboard", "cases", "tasks", "files", "chat"]
 };
 
@@ -38,11 +38,11 @@ export function isStaffRole(role: Role): role is Exclude<Role, "Client"> {
 export function tabsForRole(role: Role): AppScreen[] {
   const normalized = normalizeRole(role);
   if (normalized === "Client") return [];
-  return STAFF_ROLE_TAB_ACCESS.Admin;
+  return STAFF_ROLE_TAB_ACCESS[normalized];
 }
 
 export function canManageUsers(role: Role): boolean {
-  return normalizeRole(role) !== "Client";
+  return normalizeRole(role) === "Admin";
 }
 
 export function canCreateCase(role: Role): boolean {

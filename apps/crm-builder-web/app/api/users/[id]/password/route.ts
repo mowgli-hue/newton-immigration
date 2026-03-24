@@ -9,17 +9,13 @@ export async function PATCH(
 ) {
   const user = await getCurrentUserFromRequest(request);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (user.userType !== "staff" || (user.role !== "Admin" && user.role !== "Owner")) {
+  if (user.userType !== "staff" || user.role !== "Admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const target = await getUserById(user.companyId, params.id);
   if (!target) return NextResponse.json({ error: "User not found" }, { status: 404 });
   if (target.userType !== "staff") return NextResponse.json({ error: "Invalid target user" }, { status: 400 });
-  if (user.role === "Owner" && target.role === "Admin") {
-    return NextResponse.json({ error: "Owner cannot reset Admin password." }, { status: 403 });
-  }
-
   const body = await request.json().catch(() => ({}));
   const password = String(body.password ?? "");
   if (!password) {

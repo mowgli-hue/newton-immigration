@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { resolveApplicationChecklistKey } from "@/lib/application-checklists";
+import { getQuestionPromptsForFormType } from "@/lib/application-question-flows";
 
 type CaseMessage = {
   id: string;
@@ -158,118 +159,6 @@ const EMPTY_FORM: IntakeForm = {
   criminalHistory: "",
   medicalHistory: "",
   additionalNotes: ""
-};
-
-const APPLICATION_PROMPTS: Record<string, string[]> = {
-  pgwp: [
-    "Any recent entry to Canada? (date + reason)",
-    "Any gaps, breaks, or part-time semesters during studies? (explain)",
-    "Previous colleges attended in Canada (if any)",
-    "Any academic probation or transfer history? (explain)"
-  ],
-  trv_inside: [
-    "Have you used any other name? (Yes/No, details if yes)",
-    "Current marital status and spouse details (if applicable)",
-    "Current mailing/residential address and phone",
-    "Any refusal, criminal history, or medical history? (details if yes)",
-    "Employment history",
-    "Education after 12th",
-    "Name/relationship/address of person you will visit in Canada",
-    "Funds available and who will pay expenses"
-  ],
-  visitor_visa: [
-    "Have you used any other name? (Yes/No, details if yes)",
-    "Current marital status and spouse details",
-    "Countries lived in during past 5 years",
-    "Post-secondary studies details",
-    "Military/police/security service history",
-    "Employment and activities in last 10 years",
-    "Travel history in last 5 years",
-    "Refusal/criminal/medical history details",
-    "Parents and children details"
-  ],
-  visitor_record: [
-    "Current status in Canada and expiry details",
-    "Reason for extension and requested duration",
-    "Current address and phone number",
-    "Proof of funds summary",
-    "Any refusal/criminal/medical issues? (details if yes)"
-  ],
-  work_permit: [
-    "Have you used any other name? (Yes/No, details if yes)",
-    "Current marital status and spouse details",
-    "Current mailing/residential address and phone",
-    "Date/place/purpose of first entry to Canada",
-    "Any recent entry to Canada? (date + reason)",
-    "Any refusal, criminal history, or medical history? (details if yes)",
-    "Employment details (all positions, most recent first)",
-    "Education after 12th (if any)",
-    "Native language and English test status"
-  ],
-  study_permit: [
-    "Have you used any other name? (Yes/No, details if yes)",
-    "Current marital status and spouse details",
-    "Current mailing/residential address and phone",
-    "Any refusal, criminal history, or medical history? (details if yes)",
-    "Employment details",
-    "Education details after 12th",
-    "Native language"
-  ],
-  study_permit_extension: [
-    "Current permit details and expiry",
-    "Current institution + enrollment details",
-    "Reason for extension/college change",
-    "Address and phone details",
-    "Any refusal/criminal/medical issues? (details if yes)"
-  ],
-  super_visa: [
-    "Have you used any other name? (Yes/No, details if yes)",
-    "Current marital status and spouse details",
-    "Current mailing/residential address and phone",
-    "Any refusal, criminal history, or medical history? (details if yes)",
-    "Employment and education details",
-    "Native language",
-    "Family info (spouse/children/parents)"
-  ],
-  us_b1b2: [
-    "Purpose of US trip and intended dates",
-    "US contact details (if any)",
-    "Family information (parents/spouse)",
-    "Employment/education/training details",
-    "Travel history + past refusals/overstays",
-    "Security background answers"
-  ],
-  uk_visitor: [
-    "Address history (past 2 years)",
-    "Current activity/work/study details",
-    "Estimated monthly living expenses",
-    "Travel purpose and intended UK arrival date",
-    "Family details and UK relatives",
-    "Travel/refusal/criminal/medical history"
-  ],
-  refugee: [
-    "Other names used (if any)",
-    "Current address, phone, email, and language details",
-    "Marital/spouse/previous relationship details",
-    "Parents/siblings/children details",
-    "Address history last 10 years",
-    "Employment/activity history last 10 years",
-    "Travel history last 5 years",
-    "Detailed refugee claim narrative (incidents, dates, threats)"
-  ],
-  canadian_passport_doc: [
-    "Any previous names used?",
-    "Eye color and height (cm)",
-    "Address history (past 2 years)",
-    "Occupation history (past 2 years)",
-    "Guarantor details",
-    "Two references and emergency contact details"
-  ],
-  generic: [
-    "Please provide all key details relevant to this application",
-    "Any refusals, criminal, or medical history?",
-    "Any additional notes for your case team?"
-  ]
 };
 
 function parseSpecificAnswers(raw: string, prompts: string[]): Record<string, string> {
@@ -446,7 +335,7 @@ export default function QuestionnairePage({ params }: { params: { caseId: string
   const [assistantMessages, setAssistantMessages] = useState<CaseMessage[]>([]);
   const [specificAnswers, setSpecificAnswers] = useState<Record<string, string>>({});
   const appKey = useMemo(() => resolveApplicationChecklistKey(form.applicationType || "generic"), [form.applicationType]);
-  const appPrompts = useMemo(() => APPLICATION_PROMPTS[appKey] || APPLICATION_PROMPTS.generic, [appKey]);
+  const appPrompts = useMemo(() => getQuestionPromptsForFormType(form.applicationType || appKey), [appKey, form.applicationType]);
 
   async function loadAssistantMessages() {
     const res = await fetch(`/api/cases/${params.caseId}/messages`, { cache: "no-store" });
@@ -478,7 +367,7 @@ export default function QuestionnairePage({ params }: { params: { caseId: string
         setEmploymentEntries(parseEmploymentHistory(String(nextForm.employmentHistory || "")));
         setTravelEntries(parseTravelHistory(String(nextForm.travelHistoryDetails || "")));
         setEducationEntries(parseEducationHistory(String(nextForm.educationDetails || "")));
-        const promptList = APPLICATION_PROMPTS[resolveApplicationChecklistKey(nextForm.applicationType || "generic")] || APPLICATION_PROMPTS.generic;
+        const promptList = getQuestionPromptsForFormType(nextForm.applicationType || "generic");
         setSpecificAnswers(parseSpecificAnswers(String(nextForm.applicationSpecificAnswers || ""), promptList));
         await loadAssistantMessages();
       } catch {

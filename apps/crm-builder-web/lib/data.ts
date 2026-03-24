@@ -17,6 +17,8 @@ export const seedCompany: Company = {
   name: "Newton Immigration",
   slug: "newton",
   branding: {
+    customPortalSections: [],
+    customPortalSectionHistory: [],
     appName: "FlowDesk",
     logoText: "FlowDesk CRM",
     logoUrl: "",

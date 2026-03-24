@@ -1,0 +1,2451 @@
+{
+  "companies": [
+    {
+      "id": "CMP-1",
+      "name": "Newton Immigration",
+      "slug": "newton",
+      "createdAt": "2026-03-16T02:30:39.409Z",
+      "branding": {
+        "appName": "Newton Immigration",
+        "logoText": "FlowDesk CRM",
+        "logoUrl": "",
+        "driveRootLink": "https://drive.google.com/drive/folders/1-eOrPlJLEiMGAUr623H6Y1ByW1xG59r7",
+        "primary": "#1E3A8A",
+        "secondary": "#6366F1",
+        "success": "#10B981",
+        "background": "#F8FAFC",
+        "text": "#111827"
+      }
+    }
+  ],
+  "users": [
+    {
+      "id": "USR-1",
+      "name": "Admin User",
+      "email": "admin@flowdesk.local",
+      "role": "Admin",
+      "password": "admin123",
+      "companyId": "CMP-1",
+      "userType": "staff"
+    },
+    {
+      "id": "USR-2",
+      "name": "Case Owner",
+      "email": "owner@flowdesk.local",
+      "role": "Owner",
+      "password": "owner123",
+      "companyId": "CMP-1",
+      "userType": "staff"
+    },
+    {
+      "id": "USR-3",
+      "name": "Reviewer User",
+      "email": "reviewer@flowdesk.local",
+      "role": "Reviewer",
+      "password": "reviewer123",
+      "companyId": "CMP-1",
+      "userType": "staff"
+    },
+    {
+      "id": "USR-10",
+      "name": "Jatin Yadav",
+      "email": "client@flowdesk.local",
+      "role": "Owner",
+      "password": "client123",
+      "companyId": "CMP-1",
+      "userType": "client",
+      "caseId": "CASE-1021"
+    },
+    {
+      "id": "USR-5",
+      "companyId": "CMP-1",
+      "name": "lavi",
+      "email": "lavishadhingra06@gmail.com",
+      "role": "Owner",
+      "userType": "client",
+      "password": "client123",
+      "caseId": "CASE-1005"
+    },
+    {
+      "id": "USR-6",
+      "companyId": "CMP-1",
+      "name": "jjj",
+      "email": "navisandhu0297@gmail.com",
+      "role": "Owner",
+      "userType": "client",
+      "password": "admin123",
+      "caseId": "CASE-1005"
+    },
+    {
+      "id": "USR-7",
+      "companyId": "CMP-1",
+      "name": "LAVISHA",
+      "email": "mowgli@junglelabsworld.com",
+      "role": "Owner",
+      "userType": "client",
+      "password": "client123",
+      "caseId": "CASE-1005"
+    },
+    {
+      "id": "USR-8",
+      "companyId": "CMP-1",
+      "name": "LAVIAHA",
+      "email": "ADMIN@JUNGELLABSWORLD.COM",
+      "role": "Owner",
+      "userType": "client",
+      "password": "admin123",
+      "caseId": "CASE-1021"
+    },
+    {
+      "id": "USR-9",
+      "companyId": "CMP-1",
+      "name": "Client",
+      "email": "client-24bdcf6b-1773880398172@flowdesk.local",
+      "role": "Owner",
+      "userType": "client",
+      "password": "fd_24bdcf6b-4_ws4886dq",
+      "caseId": "CASE-1006"
+    },
+    {
+      "id": "USR-10",
+      "companyId": "CMP-1",
+      "name": "NEHA",
+      "email": "client-05d35944-1773880935538@flowdesk.local",
+      "role": "Owner",
+      "userType": "client",
+      "password": "fd_05d35944-8_tvtqta4o",
+      "caseId": "CASE-1007"
+    },
+    {
+      "id": "USR-11",
+      "companyId": "CMP-1",
+      "name": "Client",
+      "email": "client-2b29dfca-1773881344589@flowdesk.local",
+      "role": "Owner",
+      "userType": "client",
+      "password": "fd_2b29dfca-f_iyrhbi4j",
+      "caseId": "CASE-1008"
+    },
+    {
+      "id": "USR-12",
+      "companyId": "CMP-1",
+      "name": "Client",
+      "email": "client-e61c7a6e-1773881726823@flowdesk.local",
+      "role": "Owner",
+      "userType": "client",
+      "password": "fd_e61c7a6e-1_1qbqaxnk",
+      "caseId": "CASE-1008"
+    },
+    {
+      "id": "USR-13",
+      "companyId": "CMP-1",
+      "name": "Client",
+      "email": "client-15e59314-1773882477065@flowdesk.local",
+      "role": "Owner",
+      "userType": "client",
+      "password": "fd_15e59314-2_b7c799vf",
+      "caseId": "CASE-1009"
+    },
+    {
+      "id": "USR-14",
+      "companyId": "CMP-1",
+      "name": "Client",
+      "email": "client-4776ab88-1773884030647@flowdesk.local",
+      "role": "Owner",
+      "userType": "client",
+      "password": "fd_4776ab88-9_k6ks9cwx",
+      "caseId": "CASE-1010"
+    },
+    {
+      "id": "USR-15",
+      "companyId": "CMP-1",
+      "name": "navdeep",
+      "email": "client-c94e3169-1773902592755@flowdesk.local",
+      "role": "Owner",
+      "userType": "client",
+      "password": "fd_c94e3169-2_1maikksl",
+      "caseId": "CASE-1011"
+    }
+  ],
+  "cases": [
+    {
+      "id": "CASE-1011",
+      "companyId": "CMP-1",
+      "client": "navdeep",
+      "caseStatus": "active",
+      "aiStatus": "waiting_client",
+      "leadPhone": "7787236662",
+      "formType": "Visitor Record (Extension)",
+      "owner": "N/A",
+      "reviewer": "N/A",
+      "stage": "Paid",
+      "dueInDays": 7,
+      "unreadClientMessages": 0,
+      "docsPending": 5,
+      "balanceAmount": 0,
+      "retainerSigned": true,
+      "docsUploadLink": "https://drive.google.com/drive/folders/15RWTRWm3XeWK0HZEDPF5RkGcZ9svEdgN",
+      "questionnaireLink": "",
+      "paymentMethod": "interac",
+      "interacRecipient": "newtonimmigration@gmail.com",
+      "interacInstructions": "Please include your case number in transfer message and share payment screenshot.",
+      "paymentStatus": "paid",
+      "imm5710Automation": {
+        "status": "idle"
+      },
+      "servicePackage": {
+        "name": "Standard Service",
+        "retainerAmount": 315,
+        "balanceAmount": 0,
+        "milestones": []
+      },
+      "invoices": [],
+      "applicationFormsLink": "https://drive.google.com/drive/folders/1VyzNETN0prDjy4EH9Kpy_BkJTebtxFSQ",
+      "submittedFolderLink": "https://drive.google.com/drive/folders/1-mWllN0H-rBbx8K0qZPGonxFYKH_J0BE",
+      "correspondenceFolderLink": "https://drive.google.com/drive/folders/1nA8UNAzA0nq2COmSgwHdutA-gv8VAwF-",
+      "retainerSentAt": "2026-03-19T06:42:16.916Z",
+      "clientUserId": "USR-15",
+      "retainerRecord": {
+        "signedAt": "2026-03-19T06:43:31.427Z",
+        "signerName": "navdeep",
+        "signatureType": "typed",
+        "signatureValue": "navdeep",
+        "acceptedTerms": true
+      },
+      "paymentPaidAt": "2026-03-19T06:44:32.636Z"
+    },
+    {
+      "id": "CASE-1010",
+      "companyId": "CMP-1",
+      "client": "Client",
+      "caseStatus": "under_review",
+      "aiStatus": "drafting",
+      "leadPhone": "7787236662",
+      "formType": "PGWP",
+      "owner": "N/A",
+      "reviewer": "N/A",
+      "stage": "Under Review",
+      "dueInDays": 7,
+      "unreadClientMessages": 0,
+      "docsPending": 5,
+      "balanceAmount": 0,
+      "retainerSigned": true,
+      "docsUploadLink": "https://drive.google.com/drive/folders/1p9h4aXIbQBR3lJaDLJlcvK490Uj6YRc4",
+      "questionnaireLink": "",
+      "paymentMethod": "interac",
+      "interacRecipient": "newtonimmigration@gmail.com",
+      "interacInstructions": "Please include your case number in transfer message and share payment screenshot.",
+      "paymentStatus": "paid",
+      "servicePackage": {
+        "name": "Standard Service",
+        "retainerAmount": 265,
+        "balanceAmount": 0,
+        "milestones": []
+      },
+      "invoices": [],
+      "applicationFormsLink": "https://drive.google.com/drive/folders/1SXPDtHoUWHWWPtRIP0PQFWSeTVeJTPAg",
+      "submittedFolderLink": "https://drive.google.com/drive/folders/18JVKS57YCA9FWIJQMbmNCQ0gQ0aZvLy6",
+      "correspondenceFolderLink": "https://drive.google.com/drive/folders/1f5cfnU8wtvtqUremk3b5JhhLbliKnByV",
+      "retainerSentAt": "2026-03-19T01:33:46.958Z",
+      "clientUserId": "USR-14",
+      "retainerRecord": {
+        "signedAt": "2026-03-19T01:33:56.138Z",
+        "signerName": "Client",
+        "signatureType": "typed",
+        "signatureValue": "CLIENT",
+        "acceptedTerms": true
+      },
+      "paymentPaidAt": "2026-03-19T01:34:36.748Z",
+      "imm5710Automation": {
+        "status": "started",
+        "startedAt": "2026-03-19T06:27:36.080Z",
+        "pid": 50632,
+        "logPath": "/Users/junglelabs/Documents/New project/imm5710_automation/automation.log",
+        "readyPackagePath": "/Users/junglelabs/Documents/New project/apps/crm-builder-web/data/ready_packages/CASE-1010_pgwp.json",
+        "autoTriggered": true
+      },
+      "pgwpIntake": {
+        "applicationType": "PGWP",
+        "firstName": "Navdeep",
+        "lastName": "Sandhu",
+        "dateOfBirth": "2002-09-24",
+        "uci": "",
+        "address": "17282 59a Ave, SURREY, bc, v3s 5s5",
+        "city": "Surrey",
+        "province": "British Columbia",
+        "postalCode": "V3S 5S5",
+        "email": "mowgli@junglelabsworld.com",
+        "phone": "4379829604",
+        "nativeLanguage": "HINDI",
+        "preferredLanguage": "English",
+        "maritalStatus": "SINGLE",
+        "ieltsDetails": "YES",
+        "originalEntryDate": "2024-01-12",
+        "originalEntryPlacePurpose": "TORONTO, STUDY",
+        "recentEntryDetails": "no",
+        "employmentHistory": "From: 2024-01 | To: 2025-09 | Position: director | Employer: immigration | Location: surrey",
+        "dliNameLocation": "ALEXANDER",
+        "programNameDuration": "ASSOCIATE OF ARTS",
+        "completionLetterDate": "2026-01-12",
+        "fullTimeStudentThroughout": "YES",
+        "gapsOrPartTimeDetails": "NO",
+        "previousCollegesInCanada": "NO",
+        "academicProbationOrTransfer": "NO",
+        "refusedAnyCountry": "NO",
+        "refusalDetails": "NO",
+        "criminalHistory": "NO",
+        "medicalHistory": "NO",
+        "additionalNotes": "NO",
+        "intendedWorkDetails": "",
+        "usedOtherName": "NO",
+        "otherNameDetails": "no",
+        "currentCountry": "Canada",
+        "currentCountryStatus": "",
+        "currentCountryFromDate": "",
+        "placeOfBirthCity": "",
+        "passportNumber": "",
+        "passportIssueDate": "",
+        "passportExpiryDate": "",
+        "countryOfBirth": "",
+        "citizenship": "",
+        "canCommunicateEnglishFrench": "",
+        "spouseName": "",
+        "spouseDateOfMarriage": "",
+        "previousMarriageCommonLaw": "",
+        "previousRelationshipDetails": "",
+        "residentialAddress": "no",
+        "education": "12th",
+        "englishTestTaken": "no",
+        "recentEntryAny": "",
+        "permitDetails": "",
+        "studyPermitExpiryDate": "",
+        "fullName": "Navdeep Singh Sandhu",
+        "travelHistorySixMonths": "no",
+        "travelHistoryDetails": "",
+        "educationDetails": ""
+      }
+    },
+    {
+      "id": "CASE-1009",
+      "companyId": "CMP-1",
+      "client": "Client",
+      "caseStatus": "active",
+      "aiStatus": "waiting_client",
+      "leadPhone": "7787236662",
+      "formType": "PGWP",
+      "owner": "N/A",
+      "reviewer": "N/A",
+      "stage": "Paid",
+      "dueInDays": 7,
+      "unreadClientMessages": 0,
+      "docsPending": 5,
+      "balanceAmount": 0,
+      "retainerSigned": true,
+      "docsUploadLink": "https://drive.google.com/drive/folders/1TNLxbZgYhb0cgLdZpB0JHfAj3-lcbT7I",
+      "questionnaireLink": "",
+      "paymentMethod": "interac",
+      "interacRecipient": "newtonimmigration@gmail.com",
+      "interacInstructions": "Please include your case number in transfer message and share payment screenshot.",
+      "paymentStatus": "paid",
+      "servicePackage": {
+        "name": "Standard Service",
+        "retainerAmount": 265,
+        "balanceAmount": 0,
+        "milestones": []
+      },
+      "invoices": [],
+      "applicationFormsLink": "https://drive.google.com/drive/folders/1j4AdzZ1w6idPapT6nWrD__OoSneg1Xqy",
+      "submittedFolderLink": "https://drive.google.com/drive/folders/1_fnZeve1WOrD2xzIrLHcclXHODt2dSnt",
+      "correspondenceFolderLink": "https://drive.google.com/drive/folders/1Em7Lur8qJb91otfmaREwJE74MOKMGXQY",
+      "retainerSentAt": "2026-03-19T01:07:46.023Z",
+      "clientUserId": "USR-13",
+      "retainerRecord": {
+        "signedAt": "2026-03-19T01:08:08.260Z",
+        "signerName": "Client",
+        "signatureType": "typed",
+        "signatureValue": "CLIENT",
+        "acceptedTerms": true
+      },
+      "paymentPaidAt": "2026-03-19T01:08:34.285Z",
+      "imm5710Automation": {
+        "status": "idle"
+      }
+    },
+    {
+      "id": "CASE-1008",
+      "companyId": "CMP-1",
+      "client": "Client",
+      "caseStatus": "active",
+      "aiStatus": "waiting_client",
+      "leadPhone": "7787236662",
+      "formType": "PGWP",
+      "owner": "N/A",
+      "reviewer": "N/A",
+      "stage": "Paid",
+      "dueInDays": 7,
+      "unreadClientMessages": 0,
+      "docsPending": 5,
+      "balanceAmount": 0,
+      "retainerSigned": true,
+      "docsUploadLink": "https://drive.google.com/drive/folders/1F6bdbFveblN4BAsjIb-Ku1KgVfEIBXg7",
+      "questionnaireLink": "",
+      "paymentMethod": "interac",
+      "interacRecipient": "newtonimmigration@gmail.com",
+      "interacInstructions": "Please include your case number in transfer message and share payment screenshot.",
+      "paymentStatus": "paid",
+      "servicePackage": {
+        "name": "Standard Service",
+        "retainerAmount": 265,
+        "balanceAmount": 0,
+        "milestones": []
+      },
+      "invoices": [],
+      "applicationFormsLink": "https://drive.google.com/drive/folders/1ZaOtGX6GsRhHodt9tssbHPGJ-iRl4G3F",
+      "submittedFolderLink": "https://drive.google.com/drive/folders/1WDnNsm3dlvbA91iePMo0DjjSAb5fgmNT",
+      "correspondenceFolderLink": "https://drive.google.com/drive/folders/1Em4MqPTRjJ0Y31jVA4MHTQ6_dcyk2JqI",
+      "retainerSentAt": "2026-03-19T00:55:22.690Z",
+      "clientUserId": "USR-12",
+      "retainerRecord": {
+        "signedAt": "2026-03-19T00:55:33.923Z",
+        "signerName": "Client",
+        "signatureType": "typed",
+        "signatureValue": "CLIENT",
+        "acceptedTerms": true
+      },
+      "paymentPaidAt": "2026-03-19T01:01:44.576Z",
+      "imm5710Automation": {
+        "status": "idle"
+      }
+    },
+    {
+      "id": "CASE-1007",
+      "companyId": "CMP-1",
+      "client": "NEHA",
+      "caseStatus": "lead",
+      "aiStatus": "idle",
+      "leadPhone": "4379829604",
+      "formType": "Post-Graduation Work Permit (PGWP)",
+      "owner": "N/A",
+      "reviewer": "N/A",
+      "stage": "Lead",
+      "dueInDays": 7,
+      "unreadClientMessages": 0,
+      "docsPending": 5,
+      "balanceAmount": 0,
+      "retainerSigned": false,
+      "docsUploadLink": "https://drive.google.com/drive/folders/1k47GOi6YogKolLXld40J76E6Gb3bNbeg",
+      "questionnaireLink": "",
+      "paymentMethod": "interac",
+      "interacRecipient": "newtonimmigration@gmail.com",
+      "interacInstructions": "Please include your case number in transfer message and share payment screenshot.",
+      "paymentStatus": "pending",
+      "servicePackage": {
+        "name": "Standard Service",
+        "retainerAmount": 265,
+        "balanceAmount": 0,
+        "milestones": []
+      },
+      "invoices": [],
+      "applicationFormsLink": "https://drive.google.com/drive/folders/1PVVQsVVhEGwUvkZD275OxsSVAg5wOedO",
+      "submittedFolderLink": "https://drive.google.com/drive/folders/10NKbqw8bJEmDiGN2sITuVI2tZcblG01t",
+      "correspondenceFolderLink": "https://drive.google.com/drive/folders/1MiKZv45ar7C751HSRnU3OMMdY-Z9rgMi",
+      "retainerSentAt": "2026-03-19T00:42:08.577Z",
+      "clientUserId": "USR-10",
+      "imm5710Automation": {
+        "status": "idle"
+      }
+    },
+    {
+      "id": "CASE-1006",
+      "companyId": "CMP-1",
+      "client": "Client",
+      "caseStatus": "lead",
+      "aiStatus": "idle",
+      "leadPhone": "424324",
+      "formType": "Visitor Record (Extension)",
+      "owner": "N/A",
+      "reviewer": "N/A",
+      "stage": "Lead",
+      "dueInDays": 7,
+      "unreadClientMessages": 0,
+      "docsPending": 5,
+      "balanceAmount": 0,
+      "retainerSigned": true,
+      "docsUploadLink": "https://drive.google.com/drive/folders/1dj38kLGLTF9XBYlQZmBBWWxR6EmEvJbV",
+      "questionnaireLink": "",
+      "paymentMethod": "interac",
+      "interacRecipient": "newtonimmigration@gmail.com",
+      "interacInstructions": "Please include your case number in transfer message and share payment screenshot.",
+      "paymentStatus": "pending",
+      "servicePackage": {
+        "name": "Standard Service",
+        "retainerAmount": 315,
+        "balanceAmount": 0,
+        "milestones": []
+      },
+      "invoices": [],
+      "applicationFormsLink": "https://drive.google.com/drive/folders/18OzvfLxkOxkhJBM2FIl_QlL95mquycbK",
+      "submittedFolderLink": "https://drive.google.com/drive/folders/1Ga_eA0MCN2xMRN5zkynZxrkuksccLfLL",
+      "correspondenceFolderLink": "https://drive.google.com/drive/folders/1h6yn1qfa15TQBvpwuDw6s-tWEKY9pNPm",
+      "retainerSentAt": "2026-03-19T00:33:12.479Z",
+      "clientUserId": "USR-9",
+      "retainerRecord": {
+        "signedAt": "2026-03-19T00:33:34.433Z",
+        "signerName": "Client",
+        "signatureType": "typed",
+        "signatureValue": "CLIENT",
+        "acceptedTerms": true
+      },
+      "imm5710Automation": {
+        "status": "idle"
+      }
+    },
+    {
+      "id": "CASE-1005",
+      "companyId": "CMP-1",
+      "client": "LAVISHA",
+      "formType": "PGWP",
+      "owner": "N/A",
+      "reviewer": "N/A",
+      "stage": "Paid",
+      "dueInDays": 7,
+      "unreadClientMessages": 0,
+      "docsPending": 5,
+      "balanceAmount": 0,
+      "retainerSigned": true,
+      "docsUploadLink": "https://drive.google.com/drive/folders/1iFoUvvIT-jW8WehdCO-5y5GU7L2_9bU_",
+      "questionnaireLink": "",
+      "servicePackage": {
+        "name": "Standard Service",
+        "retainerAmount": 265,
+        "balanceAmount": 0,
+        "milestones": []
+      },
+      "invoices": [],
+      "paymentLink": "",
+      "paymentStatus": "paid",
+      "paymentMethod": "interac",
+      "interacRecipient": "newtonimmigration@gmail.com",
+      "interacInstructions": "Send Interac e-Transfer with case number.",
+      "retainerSentAt": "2026-03-18T06:47:00.288Z",
+      "clientUserId": "USR-7",
+      "retainerRecord": {
+        "signedAt": "2026-03-17T05:44:53.327Z",
+        "signerName": "lavi",
+        "signatureType": "typed",
+        "signatureValue": "lavi",
+        "acceptedTerms": true
+      },
+      "caseStatus": "active",
+      "aiStatus": "waiting_client",
+      "paymentPaidAt": "2026-03-18T06:49:13.845Z",
+      "pgwpIntake": {
+        "applicationType": "PGWP",
+        "firstName": "Navdeep",
+        "lastName": "Sandhu",
+        "dateOfBirth": "2002-09-24",
+        "uci": "",
+        "address": "17282 59a Ave",
+        "city": "Surrey",
+        "province": "British Columbia",
+        "postalCode": "V3S 5S5",
+        "email": "mowgli@junglelabsworld.com",
+        "phone": "4379829604",
+        "nativeLanguage": "hindi",
+        "preferredLanguage": "English",
+        "maritalStatus": "single",
+        "ieltsDetails": "yes",
+        "originalEntryDate": "2022-03-10",
+        "originalEntryPlacePurpose": "toronto, study",
+        "recentEntryDetails": "",
+        "employmentHistory": "2024-01 to 2025-10 at mc donalds as a crew member",
+        "dliNameLocation": "alexander college",
+        "programNameDuration": "",
+        "completionLetterDate": "2025-08-01",
+        "fullTimeStudentThroughout": "yes",
+        "gapsOrPartTimeDetails": "no",
+        "previousCollegesInCanada": "no",
+        "academicProbationOrTransfer": "no",
+        "refusedAnyCountry": "no",
+        "refusalDetails": "",
+        "criminalHistory": "no",
+        "medicalHistory": "no",
+        "additionalNotes": "no",
+        "currentCountryStatus": "work permit",
+        "passportNumber": "v1109650",
+        "passportIssueDate": "2021-04-09",
+        "countryOfBirth": "india",
+        "citizenship": "india",
+        "studyPermitExpiryDate": "2025-09-24"
+      },
+      "applicationFormsLink": "https://drive.google.com/drive/folders/1OO2XwObbk0Zc-xMpOrHd9zP0B2MqHmFx",
+      "submittedFolderLink": "https://drive.google.com/drive/folders/1dHuMRHI7yEbjtKk4lyNgMgtYhqrG_H2U",
+      "correspondenceFolderLink": "https://drive.google.com/drive/folders/1hZESD_sMjWIqPyTqh20GJxVRptjdEGf-",
+      "imm5710Automation": {
+        "status": "idle"
+      }
+    },
+    {
+      "id": "CASE-1021",
+      "client": "LAVIAHA",
+      "formType": "PGWP",
+      "owner": "Aman",
+      "reviewer": "Harpreet",
+      "stage": "Assigned",
+      "dueInDays": 2,
+      "unreadClientMessages": 3,
+      "docsPending": 1,
+      "companyId": "CMP-1",
+      "balanceAmount": 0,
+      "retainerSigned": true,
+      "docsUploadLink": "",
+      "questionnaireLink": "",
+      "servicePackage": {
+        "name": "Standard Service",
+        "retainerAmount": 265,
+        "balanceAmount": 0,
+        "milestones": []
+      },
+      "invoices": [],
+      "retainerRecord": {
+        "signedAt": "2026-03-16T04:13:32.783Z",
+        "signerName": "Jatin Yadav",
+        "signatureType": "initials",
+        "signatureValue": "J Y",
+        "acceptedTerms": true
+      },
+      "paymentLink": "",
+      "paymentStatus": "pending",
+      "paymentMethod": "interac",
+      "interacRecipient": "newtonimmigration@gmail.com",
+      "interacInstructions": "Send Interac e-Transfer with case number.",
+      "caseStatus": "active",
+      "aiStatus": "idle",
+      "retainerSentAt": "2026-03-18T23:55:09.276Z",
+      "clientUserId": "USR-8",
+      "imm5710Automation": {
+        "status": "idle"
+      }
+    },
+    {
+      "id": "CASE-1022",
+      "client": "Gurpreet Kaur",
+      "formType": "TRV",
+      "owner": "Simran",
+      "reviewer": "Nav",
+      "stage": "Decision",
+      "dueInDays": 1,
+      "unreadClientMessages": 0,
+      "docsPending": 0,
+      "companyId": "CMP-1",
+      "balanceAmount": 0,
+      "retainerSigned": false,
+      "docsUploadLink": "",
+      "questionnaireLink": "",
+      "servicePackage": {
+        "name": "Standard Service",
+        "retainerAmount": 0,
+        "balanceAmount": 0,
+        "milestones": []
+      },
+      "invoices": [],
+      "paymentLink": "",
+      "paymentStatus": "pending",
+      "paymentMethod": "interac",
+      "interacRecipient": "",
+      "interacInstructions": "Send Interac e-Transfer with case number.",
+      "caseStatus": "submitted",
+      "aiStatus": "idle",
+      "imm5710Automation": {
+        "status": "idle"
+      }
+    },
+    {
+      "id": "CASE-1023",
+      "client": "Rahul Sharma",
+      "formType": "PGWP",
+      "owner": "Aman",
+      "reviewer": "Mani",
+      "stage": "Intake",
+      "dueInDays": 4,
+      "unreadClientMessages": 2,
+      "docsPending": 4,
+      "companyId": "CMP-1",
+      "balanceAmount": 0,
+      "retainerSigned": false,
+      "docsUploadLink": "",
+      "questionnaireLink": "",
+      "servicePackage": {
+        "name": "Standard Service",
+        "retainerAmount": 0,
+        "balanceAmount": 0,
+        "milestones": []
+      },
+      "invoices": [],
+      "paymentLink": "",
+      "paymentStatus": "pending",
+      "paymentMethod": "interac",
+      "interacRecipient": "",
+      "interacInstructions": "Send Interac e-Transfer with case number.",
+      "caseStatus": "lead",
+      "aiStatus": "idle",
+      "imm5710Automation": {
+        "status": "idle"
+      }
+    },
+    {
+      "id": "CASE-1024",
+      "client": "Neha Singh",
+      "formType": "Work Permit",
+      "owner": "N/A",
+      "reviewer": "N/A",
+      "stage": "Paid",
+      "dueInDays": 6,
+      "unreadClientMessages": 1,
+      "docsPending": 5,
+      "companyId": "CMP-1",
+      "balanceAmount": 0,
+      "retainerSigned": false,
+      "docsUploadLink": "",
+      "questionnaireLink": "",
+      "servicePackage": {
+        "name": "Standard Service",
+        "retainerAmount": 0,
+        "balanceAmount": 0,
+        "milestones": []
+      },
+      "invoices": [],
+      "paymentLink": "",
+      "paymentStatus": "pending",
+      "paymentMethod": "interac",
+      "interacRecipient": "",
+      "interacInstructions": "Send Interac e-Transfer with case number.",
+      "caseStatus": "lead",
+      "aiStatus": "idle",
+      "imm5710Automation": {
+        "status": "idle"
+      }
+    }
+  ],
+  "messages": [
+    {
+      "id": "MSG-1",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1021",
+      "senderType": "staff",
+      "senderName": "Aman",
+      "text": "Please upload your latest passport and permit copy.",
+      "createdAt": "2026-03-16T02:30:39.409Z"
+    },
+    {
+      "id": "MSG-2",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1021",
+      "senderType": "ai",
+      "senderName": "FlowDesk AI",
+      "text": "I can help you verify if your documents are complete before review.",
+      "createdAt": "2026-03-16T02:30:39.409Z"
+    },
+    {
+      "id": "MSG-3",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1023",
+      "senderType": "ai",
+      "senderName": "FlowDesk AI",
+      "text": "hi",
+      "createdAt": "2026-03-17T06:33:10.975Z"
+    },
+    {
+      "id": "MSG-4",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1023",
+      "senderType": "staff",
+      "senderName": "Admin User",
+      "text": "hi",
+      "createdAt": "2026-03-17T06:33:16.188Z"
+    },
+    {
+      "id": "MSG-5",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1021",
+      "senderType": "client",
+      "senderName": "Jatin Yadav",
+      "text": "HI",
+      "createdAt": "2026-03-19T00:42:56.895Z"
+    },
+    {
+      "id": "MSG-6",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "senderType": "client",
+      "senderName": "Client",
+      "text": "how cna i do it",
+      "createdAt": "2026-03-19T02:08:58.106Z"
+    },
+    {
+      "id": "MSG-7",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "senderType": "ai",
+      "senderName": "FlowDesk AI",
+      "text": "PGWP intake progress: 21/25. Please provide: Residential address if different.",
+      "createdAt": "2026-03-19T02:08:58.118Z"
+    },
+    {
+      "id": "MSG-8",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "senderType": "client",
+      "senderName": "Client",
+      "text": "what else is left",
+      "createdAt": "2026-03-19T02:09:12.140Z"
+    },
+    {
+      "id": "MSG-9",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "senderType": "ai",
+      "senderName": "FlowDesk AI",
+      "text": "PGWP intake progress: 22/25. Please provide: Any recent entry to Canada (Yes/No).",
+      "createdAt": "2026-03-19T02:09:12.153Z"
+    },
+    {
+      "id": "MSG-10",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "senderType": "client",
+      "senderName": "Client",
+      "text": "no",
+      "createdAt": "2026-03-19T02:09:24.799Z"
+    },
+    {
+      "id": "MSG-11",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "senderType": "ai",
+      "senderName": "FlowDesk AI",
+      "text": "PGWP intake progress: 23/25. Please provide: Education after 12th grade.",
+      "createdAt": "2026-03-19T02:09:24.812Z"
+    },
+    {
+      "id": "MSG-12",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "senderType": "client",
+      "senderName": "Client",
+      "text": "alexander college, diploma complete in 2026-01 started in 2024 12",
+      "createdAt": "2026-03-19T02:10:14.746Z"
+    },
+    {
+      "id": "MSG-13",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "senderType": "ai",
+      "senderName": "FlowDesk AI",
+      "text": "PGWP intake progress: 24/25. Please provide: Taken English language test (Yes/No).",
+      "createdAt": "2026-03-19T02:10:14.760Z"
+    },
+    {
+      "id": "MSG-14",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "senderType": "client",
+      "senderName": "Client",
+      "text": "yes",
+      "createdAt": "2026-03-19T02:10:19.409Z"
+    },
+    {
+      "id": "MSG-15",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "senderType": "ai",
+      "senderName": "FlowDesk AI",
+      "text": "Thanks Client. I can help with document checklist, case status, and next PGWP steps. Ask me what to upload next or your current status.",
+      "createdAt": "2026-03-19T02:10:19.423Z"
+    },
+    {
+      "id": "MSG-16",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "senderType": "client",
+      "senderName": "Client",
+      "text": "nothing",
+      "createdAt": "2026-03-19T02:10:36.178Z"
+    },
+    {
+      "id": "MSG-17",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "senderType": "ai",
+      "senderName": "FlowDesk AI",
+      "text": "Thanks Client. I can help with document checklist, case status, and next PGWP steps. Ask me what to upload next or your current status.",
+      "createdAt": "2026-03-19T02:10:36.187Z"
+    },
+    {
+      "id": "MSG-18",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "senderType": "client",
+      "senderName": "Client",
+      "text": "what left now",
+      "createdAt": "2026-03-19T02:10:52.439Z"
+    },
+    {
+      "id": "MSG-19",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "senderType": "ai",
+      "senderName": "FlowDesk AI",
+      "text": "PGWP intake progress: 23/25. Please provide: Education after 12th grade.",
+      "createdAt": "2026-03-19T02:10:52.451Z"
+    },
+    {
+      "id": "MSG-20",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "senderType": "client",
+      "senderName": "Client",
+      "text": "alexander college, diploma complete in 2026-01 started in 2024 12 city burnaby, country canada",
+      "createdAt": "2026-03-19T02:11:12.362Z"
+    },
+    {
+      "id": "MSG-21",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "senderType": "ai",
+      "senderName": "FlowDesk AI",
+      "text": "PGWP intake progress: 24/25. Please provide: Taken English language test (Yes/No).",
+      "createdAt": "2026-03-19T02:11:12.376Z"
+    },
+    {
+      "id": "MSG-22",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "senderType": "client",
+      "senderName": "Client",
+      "text": "yes",
+      "createdAt": "2026-03-19T02:11:16.763Z"
+    },
+    {
+      "id": "MSG-23",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "senderType": "ai",
+      "senderName": "FlowDesk AI",
+      "text": "Thanks Client. I can help with document checklist, case status, and next PGWP steps. Ask me what to upload next or your current status.",
+      "createdAt": "2026-03-19T02:11:16.777Z"
+    },
+    {
+      "id": "MSG-24",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "senderType": "client",
+      "senderName": "Client",
+      "text": "anythign else left",
+      "createdAt": "2026-03-19T02:11:23.254Z"
+    },
+    {
+      "id": "MSG-25",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "senderType": "ai",
+      "senderName": "FlowDesk AI",
+      "text": "Thanks Client. I can help with document checklist, case status, and next PGWP steps. Ask me what to upload next or your current status.",
+      "createdAt": "2026-03-19T02:11:23.262Z"
+    },
+    {
+      "id": "MSG-26",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "senderType": "client",
+      "senderName": "Client",
+      "text": "what is left",
+      "createdAt": "2026-03-19T05:27:14.863Z"
+    },
+    {
+      "id": "MSG-27",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "senderType": "ai",
+      "senderName": "FlowDesk AI",
+      "text": "Thanks Client. I can help with document checklist, case status, and next PGWP steps. Ask me what to upload next or your current status.",
+      "createdAt": "2026-03-19T05:27:14.872Z"
+    }
+  ],
+  "documents": [
+    {
+      "id": "DOC-1",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1021",
+      "name": "Passport Bio Page",
+      "status": "received",
+      "link": "https://drive.google.com/newton/docs/passport",
+      "createdAt": "2026-03-16T02:30:39.409Z"
+    },
+    {
+      "id": "DOC-2",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1005",
+      "name": "Valid Study Permit",
+      "status": "received",
+      "link": "https://drive.google.com/file/d/16Tg2buevro3EBeOV-8KWl0yHODZBtRiX/view?usp=drivesdk",
+      "createdAt": "2026-03-18T06:50:38.579Z"
+    },
+    {
+      "id": "DOC-3",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1005",
+      "name": "Completion Letter",
+      "status": "received",
+      "link": "https://drive.google.com/file/d/1Aau_MK7iMqCn-TrqcN8pi1G5MER5e3GE/view?usp=drivesdk",
+      "createdAt": "2026-03-18T06:50:48.613Z"
+    },
+    {
+      "id": "DOC-4",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1005",
+      "name": "Official Transcripts",
+      "status": "received",
+      "link": "https://drive.google.com/file/d/1MeUcz7zbtGJsooHkKnhp67ZH-P9_WuZz/view?usp=drivesdk",
+      "createdAt": "2026-03-18T06:50:56.510Z"
+    },
+    {
+      "id": "DOC-5",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1005",
+      "name": "Digital Photo",
+      "status": "received",
+      "link": "https://drive.google.com/file/d/1lfBWR3NvTwmTHYlm_4ByX39T1-qamMSw/view?usp=drivesdk",
+      "createdAt": "2026-03-18T06:50:59.132Z"
+    },
+    {
+      "id": "DOC-6",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1009",
+      "name": "Passport (all pages with stamps)",
+      "status": "received",
+      "link": "https://drive.google.com/file/d/1vvlBOgolCt_teukRMCxa6398lPztXQD4/view?usp=drivesdk",
+      "createdAt": "2026-03-19T01:13:41.030Z"
+    },
+    {
+      "id": "DOC-7",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1009",
+      "name": "Valid Study Permit",
+      "status": "received",
+      "link": "https://drive.google.com/file/d/1vnOvLq8OhrXasUC6d-jzSBdnl72x0793/view?usp=drivesdk",
+      "createdAt": "2026-03-19T01:13:42.249Z"
+    },
+    {
+      "id": "DOC-8",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "name": "Passport (all pages with stamps)",
+      "status": "received",
+      "link": "https://drive.google.com/file/d/1aNuPghN9-7nt3dRA8W7xvnPS4jLFewNX/view?usp=drivesdk",
+      "createdAt": "2026-03-19T05:28:04.175Z"
+    },
+    {
+      "id": "DOC-9",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "name": "Valid Study Permit",
+      "status": "received",
+      "link": "https://drive.google.com/file/d/1DvsBmIy2ZAPke-v_DVsOp09MCMz5gHQs/view?usp=drivesdk",
+      "createdAt": "2026-03-19T05:28:44.854Z"
+    },
+    {
+      "id": "DOC-10",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "name": "Completion Letter",
+      "status": "received",
+      "link": "https://drive.google.com/file/d/1vcZmbeaxLcAPrMQ7PgDyD15w9dl3-ZJb/view?usp=drivesdk",
+      "createdAt": "2026-03-19T05:28:45.892Z"
+    },
+    {
+      "id": "DOC-11",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "name": "Official Transcripts",
+      "status": "received",
+      "link": "https://drive.google.com/file/d/1UbHHv6MpqX2mXtur0SyqEPe7kR9ATJsF/view?usp=drivesdk",
+      "createdAt": "2026-03-19T05:28:53.782Z"
+    },
+    {
+      "id": "DOC-12",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "name": "Language Proficiency Test (IELTS/CELPIP/PTE)",
+      "status": "received",
+      "link": "https://drive.google.com/file/d/1D9UQvtJW_86SFJRWqocuVr4xw9KB102J/view?usp=drivesdk",
+      "createdAt": "2026-03-19T05:28:58.414Z"
+    },
+    {
+      "id": "DOC-13",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "name": "Digital Photo",
+      "status": "received",
+      "link": "https://drive.google.com/file/d/1SA_0SqyW0JNMTWzw6imzaZStDYIneuQC/view?usp=drivesdk",
+      "createdAt": "2026-03-19T05:29:00.291Z"
+    },
+    {
+      "id": "DOC-14",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "name": "Previous College Transcripts (if transfer)",
+      "status": "received",
+      "link": "https://drive.google.com/file/d/1dYPkaHvfuBBMvrUplavJipdnDxQfgRss/view?usp=drivesdk",
+      "createdAt": "2026-03-19T05:29:12.201Z"
+    },
+    {
+      "id": "DOC-15",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "name": "Passport (all pages with stamps)",
+      "status": "received",
+      "link": "https://drive.google.com/file/d/1ZN08b_TO-aO84ta4dxzA7exlN-80r27T/view?usp=drivesdk",
+      "createdAt": "2026-03-19T06:27:36.067Z"
+    },
+    {
+      "id": "DOC-16",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "name": "Valid Study Permit",
+      "status": "received",
+      "link": "https://drive.google.com/file/d/1iJ-JACYNH7JP9s583eBG2hArHvD_qKgF/view?usp=drivesdk",
+      "createdAt": "2026-03-19T06:27:45.167Z"
+    },
+    {
+      "id": "DOC-17",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "name": "Official Transcripts",
+      "status": "received",
+      "link": "https://drive.google.com/file/d/1KZHCPupE-KPmMxQBFoELm4ytQ9wjaihY/view?usp=drivesdk",
+      "createdAt": "2026-03-19T06:27:53.552Z"
+    },
+    {
+      "id": "DOC-18",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "name": "Completion Letter",
+      "status": "received",
+      "link": "https://drive.google.com/file/d/1ygXCpzPXDQDNjWFSz1ZA-gpA7EEfE06k/view?usp=drivesdk",
+      "createdAt": "2026-03-19T06:27:54.415Z"
+    },
+    {
+      "id": "DOC-19",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "name": "Valid Study Permit",
+      "status": "received",
+      "link": "https://drive.google.com/file/d/1kqXElTOzK-QkoSt83-JhXMhZgo9eewD7/view?usp=drivesdk",
+      "createdAt": "2026-03-19T06:27:59.842Z"
+    },
+    {
+      "id": "DOC-20",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "name": "Digital Photo",
+      "status": "received",
+      "link": "https://drive.google.com/file/d/16KOVM3Ji2XRF9QNKR4l_ros8wWJtajbV/view?usp=drivesdk",
+      "createdAt": "2026-03-19T06:28:02.320Z"
+    },
+    {
+      "id": "DOC-21",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "name": "Language Proficiency Test (IELTS/CELPIP/PTE) - optional",
+      "status": "received",
+      "link": "https://drive.google.com/file/d/1r98zXJA1MimdJXB-ydp537J61JNByxJt/view?usp=drivesdk",
+      "createdAt": "2026-03-19T06:28:10.602Z"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "TSK-58",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1011",
+      "title": "Follow up with client",
+      "description": "Missing required PGWP documents. Follow up in 48h.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "medium",
+      "status": "pending",
+      "createdAt": "2026-03-19T06:44:32.636Z"
+    },
+    {
+      "id": "TSK-57",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1011",
+      "title": "Follow up with client for payment",
+      "description": "Payment is pending. Send payment reminder.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "pending",
+      "createdAt": "2026-03-19T06:42:16.916Z"
+    },
+    {
+      "id": "TSK-56",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "Human review gate: approve submission package",
+      "description": "AI precheck passed. Reviewer must verify package and approve submission readiness.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "pending",
+      "createdAt": "2026-03-19T05:29:00.292Z"
+    },
+    {
+      "id": "TSK-55",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "Review application",
+      "description": "All required documents uploaded. Review draft package.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "pending",
+      "createdAt": "2026-03-19T05:28:53.782Z"
+    },
+    {
+      "id": "TSK-54",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "IMM5710 data needed: Taken English language test (Yes/No)",
+      "description": "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T02:11:27.240Z"
+    },
+    {
+      "id": "TSK-53",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "IMM5710 data needed: Education after 12th grade",
+      "description": "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T02:11:27.240Z"
+    },
+    {
+      "id": "TSK-52",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "IMM5710 data needed: Any recent entry to Canada (Yes/No)",
+      "description": "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T02:11:27.240Z"
+    },
+    {
+      "id": "TSK-51",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "IMM5710 data needed: Taken English language test (Yes/No)",
+      "description": "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T02:10:39.808Z"
+    },
+    {
+      "id": "TSK-50",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "IMM5710 data needed: Education after 12th grade",
+      "description": "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T02:10:39.808Z"
+    },
+    {
+      "id": "TSK-49",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "IMM5710 data needed: Any recent entry to Canada (Yes/No)",
+      "description": "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T02:10:39.808Z"
+    },
+    {
+      "id": "TSK-48",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "IMM5710 data needed: Taken English language test (Yes/No)",
+      "description": "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T02:08:38.635Z"
+    },
+    {
+      "id": "TSK-47",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "IMM5710 data needed: Education after 12th grade",
+      "description": "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T02:08:38.635Z"
+    },
+    {
+      "id": "TSK-46",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "IMM5710 data needed: Any recent entry to Canada (Yes/No)",
+      "description": "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T02:08:38.635Z"
+    },
+    {
+      "id": "TSK-45",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "IMM5710 data needed: Residential address if different",
+      "description": "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T02:08:38.635Z"
+    },
+    {
+      "id": "TSK-44",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "IMM5710 data needed: Any previous marriage/common-law (Yes/No)",
+      "description": "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T02:08:38.635Z"
+    },
+    {
+      "id": "TSK-43",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "Follow up with client",
+      "description": "Missing required PGWP documents. Follow up in 48h.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "medium",
+      "status": "pending",
+      "createdAt": "2026-03-19T01:34:36.748Z"
+    },
+    {
+      "id": "TSK-42",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "Missing document: Past Studies Evidence (if transferred)",
+      "description": "Client must upload this required PGWP document before drafting/submission.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T01:33:46.958Z"
+    },
+    {
+      "id": "TSK-41",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "Missing document: Digital Photo",
+      "description": "Client must upload this required PGWP document before drafting/submission.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T01:33:46.958Z"
+    },
+    {
+      "id": "TSK-40",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "Missing document: Language Proficiency Test (IELTS/CELPIP/PTE)",
+      "description": "Client must upload this required PGWP document before drafting/submission.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T01:33:46.958Z"
+    },
+    {
+      "id": "TSK-39",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "Missing document: Official Transcripts",
+      "description": "Client must upload this required PGWP document before drafting/submission.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T01:33:46.958Z"
+    },
+    {
+      "id": "TSK-38",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "Missing document: Completion Letter",
+      "description": "Client must upload this required PGWP document before drafting/submission.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T01:33:46.958Z"
+    },
+    {
+      "id": "TSK-37",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "Missing document: Valid Study Permit",
+      "description": "Client must upload this required PGWP document before drafting/submission.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T01:33:46.958Z"
+    },
+    {
+      "id": "TSK-36",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "Missing document: Passport (all pages with stamps)",
+      "description": "Client must upload this required PGWP document before drafting/submission.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T01:33:46.958Z"
+    },
+    {
+      "id": "TSK-35",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "IMM5710 data needed: Completion letter date",
+      "description": "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T01:33:46.958Z"
+    },
+    {
+      "id": "TSK-34",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "IMM5710 data needed: Program name and duration",
+      "description": "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T01:33:46.958Z"
+    },
+    {
+      "id": "TSK-33",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "IMM5710 data needed: DLI name and location",
+      "description": "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T01:33:46.958Z"
+    },
+    {
+      "id": "TSK-32",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "IMM5710 data needed: Study permit expiry date",
+      "description": "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T01:33:46.958Z"
+    },
+    {
+      "id": "TSK-31",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "IMM5710 data needed: Intended work details",
+      "description": "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T01:33:46.958Z"
+    },
+    {
+      "id": "TSK-30",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "IMM5710 data needed: Application type",
+      "description": "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T01:33:46.958Z"
+    },
+    {
+      "id": "TSK-29",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "IMM5710 data needed: Marital status",
+      "description": "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T01:33:46.958Z"
+    },
+    {
+      "id": "TSK-28",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "IMM5710 data needed: Phone number",
+      "description": "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T01:33:46.958Z"
+    },
+    {
+      "id": "TSK-27",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "IMM5710 data needed: Email",
+      "description": "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T01:33:46.958Z"
+    },
+    {
+      "id": "TSK-26",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "IMM5710 data needed: Postal code",
+      "description": "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T01:33:46.958Z"
+    },
+    {
+      "id": "TSK-25",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "IMM5710 data needed: Province",
+      "description": "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T01:33:46.958Z"
+    },
+    {
+      "id": "TSK-24",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "IMM5710 data needed: City",
+      "description": "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T01:33:46.958Z"
+    },
+    {
+      "id": "TSK-23",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "IMM5710 data needed: Current address",
+      "description": "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T01:33:46.958Z"
+    },
+    {
+      "id": "TSK-22",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "IMM5710 data needed: Status start date",
+      "description": "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T01:33:46.958Z"
+    },
+    {
+      "id": "TSK-21",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "IMM5710 data needed: Current status in current country",
+      "description": "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T01:33:46.958Z"
+    },
+    {
+      "id": "TSK-20",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "IMM5710 data needed: Current country",
+      "description": "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T01:33:46.958Z"
+    },
+    {
+      "id": "TSK-19",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "IMM5710 data needed: Citizenship",
+      "description": "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T01:33:46.958Z"
+    },
+    {
+      "id": "TSK-18",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "IMM5710 data needed: Country of birth",
+      "description": "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T01:33:46.958Z"
+    },
+    {
+      "id": "TSK-17",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "IMM5710 data needed: Passport expiry date",
+      "description": "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T01:33:46.958Z"
+    },
+    {
+      "id": "TSK-16",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "IMM5710 data needed: Passport number",
+      "description": "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T01:33:46.958Z"
+    },
+    {
+      "id": "TSK-15",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "IMM5710 data needed: Place of birth (city)",
+      "description": "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T01:33:46.958Z"
+    },
+    {
+      "id": "TSK-14",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "IMM5710 data needed: Date of birth",
+      "description": "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T01:33:46.958Z"
+    },
+    {
+      "id": "TSK-13",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "IMM5710 data needed: Last name (passport)",
+      "description": "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T01:33:46.958Z"
+    },
+    {
+      "id": "TSK-12",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "IMM5710 data needed: First name (passport)",
+      "description": "Collect this missing IMM5710 answer from client or case team, then update intake.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-19T01:33:46.958Z"
+    },
+    {
+      "id": "TSK-11",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "title": "Follow up with client for payment",
+      "description": "Payment is pending. Send payment reminder.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "pending",
+      "createdAt": "2026-03-19T01:33:46.958Z"
+    },
+    {
+      "id": "TSK-10",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1009",
+      "title": "Follow up with client",
+      "description": "Missing required PGWP documents. Follow up in 48h.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "medium",
+      "status": "pending",
+      "createdAt": "2026-03-19T01:08:34.285Z"
+    },
+    {
+      "id": "TSK-9",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1009",
+      "title": "Follow up with client for payment",
+      "description": "Payment is pending. Send payment reminder.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "pending",
+      "createdAt": "2026-03-19T01:07:46.023Z"
+    },
+    {
+      "id": "TSK-8",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1008",
+      "title": "Follow up with client",
+      "description": "Missing required PGWP documents. Follow up in 48h.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "medium",
+      "status": "pending",
+      "createdAt": "2026-03-19T00:55:11.691Z"
+    },
+    {
+      "id": "TSK-7",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1008",
+      "title": "Follow up with client for payment",
+      "description": "Payment is pending. Send payment reminder.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "pending",
+      "createdAt": "2026-03-19T00:49:01.480Z"
+    },
+    {
+      "id": "TSK-6",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1007",
+      "title": "Follow up with client for payment",
+      "description": "Payment is pending. Send payment reminder.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "pending",
+      "createdAt": "2026-03-19T00:42:08.577Z"
+    },
+    {
+      "id": "TSK-5",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1006",
+      "title": "Follow up with client for payment",
+      "description": "Payment is pending. Send payment reminder.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "pending",
+      "createdAt": "2026-03-19T00:33:12.479Z"
+    },
+    {
+      "id": "TSK-4",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1021",
+      "title": "Follow up with client for payment",
+      "description": "Payment is pending. Send payment reminder.",
+      "assignedTo": "Aman",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "pending",
+      "createdAt": "2026-03-18T23:40:14.000Z"
+    },
+    {
+      "id": "TSK-3",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1005",
+      "title": "Follow up with client",
+      "description": "Missing required PGWP documents. Follow up in 48h.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "medium",
+      "status": "pending",
+      "createdAt": "2026-03-18T06:49:13.845Z"
+    },
+    {
+      "id": "TSK-2",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1005",
+      "title": "Follow up with client for payment",
+      "description": "Payment is pending. Send payment reminder.",
+      "assignedTo": "Unassigned",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "completed",
+      "createdAt": "2026-03-18T06:47:00.288Z"
+    },
+    {
+      "id": "TSK-1",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1022",
+      "title": "Follow up with client for payment",
+      "description": "Payment is pending. Send payment reminder.",
+      "assignedTo": "Simran",
+      "createdBy": "ai",
+      "priority": "high",
+      "status": "pending",
+      "createdAt": "2026-03-18T06:36:47.131Z"
+    }
+  ],
+  "notifications": [
+    {
+      "id": "NTF-30",
+      "companyId": "CMP-1",
+      "userId": "USR-1",
+      "type": "ai_alert",
+      "message": "CASE-1010 is ready for review (AI drafting completed docs check).",
+      "read": false,
+      "createdAt": "2026-03-19T06:32:04.169Z"
+    },
+    {
+      "id": "NTF-29",
+      "companyId": "CMP-1",
+      "userId": "USR-1",
+      "type": "ai_alert",
+      "message": "CASE-1010 is ready for review (AI drafting completed docs check).",
+      "read": false,
+      "createdAt": "2026-03-19T06:32:04.167Z"
+    },
+    {
+      "id": "NTF-28",
+      "companyId": "CMP-1",
+      "userId": "USR-1",
+      "type": "ai_alert",
+      "message": "CASE-1010 is ready for review (AI drafting completed docs check).",
+      "read": false,
+      "createdAt": "2026-03-19T06:28:40.469Z"
+    },
+    {
+      "id": "NTF-27",
+      "companyId": "CMP-1",
+      "userId": "USR-1",
+      "type": "ai_alert",
+      "message": "CASE-1010 is ready for review (AI drafting completed docs check).",
+      "read": false,
+      "createdAt": "2026-03-19T06:28:40.466Z"
+    },
+    {
+      "id": "NTF-26",
+      "companyId": "CMP-1",
+      "userId": "USR-1",
+      "type": "ai_alert",
+      "message": "CASE-1010 is ready for review (AI drafting completed docs check).",
+      "read": false,
+      "createdAt": "2026-03-19T06:28:10.604Z"
+    },
+    {
+      "id": "NTF-25",
+      "companyId": "CMP-1",
+      "userId": "USR-1",
+      "type": "ai_alert",
+      "message": "CASE-1010 is ready for review (AI drafting completed docs check).",
+      "read": false,
+      "createdAt": "2026-03-19T06:28:10.602Z"
+    },
+    {
+      "id": "NTF-24",
+      "companyId": "CMP-1",
+      "userId": "USR-1",
+      "type": "ai_alert",
+      "message": "CASE-1010 is ready for review (AI drafting completed docs check).",
+      "read": false,
+      "createdAt": "2026-03-19T06:28:02.323Z"
+    },
+    {
+      "id": "NTF-23",
+      "companyId": "CMP-1",
+      "userId": "USR-1",
+      "type": "ai_alert",
+      "message": "CASE-1010 is ready for review (AI drafting completed docs check).",
+      "read": false,
+      "createdAt": "2026-03-19T06:28:02.320Z"
+    },
+    {
+      "id": "NTF-22",
+      "companyId": "CMP-1",
+      "userId": "USR-1",
+      "type": "ai_alert",
+      "message": "CASE-1010 is ready for review (AI drafting completed docs check).",
+      "read": false,
+      "createdAt": "2026-03-19T06:27:59.847Z"
+    },
+    {
+      "id": "NTF-21",
+      "companyId": "CMP-1",
+      "userId": "USR-1",
+      "type": "ai_alert",
+      "message": "CASE-1010 is ready for review (AI drafting completed docs check).",
+      "read": false,
+      "createdAt": "2026-03-19T06:27:59.842Z"
+    },
+    {
+      "id": "NTF-20",
+      "companyId": "CMP-1",
+      "userId": "USR-1",
+      "type": "ai_alert",
+      "message": "CASE-1010 is ready for review (AI drafting completed docs check).",
+      "read": false,
+      "createdAt": "2026-03-19T06:27:54.418Z"
+    },
+    {
+      "id": "NTF-19",
+      "companyId": "CMP-1",
+      "userId": "USR-1",
+      "type": "ai_alert",
+      "message": "CASE-1010 is ready for review (AI drafting completed docs check).",
+      "read": false,
+      "createdAt": "2026-03-19T06:27:54.416Z"
+    },
+    {
+      "id": "NTF-18",
+      "companyId": "CMP-1",
+      "userId": "USR-1",
+      "type": "ai_alert",
+      "message": "CASE-1010 is ready for review (AI drafting completed docs check).",
+      "read": false,
+      "createdAt": "2026-03-19T06:27:53.556Z"
+    },
+    {
+      "id": "NTF-17",
+      "companyId": "CMP-1",
+      "userId": "USR-1",
+      "type": "ai_alert",
+      "message": "CASE-1010 is ready for review (AI drafting completed docs check).",
+      "read": false,
+      "createdAt": "2026-03-19T06:27:53.552Z"
+    },
+    {
+      "id": "NTF-16",
+      "companyId": "CMP-1",
+      "userId": "USR-1",
+      "type": "ai_alert",
+      "message": "CASE-1010 is ready for review (AI drafting completed docs check).",
+      "read": false,
+      "createdAt": "2026-03-19T06:27:45.170Z"
+    },
+    {
+      "id": "NTF-15",
+      "companyId": "CMP-1",
+      "userId": "USR-1",
+      "type": "ai_alert",
+      "message": "CASE-1010 is ready for review (AI drafting completed docs check).",
+      "read": false,
+      "createdAt": "2026-03-19T06:27:45.167Z"
+    },
+    {
+      "id": "NTF-14",
+      "companyId": "CMP-1",
+      "userId": "USR-1",
+      "type": "ai_alert",
+      "message": "CASE-1010 is ready for review (AI drafting completed docs check).",
+      "read": false,
+      "createdAt": "2026-03-19T06:27:36.072Z"
+    },
+    {
+      "id": "NTF-13",
+      "companyId": "CMP-1",
+      "userId": "USR-1",
+      "type": "ai_alert",
+      "message": "CASE-1010 is ready for review (AI drafting completed docs check).",
+      "read": false,
+      "createdAt": "2026-03-19T06:27:36.068Z"
+    },
+    {
+      "id": "NTF-12",
+      "companyId": "CMP-1",
+      "userId": "USR-1",
+      "type": "ai_alert",
+      "message": "CASE-1010 is ready for review (AI drafting completed docs check).",
+      "read": false,
+      "createdAt": "2026-03-19T05:48:52.587Z"
+    },
+    {
+      "id": "NTF-11",
+      "companyId": "CMP-1",
+      "userId": "USR-1",
+      "type": "ai_alert",
+      "message": "CASE-1010 is ready for review (AI drafting completed docs check).",
+      "read": false,
+      "createdAt": "2026-03-19T05:48:52.584Z"
+    },
+    {
+      "id": "NTF-10",
+      "companyId": "CMP-1",
+      "userId": "USR-1",
+      "type": "ai_alert",
+      "message": "CASE-1010 is ready for review (AI drafting completed docs check).",
+      "read": false,
+      "createdAt": "2026-03-19T05:29:43.077Z"
+    },
+    {
+      "id": "NTF-9",
+      "companyId": "CMP-1",
+      "userId": "USR-1",
+      "type": "ai_alert",
+      "message": "CASE-1010 is ready for review (AI drafting completed docs check).",
+      "read": false,
+      "createdAt": "2026-03-19T05:29:43.074Z"
+    },
+    {
+      "id": "NTF-8",
+      "companyId": "CMP-1",
+      "userId": "USR-1",
+      "type": "ai_alert",
+      "message": "CASE-1010 is ready for review (AI drafting completed docs check).",
+      "read": false,
+      "createdAt": "2026-03-19T05:29:12.207Z"
+    },
+    {
+      "id": "NTF-7",
+      "companyId": "CMP-1",
+      "userId": "USR-1",
+      "type": "ai_alert",
+      "message": "CASE-1010 is ready for review (AI drafting completed docs check).",
+      "read": false,
+      "createdAt": "2026-03-19T05:29:12.202Z"
+    },
+    {
+      "id": "NTF-6",
+      "companyId": "CMP-1",
+      "userId": "USR-1",
+      "type": "ai_alert",
+      "message": "CASE-1010 is ready for review (AI drafting completed docs check).",
+      "read": false,
+      "createdAt": "2026-03-19T05:29:00.297Z"
+    },
+    {
+      "id": "NTF-5",
+      "companyId": "CMP-1",
+      "userId": "USR-1",
+      "type": "ai_alert",
+      "message": "CASE-1010 is ready for review (AI drafting completed docs check).",
+      "read": false,
+      "createdAt": "2026-03-19T05:29:00.291Z"
+    },
+    {
+      "id": "NTF-4",
+      "companyId": "CMP-1",
+      "userId": "USR-1",
+      "type": "ai_alert",
+      "message": "CASE-1010 is ready for review (AI drafting completed docs check).",
+      "read": false,
+      "createdAt": "2026-03-19T05:28:58.417Z"
+    },
+    {
+      "id": "NTF-3",
+      "companyId": "CMP-1",
+      "userId": "USR-1",
+      "type": "ai_alert",
+      "message": "CASE-1010 is ready for review (AI drafting completed docs check).",
+      "read": false,
+      "createdAt": "2026-03-19T05:28:58.415Z"
+    },
+    {
+      "id": "NTF-2",
+      "companyId": "CMP-1",
+      "userId": "USR-1",
+      "type": "ai_alert",
+      "message": "CASE-1010 is ready for review (AI drafting completed docs check).",
+      "read": false,
+      "createdAt": "2026-03-19T05:28:53.786Z"
+    },
+    {
+      "id": "NTF-1",
+      "companyId": "CMP-1",
+      "userId": "USR-1",
+      "type": "ai_alert",
+      "message": "CASE-1010 is ready for review (AI drafting completed docs check).",
+      "read": false,
+      "createdAt": "2026-03-19T05:28:53.782Z"
+    }
+  ],
+  "sessions": [
+    {
+      "token": "9b39d629-405e-41c8-87c8-ee126e360629",
+      "userId": "USR-1",
+      "companyId": "CMP-1",
+      "expiresAt": "2026-03-23T03:02:18.551Z"
+    },
+    {
+      "token": "c0362e1e-113a-4c75-9c15-4f31150097a7",
+      "userId": "USR-1",
+      "companyId": "CMP-1",
+      "expiresAt": "2026-03-23T04:20:32.315Z"
+    },
+    {
+      "token": "1f7b5a3b-29ab-4eb8-9286-6d6b774788b4",
+      "userId": "USR-1",
+      "companyId": "CMP-1",
+      "expiresAt": "2026-03-24T01:18:40.272Z"
+    },
+    {
+      "token": "f8ff3998-e28f-4448-a920-9a9d8e541241",
+      "userId": "USR-1",
+      "companyId": "CMP-1",
+      "expiresAt": "2026-03-24T05:50:17.356Z"
+    },
+    {
+      "token": "cc95468f-9c64-44dd-ae27-abbb496cf448",
+      "userId": "USR-6",
+      "companyId": "CMP-1",
+      "expiresAt": "2026-03-24T05:50:55.036Z"
+    },
+    {
+      "token": "45b76777-fca6-4d8e-876a-814ad976260f",
+      "userId": "USR-1",
+      "companyId": "CMP-1",
+      "expiresAt": "2026-03-25T05:46:24.188Z"
+    },
+    {
+      "token": "54530bf1-1367-4b8a-a4dc-0eabe92f7ad9",
+      "userId": "USR-7",
+      "companyId": "CMP-1",
+      "expiresAt": "2026-03-25T07:41:56.620Z"
+    },
+    {
+      "token": "02896759-dc01-435a-8ce4-1ebd764a401e",
+      "userId": "USR-1",
+      "companyId": "CMP-1",
+      "expiresAt": "2026-03-25T07:49:16.590Z"
+    },
+    {
+      "token": "84aa79a7-a78f-415d-885c-798e44066403",
+      "userId": "USR-1",
+      "companyId": "CMP-1",
+      "expiresAt": "2026-03-25T07:49:19.347Z"
+    },
+    {
+      "token": "db8b1420-a593-4089-b693-284ce66cd780",
+      "userId": "USR-1",
+      "companyId": "CMP-1",
+      "expiresAt": "2026-03-25T07:49:23.132Z"
+    },
+    {
+      "token": "6b956bca-c93d-413c-801f-b62ebaf85996",
+      "userId": "USR-1",
+      "companyId": "CMP-1",
+      "expiresAt": "2026-03-25T07:49:30.536Z"
+    },
+    {
+      "token": "432eaa81-e25d-4160-a6f2-43ff6b6bb168",
+      "userId": "USR-2",
+      "companyId": "CMP-1",
+      "expiresAt": "2026-03-25T07:49:47.413Z"
+    },
+    {
+      "token": "7ef6dd4c-50b4-411a-8a27-cb3508590bbc",
+      "userId": "USR-1",
+      "companyId": "CMP-1",
+      "expiresAt": "2026-03-25T23:50:45.763Z"
+    },
+    {
+      "token": "d9954071-48da-4684-b596-4f3e21b5d131",
+      "userId": "USR-1",
+      "companyId": "CMP-1",
+      "expiresAt": "2026-03-26T00:40:25.345Z"
+    },
+    {
+      "token": "cef5c0ae-0649-420a-b14c-ac937881e882",
+      "userId": "USR-1",
+      "companyId": "CMP-1",
+      "expiresAt": "2026-03-26T00:48:37.604Z"
+    },
+    {
+      "token": "2cf860cc-d000-4d6d-8be3-195745e76017",
+      "userId": "USR-11",
+      "companyId": "CMP-1",
+      "expiresAt": "2026-03-26T00:49:04.591Z"
+    },
+    {
+      "token": "9eb283b5-9de6-49b8-b995-cdbb9603c39a",
+      "userId": "USR-1",
+      "companyId": "CMP-1",
+      "expiresAt": "2026-03-26T00:52:22.448Z"
+    },
+    {
+      "token": "08f8ddf8-50c3-4010-b410-884132911397",
+      "userId": "USR-1",
+      "companyId": "CMP-1",
+      "expiresAt": "2026-03-26T01:00:25.682Z"
+    },
+    {
+      "token": "d58e486b-119e-484a-b19e-5bcb6a970ee0",
+      "userId": "USR-1",
+      "companyId": "CMP-1",
+      "expiresAt": "2026-03-26T01:01:51.610Z"
+    },
+    {
+      "token": "bccdf94d-08fa-4210-a35c-0cae256c9505",
+      "userId": "USR-1",
+      "companyId": "CMP-1",
+      "expiresAt": "2026-03-26T01:08:30.301Z"
+    },
+    {
+      "token": "ed657916-a8a1-4f11-89b9-53f9941ede93",
+      "userId": "USR-1",
+      "companyId": "CMP-1",
+      "expiresAt": "2026-03-26T01:33:02.915Z"
+    },
+    {
+      "token": "86d89f3c-5e77-484c-a759-80687f13de56",
+      "userId": "USR-1",
+      "companyId": "CMP-1",
+      "expiresAt": "2026-03-26T01:34:39.725Z"
+    },
+    {
+      "token": "bbbd4430-3fad-4e37-b345-812dbf415137",
+      "userId": "USR-14",
+      "companyId": "CMP-1",
+      "expiresAt": "2026-03-26T01:34:50.400Z"
+    },
+    {
+      "token": "055fb6ae-07dd-4f71-92fe-5ced48d552c1",
+      "userId": "USR-14",
+      "companyId": "CMP-1",
+      "expiresAt": "2026-03-26T01:54:58.793Z"
+    },
+    {
+      "token": "e1c531dc-fc7a-4aef-b718-0a145a0dfd22",
+      "userId": "USR-1",
+      "companyId": "CMP-1",
+      "expiresAt": "2026-03-26T06:41:17.054Z"
+    },
+    {
+      "token": "e85acad4-dcc3-4d5a-9e32-6dab77eb5800",
+      "userId": "USR-1",
+      "companyId": "CMP-1",
+      "expiresAt": "2026-03-26T06:44:27.692Z"
+    },
+    {
+      "token": "f459bafb-be13-487f-b2a4-bde052649983",
+      "userId": "USR-15",
+      "companyId": "CMP-1",
+      "expiresAt": "2026-03-26T06:44:39.437Z"
+    }
+  ],
+  "invites": [
+    {
+      "token": "c94e3169-2713-4200-bc10-e1f688a2ef96",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1011",
+      "email": "mowgli@junglelabsworld.com",
+      "createdByUserId": "USR-1",
+      "status": "accepted",
+      "expiresAt": "2026-04-02T06:42:16.926Z",
+      "createdAt": "2026-03-19T06:42:16.926Z",
+      "usedByUserId": "USR-15",
+      "acceptedAt": "2026-03-19T06:43:12.756Z"
+    },
+    {
+      "token": "4776ab88-9d3c-4f86-a728-6a1f6a9adc47",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1010",
+      "createdByUserId": "USR-1",
+      "status": "accepted",
+      "expiresAt": "2026-04-02T01:33:46.969Z",
+      "createdAt": "2026-03-19T01:33:46.969Z",
+      "usedByUserId": "USR-14",
+      "acceptedAt": "2026-03-19T01:33:50.648Z"
+    },
+    {
+      "token": "15e59314-264e-4879-b332-6c40d4e733b2",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1009",
+      "createdByUserId": "USR-1",
+      "status": "accepted",
+      "expiresAt": "2026-04-02T01:07:46.031Z",
+      "createdAt": "2026-03-19T01:07:46.031Z",
+      "usedByUserId": "USR-13",
+      "acceptedAt": "2026-03-19T01:07:57.066Z"
+    },
+    {
+      "token": "e61c7a6e-1cd0-4af2-a73e-e85636aed1d6",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1008",
+      "createdByUserId": "USR-1",
+      "status": "accepted",
+      "expiresAt": "2026-04-02T00:55:22.884Z",
+      "createdAt": "2026-03-19T00:55:22.884Z",
+      "usedByUserId": "USR-12",
+      "acceptedAt": "2026-03-19T00:55:26.823Z"
+    },
+    {
+      "token": "2b29dfca-f925-48a3-b06e-f93a123d695b",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1008",
+      "createdByUserId": "USR-1",
+      "status": "accepted",
+      "expiresAt": "2026-04-02T00:49:01.663Z",
+      "createdAt": "2026-03-19T00:49:01.663Z",
+      "usedByUserId": "USR-11",
+      "acceptedAt": "2026-03-19T00:49:04.590Z"
+    },
+    {
+      "token": "05d35944-8ac7-4e9e-8282-f2e99af78807",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1007",
+      "createdByUserId": "USR-1",
+      "status": "accepted",
+      "expiresAt": "2026-04-02T00:42:08.743Z",
+      "createdAt": "2026-03-19T00:42:08.743Z",
+      "usedByUserId": "USR-10",
+      "acceptedAt": "2026-03-19T00:42:15.538Z"
+    },
+    {
+      "token": "24bdcf6b-4ee1-41ea-8385-ab5d578b65f2",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1006",
+      "createdByUserId": "USR-1",
+      "status": "accepted",
+      "expiresAt": "2026-04-02T00:33:12.653Z",
+      "createdAt": "2026-03-19T00:33:12.653Z",
+      "usedByUserId": "USR-9",
+      "acceptedAt": "2026-03-19T00:33:18.173Z"
+    },
+    {
+      "token": "e3b0a241-28df-4e2d-9d67-8aceeba2f727",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1021",
+      "createdByUserId": "USR-1",
+      "status": "pending",
+      "expiresAt": "2026-04-01T23:55:09.359Z",
+      "createdAt": "2026-03-18T23:55:09.359Z"
+    },
+    {
+      "token": "5fba034e-9240-447e-a44f-fe7df3384614",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1021",
+      "createdByUserId": "USR-2",
+      "status": "accepted",
+      "expiresAt": "2026-04-01T23:40:14.178Z",
+      "createdAt": "2026-03-18T23:40:14.178Z",
+      "usedByUserId": "USR-8",
+      "acceptedAt": "2026-03-18T23:40:33.704Z"
+    },
+    {
+      "token": "6c5d9717-c22b-48df-a57c-7dde7fb95003",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1005",
+      "createdByUserId": "USR-1",
+      "status": "accepted",
+      "expiresAt": "2026-04-01T06:47:00.491Z",
+      "createdAt": "2026-03-18T06:47:00.491Z",
+      "usedByUserId": "USR-7",
+      "acceptedAt": "2026-03-18T06:47:17.350Z"
+    },
+    {
+      "token": "fdcaa9a4-ce0a-4b12-91da-db79afc35887",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1005",
+      "createdByUserId": "USR-1",
+      "status": "accepted",
+      "expiresAt": "2026-03-31T05:50:21.910Z",
+      "createdAt": "2026-03-17T05:50:21.910Z",
+      "usedByUserId": "USR-6",
+      "acceptedAt": "2026-03-17T05:50:55.036Z"
+    },
+    {
+      "token": "f4430adf-8a31-4f9c-bcab-c9d4a2265797",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1005",
+      "createdByUserId": "USR-1",
+      "status": "accepted",
+      "expiresAt": "2026-03-31T05:44:14.431Z",
+      "createdAt": "2026-03-17T05:44:14.431Z",
+      "usedByUserId": "USR-5",
+      "acceptedAt": "2026-03-17T05:44:39.404Z"
+    },
+    {
+      "token": "6abcea18-f12d-4ccc-861c-d2665cd5ffc5",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1005",
+      "createdByUserId": "USR-1",
+      "status": "pending",
+      "expiresAt": "2026-03-31T05:43:52.791Z",
+      "createdAt": "2026-03-17T05:43:52.791Z"
+    },
+    {
+      "token": "f6a155fe-c3eb-463c-aaec-b25a1a2ebbf6",
+      "companyId": "CMP-1",
+      "caseId": "CASE-1005",
+      "createdByUserId": "USR-1",
+      "status": "pending",
+      "expiresAt": "2026-03-31T05:39:08.430Z",
+      "createdAt": "2026-03-17T05:39:08.430Z"
+    }
+  ]
+}

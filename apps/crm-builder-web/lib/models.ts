@@ -98,6 +98,32 @@ export type Company = {
   name: string;
   slug: string;
   branding: {
+    customPortalSections?: Array<{
+      id: string;
+      title: string;
+      body: string;
+      fieldType?: "text" | "dropdown" | "date" | "file_upload" | "checkbox";
+      options?: string[];
+      visibleFor?: string[];
+      sortOrder?: number;
+      enabled?: boolean;
+    }>;
+    customPortalSectionHistory?: Array<{
+      id: string;
+      createdAt: string;
+      actorUserId?: string;
+      actorName?: string;
+      sections: Array<{
+        id: string;
+        title: string;
+        body: string;
+        fieldType?: "text" | "dropdown" | "date" | "file_upload" | "checkbox";
+        options?: string[];
+        visibleFor?: string[];
+        sortOrder?: number;
+        enabled?: boolean;
+      }>;
+    }>;
     appName: string;
     logoText: string;
     logoUrl?: string;

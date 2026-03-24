@@ -16,7 +16,8 @@ import { LoginView } from "@/components/login-view";
 import { CaseItem, Role } from "@/lib/data";
 import { apiFetch } from "@/lib/api-client";
 import { Company } from "@/lib/models";
-import { getChecklistForFormType } from "@/lib/application-checklists";
+import { getChecklistForFormType, resolveApplicationChecklistKey } from "@/lib/application-checklists";
+import { isQuestionnaireComplete } from "@/lib/application-question-flows";
 import { canCreateCase, canManageUsers, tabsForRole, type AppScreen } from "@/lib/rbac";
 
 type Screen = AppScreen;
@@ -80,6 +81,49 @@ type NotificationItem = {
   read: boolean;
   createdAt: string;
 };
+type CustomPortalSection = {
+  id: string;
+  title: string;
+  body: string;
+  fieldType?: "text" | "dropdown" | "date" | "file_upload" | "checkbox";
+  options?: string[];
+  visibleFor?: string[];
+  sortOrder?: number;
+  enabled?: boolean;
+};
+type CustomPortalSectionVersion = {
+  id: string;
+  createdAt: string;
+  actorName?: string;
+  sections: CustomPortalSection[];
+};
+
+const PORTAL_FIELD_TYPES: Array<CustomPortalSection["fieldType"]> = [
+  "text",
+  "dropdown",
+  "date",
+  "file_upload",
+  "checkbox"
+];
+const PORTAL_VISIBILITY_OPTIONS = [
+  "all",
+  "pgwp",
+  "visitor_visa",
+  "trv_inside",
+  "visitor_record",
+  "work_permit",
+  "study_permit",
+  "study_permit_extension",
+  "super_visa",
+  "express_entry",
+  "family_sponsorship",
+  "citizenship_prcard",
+  "us_b1b2",
+  "uk_visitor",
+  "refugee",
+  "canadian_passport_doc",
+  "generic"
+];
 type AuditItem = {
   id: string;
   action: string;
@@ -358,6 +402,13 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [brandLogoText, setBrandLogoText] = useState("");
   const [brandLogoUrl, setBrandLogoUrl] = useState("");
   const [brandDriveRootLink, setBrandDriveRootLink] = useState("");
+  const [brandCustomSections, setBrandCustomSections] = useState<CustomPortalSection[]>([]);
+  const [brandCustomSectionHistory, setBrandCustomSectionHistory] = useState<CustomPortalSectionVersion[]>([]);
+  const [newCustomSectionTitle, setNewCustomSectionTitle] = useState("");
+  const [newCustomSectionBody, setNewCustomSectionBody] = useState("");
+  const [newCustomSectionFieldType, setNewCustomSectionFieldType] = useState<CustomPortalSection["fieldType"]>("text");
+  const [newCustomSectionOptions, setNewCustomSectionOptions] = useState("");
+  const [newCustomSectionVisibleFor, setNewCustomSectionVisibleFor] = useState("all");
   const [brandStatus, setBrandStatus] = useState("");
   const [teamName, setTeamName] = useState("");
   const [teamEmail, setTeamEmail] = useState("");
@@ -432,6 +483,16 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       setBrandLogoText(comp?.branding?.logoText || "");
       setBrandLogoUrl(comp?.branding?.logoUrl || "");
       setBrandDriveRootLink(comp?.branding?.driveRootLink || "");
+      setBrandCustomSections(
+        Array.isArray(comp?.branding?.customPortalSections)
+          ? (comp.branding.customPortalSections as CustomPortalSection[])
+          : []
+      );
+      setBrandCustomSectionHistory(
+        Array.isArray(comp?.branding?.customPortalSectionHistory)
+          ? (comp.branding.customPortalSectionHistory as CustomPortalSectionVersion[])
+          : []
+      );
 
       const caseRes = await apiFetch("/cases", { cache: "no-store" });
       if (!caseRes.ok) {
@@ -757,52 +818,8 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       return;
     }
     const intake = (payload.intake || {}) as Record<string, string>;
-    const required = [
-      "fullName",
-      "phone",
-      "maritalStatus",
-      "address",
-      "travelHistorySixMonths",
-      "nativeLanguage",
-      "englishTestTaken",
-      "originalEntryDate",
-      "originalEntryPlacePurpose",
-      "employmentHistory",
-      "education",
-      "refusedAnyCountry",
-      "criminalHistory",
-      "medicalHistory"
-    ];
-    const allBase = required.every((k) => String(intake[k] || "").trim().length > 0);
-    const usedOther = String(intake.usedOtherName || "").toLowerCase();
-    const needsOtherNameDetails = usedOther.startsWith("y");
-    const otherNameOk = !needsOtherNameDetails || String(intake.otherNameDetails || "").trim().length > 0;
-
-    const marital = String(intake.maritalStatus || "").toLowerCase();
-    const needsSpouse = marital.includes("married") || marital.includes("common");
-    const spouseOk =
-      !needsSpouse ||
-      (String(intake.spouseName || "").trim().length > 0 &&
-        String(intake.spouseDateOfMarriage || "").trim().length > 0);
-
-    const previousMarriage = String(intake.previousMarriageCommonLaw || "").toLowerCase();
-    const needsPrevDetails = previousMarriage.startsWith("y");
-    const prevOk = !needsPrevDetails || String(intake.previousRelationshipDetails || "").trim().length > 0;
-
-    const refusal = String(intake.refusedAnyCountry || "").toLowerCase();
-    const needsRefusalDetails = refusal.startsWith("y");
-    const refusalOk = !needsRefusalDetails || String(intake.refusalDetails || "").trim().length > 0;
-
-    const travel = String(intake.travelHistorySixMonths || "").toLowerCase();
-    const needsTravelDetails = travel.startsWith("y");
-    const travelOk = !needsTravelDetails || String(intake.travelHistoryDetails || "").trim().length > 0;
-
-    const education = String(intake.education || "").toLowerCase();
-    const needsEducationDetails = ["bachelor", "master", "other"].includes(education);
-    const educationOk = !needsEducationDetails || String(intake.educationDetails || "").trim().length > 0;
-
-    const done = allBase && otherNameOk && spouseOk && prevOk && refusalOk && travelOk && educationOk;
-    setClientIntakeDone(done);
+    const formType = String(payload.formType || intake.applicationType || "");
+    setClientIntakeDone(isQuestionnaireComplete(formType, intake));
   }
 
   async function refreshTasks(caseId?: string) {
@@ -1825,7 +1842,8 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
         appName: brandAppName.trim(),
         logoText: brandLogoText.trim(),
         logoUrl: brandLogoUrl.trim(),
-        driveRootLink: brandDriveRootLink.trim()
+        driveRootLink: brandDriveRootLink.trim(),
+        customPortalSections: brandCustomSections
       })
     });
     const payload = await res.json().catch(() => ({}));
@@ -1835,7 +1853,102 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     }
     const nextCompany = payload.company as Company;
     setCompany(nextCompany);
+    setBrandCustomSections(
+      Array.isArray(nextCompany?.branding?.customPortalSections)
+        ? (nextCompany.branding.customPortalSections as CustomPortalSection[])
+        : []
+    );
+    setBrandCustomSectionHistory(
+      Array.isArray(nextCompany?.branding?.customPortalSectionHistory)
+        ? (nextCompany.branding.customPortalSectionHistory as CustomPortalSectionVersion[])
+        : []
+    );
     setBrandStatus("Branding updated.");
+  }
+
+  function addCustomPortalSection() {
+    const title = newCustomSectionTitle.trim();
+    const body = newCustomSectionBody.trim();
+    if (!title || !body) {
+      setBrandStatus("Custom section title and body are required.");
+      return;
+    }
+    const options = newCustomSectionOptions
+      .split(",")
+      .map((v) => v.trim())
+      .filter(Boolean);
+    const visibleFor = newCustomSectionVisibleFor === "all" ? ["all"] : [newCustomSectionVisibleFor];
+    setBrandCustomSections((prev) => [
+      ...prev,
+      {
+        id: `section_${Date.now()}`,
+        title,
+        body,
+        fieldType: newCustomSectionFieldType || "text",
+        options,
+        visibleFor,
+        sortOrder: prev.length + 1,
+        enabled: true
+      }
+    ]);
+    setNewCustomSectionTitle("");
+    setNewCustomSectionBody("");
+    setNewCustomSectionFieldType("text");
+    setNewCustomSectionOptions("");
+    setNewCustomSectionVisibleFor("all");
+    setBrandStatus("Custom section added. Click Save Branding to publish.");
+  }
+
+  function updateCustomPortalSection(index: number, patch: Partial<CustomPortalSection>) {
+    setBrandCustomSections((prev) =>
+      prev.map((section, i) => (i === index ? { ...section, ...patch } : section))
+    );
+  }
+
+  function removeCustomPortalSection(index: number) {
+    setBrandCustomSections((prev) => prev.filter((_, i) => i !== index));
+    setBrandStatus("Custom section removed. Click Save Branding to publish.");
+  }
+
+  function moveCustomPortalSection(index: number, direction: -1 | 1) {
+    setBrandCustomSections((prev) => {
+      const target = index + direction;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      const current = next[index];
+      next[index] = next[target];
+      next[target] = current;
+      return next.map((section, i) => ({ ...section, sortOrder: i + 1 }));
+    });
+    setBrandStatus("Section order updated. Click Save Branding to publish.");
+  }
+
+  async function rollbackCustomPortalSections(versionId: string) {
+    if (!versionId) return;
+    setBrandStatus("Restoring portal version...");
+    const res = await apiFetch("/company", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rollbackPortalVersionId: versionId })
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setBrandStatus(String(payload.error || "Could not rollback portal version."));
+      return;
+    }
+    const nextCompany = payload.company as Company;
+    setCompany(nextCompany);
+    setBrandCustomSections(
+      Array.isArray(nextCompany?.branding?.customPortalSections)
+        ? (nextCompany.branding.customPortalSections as CustomPortalSection[])
+        : []
+    );
+    setBrandCustomSectionHistory(
+      Array.isArray(nextCompany?.branding?.customPortalSectionHistory)
+        ? (nextCompany.branding.customPortalSectionHistory as CustomPortalSectionVersion[])
+        : []
+    );
+    setBrandStatus("Portal sections restored.");
   }
 
   async function addTeamMember() {
@@ -2455,6 +2568,17 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     })();
     const openDocRequests = (docRequests || []).filter((r) => r.status === "open");
     const processingSupportPhone = "6049024500";
+    const currentCaseKey = resolveApplicationChecklistKey(c?.formType || "generic");
+    const clientCustomSections = Array.isArray(company?.branding?.customPortalSections)
+      ? (company?.branding?.customPortalSections as CustomPortalSection[])
+          .filter((section) => {
+            if (!section || section.enabled === false || !section.title || !section.body) return false;
+            const visibleFor = Array.isArray(section.visibleFor) ? section.visibleFor : ["all"];
+            if (visibleFor.includes("all")) return true;
+            return visibleFor.includes(currentCaseKey);
+          })
+          .sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0))
+      : [];
     return (
       <main className="mx-auto flex max-w-5xl flex-col gap-5 px-4 py-6 md:px-6 md:py-8">
         <Header {...headerProps} />
@@ -2745,6 +2869,24 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
             ) : null}
           </>
         ) : null}
+            {clientCustomSections.map((section) => (
+              <section key={section.id} className="rounded-2xl border-2 border-slate-500 bg-white p-4 shadow-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="font-semibold">{section.title}</h3>
+                  <span className="rounded border border-slate-300 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-600">
+                    {section.fieldType || "text"}
+                  </span>
+                </div>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{section.body}</p>
+                {section.fieldType === "dropdown" && Array.isArray(section.options) && section.options.length > 0 ? (
+                  <ul className="mt-2 list-disc pl-5 text-xs text-slate-600">
+                    {section.options.map((option) => (
+                      <li key={`${section.id}-${option}`}>{option}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </section>
+            ))}
             <section className="rounded-2xl border-2 border-slate-500 bg-white p-4 shadow-sm">
               <h3 className="font-semibold">Contact Us</h3>
               <p className="mt-1 text-sm text-slate-700">
@@ -2922,6 +3064,145 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                   Save Branding
                 </button>
                 {brandStatus ? <p className="mt-2 text-xs text-slate-600">{brandStatus}</p> : null}
+              </section>
+
+              <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
+                <h3 className="text-base font-semibold">Customize Client Portal</h3>
+                <p className="mt-1 text-xs text-slate-500">Add/edit/remove custom sections shown automatically in client portal.</p>
+                <div className="mt-3 grid gap-2 md:grid-cols-4">
+                  <input
+                    value={newCustomSectionTitle}
+                    onChange={(e) => setNewCustomSectionTitle(e.target.value)}
+                    className="rounded-lg border-2 border-slate-300 px-3 py-2 text-sm"
+                    placeholder="Section title"
+                  />
+                  <select
+                    value={newCustomSectionFieldType}
+                    onChange={(e) => setNewCustomSectionFieldType(e.target.value as CustomPortalSection["fieldType"])}
+                    className="rounded-lg border-2 border-slate-300 px-3 py-2 text-sm"
+                  >
+                    {PORTAL_FIELD_TYPES.map((type) => (
+                      <option key={`new-ft-${type}`} value={type}>{type}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={newCustomSectionVisibleFor}
+                    onChange={(e) => setNewCustomSectionVisibleFor(e.target.value)}
+                    className="rounded-lg border-2 border-slate-300 px-3 py-2 text-sm"
+                  >
+                    {PORTAL_VISIBILITY_OPTIONS.map((item) => (
+                      <option key={`new-vis-${item}`} value={item}>{item}</option>
+                    ))}
+                  </select>
+                  <input
+                    value={newCustomSectionBody}
+                    onChange={(e) => setNewCustomSectionBody(e.target.value)}
+                    className="rounded-lg border-2 border-slate-300 px-3 py-2 text-sm"
+                    placeholder="Section body"
+                  />
+                  <input
+                    value={newCustomSectionOptions}
+                    onChange={(e) => setNewCustomSectionOptions(e.target.value)}
+                    className="rounded-lg border-2 border-slate-300 px-3 py-2 text-sm md:col-span-4"
+                    placeholder="Dropdown options (comma separated, optional)"
+                  />
+                </div>
+                <button onClick={addCustomPortalSection} className="mt-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold">
+                  Add Section
+                </button>
+                <div className="mt-3 space-y-2">
+                  {brandCustomSections.map((section, idx) => (
+                    <article key={section.id} className="rounded border border-slate-200 p-2">
+                      <div className="grid gap-2 md:grid-cols-5">
+                        <input
+                          value={section.title}
+                          onChange={(e) => updateCustomPortalSection(idx, { title: e.target.value })}
+                          className="rounded border border-slate-300 px-2 py-2 text-xs"
+                        />
+                        <select
+                          value={section.fieldType || "text"}
+                          onChange={(e) => updateCustomPortalSection(idx, { fieldType: e.target.value as CustomPortalSection["fieldType"] })}
+                          className="rounded border border-slate-300 px-2 py-2 text-xs"
+                        >
+                          {PORTAL_FIELD_TYPES.map((type) => (
+                            <option key={`${section.id}-ft-${type}`} value={type}>{type}</option>
+                          ))}
+                        </select>
+                        <select
+                          value={(section.visibleFor && section.visibleFor[0]) || "all"}
+                          onChange={(e) => updateCustomPortalSection(idx, { visibleFor: [e.target.value] })}
+                          className="rounded border border-slate-300 px-2 py-2 text-xs"
+                        >
+                          {PORTAL_VISIBILITY_OPTIONS.map((item) => (
+                            <option key={`${section.id}-vis-${item}`} value={item}>{item}</option>
+                          ))}
+                        </select>
+                        <label className="flex items-center gap-2 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={section.enabled !== false}
+                            onChange={(e) => updateCustomPortalSection(idx, { enabled: e.target.checked })}
+                          />
+                          Enabled
+                        </label>
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => moveCustomPortalSection(idx, -1)} className="rounded border border-slate-300 px-2 py-1 text-[11px] font-semibold">Up</button>
+                          <button onClick={() => moveCustomPortalSection(idx, 1)} className="rounded border border-slate-300 px-2 py-1 text-[11px] font-semibold">Down</button>
+                        </div>
+                      </div>
+                      <textarea
+                        value={section.body}
+                        onChange={(e) => updateCustomPortalSection(idx, { body: e.target.value })}
+                        className="mt-2 w-full rounded border border-slate-300 px-2 py-2 text-xs"
+                        rows={3}
+                      />
+                      {(section.fieldType || "text") === "dropdown" ? (
+                        <input
+                          value={(section.options || []).join(", ")}
+                          onChange={(e) =>
+                            updateCustomPortalSection(idx, {
+                              options: e.target.value
+                                .split(",")
+                                .map((v) => v.trim())
+                                .filter(Boolean)
+                            })
+                          }
+                          className="mt-2 w-full rounded border border-slate-300 px-2 py-2 text-xs"
+                          placeholder="Dropdown options (comma separated)"
+                        />
+                      ) : null}
+                      <button
+                        onClick={() => removeCustomPortalSection(idx)}
+                        className="mt-2 rounded border border-rose-300 px-2 py-1 text-xs font-semibold text-rose-700"
+                      >
+                        Remove
+                      </button>
+                    </article>
+                  ))}
+                  {brandCustomSections.length === 0 ? <p className="text-xs text-slate-500">No custom sections yet.</p> : null}
+                </div>
+                <p className="mt-2 text-xs text-slate-600">Save Branding to publish changes.</p>
+                <div className="mt-3 rounded border border-slate-200 p-2">
+                  <p className="text-xs font-semibold text-slate-700">Version History</p>
+                  <div className="mt-2 max-h-36 space-y-2 overflow-auto">
+                    {brandCustomSectionHistory.slice(0, 8).map((version) => (
+                      <div key={version.id} className="flex items-center justify-between rounded border border-slate-200 p-2 text-xs">
+                        <p>
+                          {new Date(version.createdAt).toLocaleString()} {version.actorName ? `• ${version.actorName}` : ""}
+                        </p>
+                        <button
+                          onClick={() => void rollbackCustomPortalSections(version.id)}
+                          className="rounded border border-slate-300 px-2 py-1 font-semibold"
+                        >
+                          Restore
+                        </button>
+                      </div>
+                    ))}
+                    {brandCustomSectionHistory.length === 0 ? (
+                      <p className="text-xs text-slate-500">No previous versions.</p>
+                    ) : null}
+                  </div>
+                </div>
               </section>
 
               {sessionUser?.userType === "staff" && sessionUser.role === "Admin" ? (
@@ -3141,6 +3422,145 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                   Save Branding
                 </button>
                 {brandStatus ? <p className="mt-2 text-xs text-slate-600">{brandStatus}</p> : null}
+              </section>
+
+              <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
+                <h3 className="text-base font-semibold">Customize Client Portal</h3>
+                <p className="mt-1 text-xs text-slate-500">Add/edit/remove custom sections shown automatically in client portal.</p>
+                <div className="mt-3 grid gap-2 md:grid-cols-4">
+                  <input
+                    value={newCustomSectionTitle}
+                    onChange={(e) => setNewCustomSectionTitle(e.target.value)}
+                    className="rounded-lg border-2 border-slate-300 px-3 py-2 text-sm"
+                    placeholder="Section title"
+                  />
+                  <select
+                    value={newCustomSectionFieldType}
+                    onChange={(e) => setNewCustomSectionFieldType(e.target.value as CustomPortalSection["fieldType"])}
+                    className="rounded-lg border-2 border-slate-300 px-3 py-2 text-sm"
+                  >
+                    {PORTAL_FIELD_TYPES.map((type) => (
+                      <option key={`new-ft-settings-${type}`} value={type}>{type}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={newCustomSectionVisibleFor}
+                    onChange={(e) => setNewCustomSectionVisibleFor(e.target.value)}
+                    className="rounded-lg border-2 border-slate-300 px-3 py-2 text-sm"
+                  >
+                    {PORTAL_VISIBILITY_OPTIONS.map((item) => (
+                      <option key={`new-vis-settings-${item}`} value={item}>{item}</option>
+                    ))}
+                  </select>
+                  <input
+                    value={newCustomSectionBody}
+                    onChange={(e) => setNewCustomSectionBody(e.target.value)}
+                    className="rounded-lg border-2 border-slate-300 px-3 py-2 text-sm"
+                    placeholder="Section body"
+                  />
+                  <input
+                    value={newCustomSectionOptions}
+                    onChange={(e) => setNewCustomSectionOptions(e.target.value)}
+                    className="rounded-lg border-2 border-slate-300 px-3 py-2 text-sm md:col-span-4"
+                    placeholder="Dropdown options (comma separated, optional)"
+                  />
+                </div>
+                <button onClick={addCustomPortalSection} className="mt-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold">
+                  Add Section
+                </button>
+                <div className="mt-3 space-y-2">
+                  {brandCustomSections.map((section, idx) => (
+                    <article key={section.id} className="rounded border border-slate-200 p-2">
+                      <div className="grid gap-2 md:grid-cols-5">
+                        <input
+                          value={section.title}
+                          onChange={(e) => updateCustomPortalSection(idx, { title: e.target.value })}
+                          className="rounded border border-slate-300 px-2 py-2 text-xs"
+                        />
+                        <select
+                          value={section.fieldType || "text"}
+                          onChange={(e) => updateCustomPortalSection(idx, { fieldType: e.target.value as CustomPortalSection["fieldType"] })}
+                          className="rounded border border-slate-300 px-2 py-2 text-xs"
+                        >
+                          {PORTAL_FIELD_TYPES.map((type) => (
+                            <option key={`${section.id}-settings-ft-${type}`} value={type}>{type}</option>
+                          ))}
+                        </select>
+                        <select
+                          value={(section.visibleFor && section.visibleFor[0]) || "all"}
+                          onChange={(e) => updateCustomPortalSection(idx, { visibleFor: [e.target.value] })}
+                          className="rounded border border-slate-300 px-2 py-2 text-xs"
+                        >
+                          {PORTAL_VISIBILITY_OPTIONS.map((item) => (
+                            <option key={`${section.id}-settings-vis-${item}`} value={item}>{item}</option>
+                          ))}
+                        </select>
+                        <label className="flex items-center gap-2 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={section.enabled !== false}
+                            onChange={(e) => updateCustomPortalSection(idx, { enabled: e.target.checked })}
+                          />
+                          Enabled
+                        </label>
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => moveCustomPortalSection(idx, -1)} className="rounded border border-slate-300 px-2 py-1 text-[11px] font-semibold">Up</button>
+                          <button onClick={() => moveCustomPortalSection(idx, 1)} className="rounded border border-slate-300 px-2 py-1 text-[11px] font-semibold">Down</button>
+                        </div>
+                      </div>
+                      <textarea
+                        value={section.body}
+                        onChange={(e) => updateCustomPortalSection(idx, { body: e.target.value })}
+                        className="mt-2 w-full rounded border border-slate-300 px-2 py-2 text-xs"
+                        rows={3}
+                      />
+                      {(section.fieldType || "text") === "dropdown" ? (
+                        <input
+                          value={(section.options || []).join(", ")}
+                          onChange={(e) =>
+                            updateCustomPortalSection(idx, {
+                              options: e.target.value
+                                .split(",")
+                                .map((v) => v.trim())
+                                .filter(Boolean)
+                            })
+                          }
+                          className="mt-2 w-full rounded border border-slate-300 px-2 py-2 text-xs"
+                          placeholder="Dropdown options (comma separated)"
+                        />
+                      ) : null}
+                      <button
+                        onClick={() => removeCustomPortalSection(idx)}
+                        className="mt-2 rounded border border-rose-300 px-2 py-1 text-xs font-semibold text-rose-700"
+                      >
+                        Remove
+                      </button>
+                    </article>
+                  ))}
+                  {brandCustomSections.length === 0 ? <p className="text-xs text-slate-500">No custom sections yet.</p> : null}
+                </div>
+                <p className="mt-2 text-xs text-slate-600">Save Branding to publish changes.</p>
+                <div className="mt-3 rounded border border-slate-200 p-2">
+                  <p className="text-xs font-semibold text-slate-700">Version History</p>
+                  <div className="mt-2 max-h-36 space-y-2 overflow-auto">
+                    {brandCustomSectionHistory.slice(0, 8).map((version) => (
+                      <div key={version.id} className="flex items-center justify-between rounded border border-slate-200 p-2 text-xs">
+                        <p>
+                          {new Date(version.createdAt).toLocaleString()} {version.actorName ? `• ${version.actorName}` : ""}
+                        </p>
+                        <button
+                          onClick={() => void rollbackCustomPortalSections(version.id)}
+                          className="rounded border border-slate-300 px-2 py-1 font-semibold"
+                        >
+                          Restore
+                        </button>
+                      </div>
+                    ))}
+                    {brandCustomSectionHistory.length === 0 ? (
+                      <p className="text-xs text-slate-500">No previous versions.</p>
+                    ) : null}
+                  </div>
+                </div>
               </section>
 
               <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">

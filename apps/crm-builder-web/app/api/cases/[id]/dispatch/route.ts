@@ -3,6 +3,7 @@ import { getCurrentUserFromRequest } from "@/lib/auth";
 import { canStaffAccessCase } from "@/lib/rbac";
 import { dispatchCommunication } from "@/lib/communications";
 import { addOutboundMessage, getCase } from "@/lib/store";
+import { boundedText, isReasonablePhone, isValidEmail, normalizeEmail, normalizePhone } from "@/lib/validation";
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const user = await getCurrentUserFromRequest(request);
@@ -17,13 +18,23 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
   const body = await request.json().catch(() => ({}));
   const channel = String(body.channel || "").trim().toLowerCase();
-  const target = String(body.target || "").trim();
-  const message = String(body.message || "").trim();
+  const targetRaw = String(body.target || "").trim();
+  const message = boundedText(body.message, 5000);
   if (!["email", "sms", "whatsapp"].includes(channel)) {
     return NextResponse.json({ error: "Invalid channel" }, { status: 400 });
   }
+  const target =
+    channel === "email"
+      ? normalizeEmail(targetRaw)
+      : normalizePhone(targetRaw);
   if (!target || !message) {
     return NextResponse.json({ error: "target and message are required" }, { status: 400 });
+  }
+  if (channel === "email" && !isValidEmail(target)) {
+    return NextResponse.json({ error: "Invalid email target" }, { status: 400 });
+  }
+  if ((channel === "sms" || channel === "whatsapp") && !isReasonablePhone(target)) {
+    return NextResponse.json({ error: "Invalid phone target" }, { status: 400 });
   }
 
   const result = await dispatchCommunication({
@@ -45,4 +56,3 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
   return NextResponse.json({ result, log });
 }
-
