@@ -14,10 +14,10 @@ export type AppScreen =
 
 const STAFF_ROLE_TAB_ACCESS: Record<Exclude<Role, "Client">, AppScreen[]> = {
   Admin: ["dashboard", "cases", "communications", "results", "submission", "accounting", "tasks", "chat", "files", "settings"],
-  Marketing: ["dashboard", "communications", "results", "accounting"],
-  Processing: ["dashboard", "cases", "tasks", "files", "chat"],
-  ProcessingLead: ["dashboard", "cases", "tasks", "files", "chat", "settings"],
-  Reviewer: ["dashboard", "cases", "tasks", "files", "chat"]
+  Marketing: ["dashboard", "cases", "communications", "results", "submission", "accounting", "tasks", "chat", "files", "settings"],
+  Processing: ["dashboard", "cases", "communications", "results", "submission", "accounting", "tasks", "chat", "files", "settings"],
+  ProcessingLead: ["dashboard", "cases", "communications", "results", "submission", "accounting", "tasks", "chat", "files", "settings"],
+  Reviewer: ["dashboard", "cases", "communications", "results", "submission", "accounting", "tasks", "chat", "files", "settings"]
 };
 
 function normalizeRole(role: Role | string): Role {
