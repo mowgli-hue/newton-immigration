@@ -17,6 +17,7 @@ import {
   NotificationItem,
   OutboundMessageItem,
   PgwpIntakeData,
+  LegacyResultItem,
   Role,
   Session,
   Stage,
@@ -80,6 +81,7 @@ const defaultStore: AppStore = {
   auditLogs: [],
   tasks: [],
   notifications: [],
+  legacyResults: [],
   sessions: [],
   invites: []
 };
@@ -303,6 +305,10 @@ function migrateStore(raw: Partial<AppStore>): AppStore {
     })),
     tasks: raw.tasks ?? [],
     notifications: raw.notifications ?? [],
+    legacyResults: (raw.legacyResults ?? []).map((r) => ({
+      ...r,
+      createdAt: r.createdAt ?? new Date().toISOString()
+    })),
     sessions: raw.sessions ?? [],
     invites: raw.invites ?? []
   };
@@ -1908,6 +1914,60 @@ export async function addDocument(input: {
   }
   await writeStore(store);
   return doc;
+}
+
+export async function listLegacyResults(companyId: string): Promise<LegacyResultItem[]> {
+  const store = await readStore();
+  return store.legacyResults
+    .filter((r) => r.companyId === companyId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export async function addLegacyResult(input: {
+  companyId: string;
+  clientName: string;
+  phone?: string;
+  applicationNumber: string;
+  outcome: LegacyResultItem["outcome"];
+  notes?: string;
+  fileName?: string;
+  fileLink?: string;
+  createdByUserId: string;
+  createdByName: string;
+}): Promise<LegacyResultItem> {
+  const store = await readStore();
+  const appNo = String(input.applicationNumber || "").trim().toLowerCase();
+  const matchedCase =
+    store.cases.find(
+      (c) =>
+        c.companyId === input.companyId &&
+        String(c.applicationNumber || "")
+          .trim()
+          .toLowerCase() === appNo
+    ) ?? null;
+  const matchedClient = matchedCase
+    ? store.clients.find((c) => c.companyId === input.companyId && c.id === matchedCase.clientId)
+    : undefined;
+
+  const item: LegacyResultItem = {
+    id: `LRES-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    companyId: input.companyId,
+    clientName: String(input.clientName || "").trim() || "Client",
+    phone: String(input.phone || "").trim() || undefined,
+    applicationNumber: String(input.applicationNumber || "").trim(),
+    outcome: input.outcome,
+    notes: String(input.notes || "").trim() || undefined,
+    fileName: String(input.fileName || "").trim() || undefined,
+    fileLink: String(input.fileLink || "").trim() || undefined,
+    matchedCaseId: matchedCase?.id,
+    matchedClientId: matchedClient?.id,
+    createdByUserId: input.createdByUserId,
+    createdByName: input.createdByName,
+    createdAt: new Date().toISOString()
+  };
+  store.legacyResults.unshift(item);
+  await writeStore(store);
+  return item;
 }
 
 export async function listCaseDocRequests(companyId: string, caseId: string): Promise<NonNullable<CaseItem["docRequests"]>> {

@@ -81,6 +81,18 @@ type NotificationItem = {
   read: boolean;
   createdAt: string;
 };
+type LegacyResultItem = {
+  id: string;
+  clientName: string;
+  phone?: string;
+  applicationNumber: string;
+  outcome: "approved" | "refused" | "request_letter" | "other";
+  notes?: string;
+  fileName?: string;
+  fileLink?: string;
+  matchedCaseId?: string;
+  createdAt: string;
+};
 type CustomPortalSection = {
   id: string;
   title: string;
@@ -344,6 +356,13 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [resultShareStatus, setResultShareStatus] = useState("");
   const [resultSendEmail, setResultSendEmail] = useState("");
   const [resultSendPhone, setResultSendPhone] = useState("");
+  const [legacyResultClientName, setLegacyResultClientName] = useState("");
+  const [legacyResultPhone, setLegacyResultPhone] = useState("");
+  const [legacyResultOutcome, setLegacyResultOutcome] = useState<"approved" | "refused" | "request_letter" | "other">("other");
+  const [legacyResultNotes, setLegacyResultNotes] = useState("");
+  const [legacyResultFile, setLegacyResultFile] = useState<File | null>(null);
+  const [legacyResultStatus, setLegacyResultStatus] = useState("");
+  const [legacyResults, setLegacyResults] = useState<LegacyResultItem[]>([]);
   const [submissionSearch, setSubmissionSearch] = useState("");
   const [submissionApplicationNumber, setSubmissionApplicationNumber] = useState("");
   const [submissionStatus, setSubmissionStatus] = useState("");
@@ -524,6 +543,11 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       }
 
       if (user.userType === "staff") {
+        const legacyRes = await apiFetch("/results/legacy", { cache: "no-store" });
+        if (legacyRes.ok) {
+          const legacyPayload = await legacyRes.json().catch(() => ({}));
+          setLegacyResults((legacyPayload.items || []) as LegacyResultItem[]);
+        }
         const usersRes = await apiFetch("/users", { cache: "no-store" });
         if (usersRes.ok) {
           const usersPayload = await usersRes.json().catch(() => ({}));
@@ -1302,6 +1326,38 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       window.open(`sms:${cleanedPhone}?body=${encodeURIComponent(message)}`, "_blank");
       setResultShareStatus("SMS app opened. Provider not configured for server send.");
     }
+  }
+
+  async function submitLegacyResult() {
+    const appNo = resultApplicationNumber.trim();
+    const client = legacyResultClientName.trim();
+    if (!appNo || !client) {
+      setLegacyResultStatus("Application number and client name are required.");
+      return;
+    }
+    setLegacyResultStatus("Saving legacy result...");
+    const form = new FormData();
+    form.append("applicationNumber", appNo);
+    form.append("clientName", client);
+    form.append("phone", legacyResultPhone.trim());
+    form.append("outcome", legacyResultOutcome);
+    form.append("notes", legacyResultNotes.trim());
+    if (legacyResultFile) form.append("file", legacyResultFile);
+
+    const res = await apiFetch("/results/legacy", {
+      method: "POST",
+      body: form
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setLegacyResultStatus(String(payload.error || "Could not save legacy result."));
+      return;
+    }
+    const item = payload.item as LegacyResultItem;
+    setLegacyResults((prev) => [item, ...prev]);
+    setLegacyResultFile(null);
+    setLegacyResultNotes("");
+    setLegacyResultStatus(`Saved legacy result for ${item.clientName}.`);
   }
 
   async function submitCaseWithApplicationNumber() {
@@ -4542,6 +4598,70 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                     Phone: {resultLinkedCase.leadPhone || "N/A"} | Application No: {resultLinkedCase.applicationNumber || "N/A"}
                   </div>
                 ) : null}
+              </div>
+              <div className="mt-3 rounded border border-slate-200 p-3 text-xs">
+                <p className="font-semibold">Regular Results (Old Clients, Not in Portal)</p>
+                <p className="mt-1 text-slate-500">Use this when result is for clients not on portal/cases. It is saved in result register.</p>
+                <div className="mt-2 grid gap-2 md:grid-cols-4">
+                  <input
+                    value={legacyResultClientName}
+                    onChange={(e) => setLegacyResultClientName(e.target.value)}
+                    className="rounded border border-slate-300 px-2 py-2"
+                    placeholder="Client name"
+                  />
+                  <input
+                    value={legacyResultPhone}
+                    onChange={(e) => setLegacyResultPhone(e.target.value)}
+                    className="rounded border border-slate-300 px-2 py-2"
+                    placeholder="Client phone"
+                  />
+                  <select
+                    value={legacyResultOutcome}
+                    onChange={(e) => setLegacyResultOutcome(e.target.value as "approved" | "refused" | "request_letter" | "other")}
+                    className="rounded border border-slate-300 px-2 py-2"
+                  >
+                    <option value="other">Other</option>
+                    <option value="approved">Approved</option>
+                    <option value="refused">Refused</option>
+                    <option value="request_letter">Request Letter</option>
+                  </select>
+                  <input
+                    type="file"
+                    onChange={(e) => setLegacyResultFile(e.target.files?.[0] || null)}
+                    className="rounded border border-slate-300 px-2 py-2"
+                  />
+                </div>
+                <textarea
+                  value={legacyResultNotes}
+                  onChange={(e) => setLegacyResultNotes(e.target.value)}
+                  className="mt-2 w-full rounded border border-slate-300 px-2 py-2"
+                  rows={2}
+                  placeholder="Notes (optional)"
+                />
+                <button
+                  onClick={() => void submitLegacyResult()}
+                  className="mt-2 rounded bg-slate-900 px-3 py-2 font-semibold text-white"
+                >
+                  Save Regular Result
+                </button>
+                {legacyResultStatus ? <p className="mt-2 text-slate-700">{legacyResultStatus}</p> : null}
+                <div className="mt-3 max-h-40 space-y-2 overflow-auto rounded border border-slate-200 p-2">
+                  {legacyResults.slice(0, 20).map((item) => (
+                    <article key={item.id} className="rounded border border-slate-200 p-2">
+                      <p className="font-semibold">{item.applicationNumber} - {item.clientName}</p>
+                      <p className="text-slate-500">
+                        {item.outcome} • {item.phone || "No phone"} • {new Date(item.createdAt).toLocaleString()}
+                      </p>
+                      {item.matchedCaseId ? <p className="text-emerald-700">Matched case: {item.matchedCaseId}</p> : null}
+                      {item.fileLink ? (
+                        <a href={item.fileLink} target="_blank" className="text-blue-700 underline">
+                          Open file
+                        </a>
+                      ) : null}
+                    </article>
+                  ))}
+                  {legacyResults.length === 0 ? <p className="text-slate-500">No regular results saved yet.</p> : null}
+                </div>
               </div>
               <input
                 value={resultSearch}

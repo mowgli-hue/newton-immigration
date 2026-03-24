@@ -375,6 +375,23 @@ export type NotificationItem = {
   createdAt: string;
 };
 
+export type LegacyResultItem = {
+  id: string;
+  companyId: string;
+  clientName: string;
+  phone?: string;
+  applicationNumber: string;
+  outcome: "approved" | "refused" | "request_letter" | "other";
+  notes?: string;
+  fileName?: string;
+  fileLink?: string;
+  matchedCaseId?: string;
+  matchedClientId?: string;
+  createdByUserId: string;
+  createdByName: string;
+  createdAt: string;
+};
+
 export type AppStore = {
   companies: Company[];
   users: AppUser[];
@@ -387,6 +404,7 @@ export type AppStore = {
   auditLogs: AuditLog[];
   tasks: TaskItem[];
   notifications: NotificationItem[];
+  legacyResults: LegacyResultItem[];
   sessions: Session[];
   invites: ClientInvite[];
 };
