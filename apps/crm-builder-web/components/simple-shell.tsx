@@ -311,6 +311,14 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDescription, setNewTaskDescription] = useState("");
   const [newTaskPriority, setNewTaskPriority] = useState<"low" | "medium" | "high">("medium");
+  const [newTaskAssignedTo, setNewTaskAssignedTo] = useState("");
+  const [newTaskDueDate, setNewTaskDueDate] = useState("");
+  const [teamTaskCaseId, setTeamTaskCaseId] = useState("");
+  const [teamTaskTitle, setTeamTaskTitle] = useState("");
+  const [teamTaskDescription, setTeamTaskDescription] = useState("");
+  const [teamTaskPriority, setTeamTaskPriority] = useState<"low" | "medium" | "high">("medium");
+  const [teamTaskAssignedTo, setTeamTaskAssignedTo] = useState("");
+  const [teamTaskDueDate, setTeamTaskDueDate] = useState("");
   const [taskActionStatus, setTaskActionStatus] = useState("");
   const [chatText, setChatText] = useState("");
   const [chatStatus, setChatStatus] = useState("");
@@ -694,6 +702,16 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     [sessionUser?.role, sessionUser?.userType]
   );
   const visibleTabs = useMemo(() => tabs.filter((t) => allowedTabs.includes(t.id)), [allowedTabs]);
+  const taskAssigneeOptions = useMemo(() => {
+    const names = new Set<string>();
+    teamUsers
+      .filter((u) => u.active !== false)
+      .forEach((u) => names.add(String(u.name || "").trim()));
+    if (sessionUser?.name) names.add(sessionUser.name);
+    if (selectedCase?.assignedTo) names.add(String(selectedCase.assignedTo));
+    names.delete("");
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }, [teamUsers, sessionUser?.name, selectedCase?.assignedTo]);
 
   useEffect(() => {
     if (!visibleTabs.length) return;
@@ -864,6 +882,8 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     setResultSendPhone(String(selectedCase.leadPhone || ""));
     setSubmissionApplicationNumber(selectedCase.applicationNumber || "");
     setSubmissionStatus("");
+    setNewTaskAssignedTo(String(selectedCase.assignedTo || sessionUser?.name || ""));
+    setNewTaskDueDate("");
   }, [selectedCase?.id]);
 
   useEffect(() => {
@@ -2110,7 +2130,9 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
         caseId: selectedCase.id,
         title: newTaskTitle.trim(),
         description: newTaskDescription.trim(),
-        priority: newTaskPriority
+        priority: newTaskPriority,
+        assignedTo: newTaskAssignedTo.trim() || selectedCase.assignedTo || sessionUser?.name || "Unassigned",
+        dueDate: newTaskDueDate || undefined
       })
     });
     const payload = await res.json().catch(() => ({}));
@@ -2121,8 +2143,45 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     setNewTaskTitle("");
     setNewTaskDescription("");
     setNewTaskPriority("medium");
+    setNewTaskDueDate("");
     setTaskActionStatus("Task created.");
     await refreshTasks(selectedCase.id);
+  }
+
+  async function createTeamTask() {
+    if (!teamTaskCaseId.trim()) {
+      setTaskActionStatus("Select case first.");
+      return;
+    }
+    if (!teamTaskTitle.trim()) {
+      setTaskActionStatus("Task title is required.");
+      return;
+    }
+    setTaskActionStatus("Creating team task...");
+    const targetCase = visibleCases.find((c) => c.id === teamTaskCaseId) || selectedCase;
+    const res = await apiFetch("/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        caseId: teamTaskCaseId,
+        title: teamTaskTitle.trim(),
+        description: teamTaskDescription.trim(),
+        priority: teamTaskPriority,
+        assignedTo: teamTaskAssignedTo.trim() || targetCase?.assignedTo || sessionUser?.name || "Unassigned",
+        dueDate: teamTaskDueDate || undefined
+      })
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setTaskActionStatus(String(payload.error || "Could not create task"));
+      return;
+    }
+    setTeamTaskTitle("");
+    setTeamTaskDescription("");
+    setTeamTaskPriority("medium");
+    setTeamTaskDueDate("");
+    setTaskActionStatus("Team task created.");
+    await refreshTasks();
   }
 
   async function markTaskCompleted(taskId: string) {
@@ -3609,7 +3668,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
 
                     {caseDetailTab === "tasks" ? (
                       <div className="mt-3 text-xs">
-                        <div className="grid gap-2 md:grid-cols-3">
+                        <div className="grid gap-2 md:grid-cols-5">
                           <input value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} className="rounded border border-slate-300 px-2 py-2" placeholder="Task title" />
                           <input value={newTaskDescription} onChange={(e) => setNewTaskDescription(e.target.value)} className="rounded border border-slate-300 px-2 py-2" placeholder="Description" />
                           <select value={newTaskPriority} onChange={(e) => setNewTaskPriority(e.target.value as "low" | "medium" | "high")} className="rounded border border-slate-300 px-2 py-2">
@@ -3617,6 +3676,15 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                             <option value="medium">medium</option>
                             <option value="high">high</option>
                           </select>
+                          <select value={newTaskAssignedTo} onChange={(e) => setNewTaskAssignedTo(e.target.value)} className="rounded border border-slate-300 px-2 py-2">
+                            <option value="">Assign to</option>
+                            {taskAssigneeOptions.map((name) => (
+                              <option key={name} value={name}>
+                                {name}
+                              </option>
+                            ))}
+                          </select>
+                          <input type="date" value={newTaskDueDate} onChange={(e) => setNewTaskDueDate(e.target.value)} className="rounded border border-slate-300 px-2 py-2" />
                         </div>
                         <button onClick={() => void createCaseTask()} className="mt-2 rounded bg-slate-900 px-3 py-2 text-xs font-semibold text-white">
                           Add Task
@@ -3627,6 +3695,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                             <div key={t.id} className="rounded border border-slate-200 p-2">
                               <p className="font-semibold">{t.title}</p>
                               <p className="text-slate-500">{t.priority} • {t.status}</p>
+                              <p className="text-slate-500">Assigned: {t.assignedTo} {t.dueDate ? `• Due: ${t.dueDate}` : ""}</p>
                               {t.description ? <p>{t.description}</p> : null}
                               {t.status !== "completed" ? (
                                 <button onClick={() => void markTaskCompleted(t.id)} className="mt-1 rounded border border-slate-300 px-2 py-1 text-xs font-semibold">
@@ -4195,6 +4264,38 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                   <p className="text-lg font-semibold">{tasks.filter((t) => t.status === "completed").length}</p>
                 </article>
               </div>
+              <div className="mt-3 rounded border border-slate-200 p-3 text-xs">
+                <p className="font-semibold">Create Task (Any Team Workspace)</p>
+                <div className="mt-2 grid gap-2 md:grid-cols-3">
+                  <select value={teamTaskCaseId} onChange={(e) => setTeamTaskCaseId(e.target.value)} className="rounded border border-slate-300 px-2 py-2">
+                    <option value="">Select case</option>
+                    {visibleCases.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.id} - {c.client}
+                      </option>
+                    ))}
+                  </select>
+                  <input value={teamTaskTitle} onChange={(e) => setTeamTaskTitle(e.target.value)} className="rounded border border-slate-300 px-2 py-2" placeholder="Task title" />
+                  <input value={teamTaskDescription} onChange={(e) => setTeamTaskDescription(e.target.value)} className="rounded border border-slate-300 px-2 py-2" placeholder="Description" />
+                  <select value={teamTaskPriority} onChange={(e) => setTeamTaskPriority(e.target.value as "low" | "medium" | "high")} className="rounded border border-slate-300 px-2 py-2">
+                    <option value="low">low</option>
+                    <option value="medium">medium</option>
+                    <option value="high">high</option>
+                  </select>
+                  <select value={teamTaskAssignedTo} onChange={(e) => setTeamTaskAssignedTo(e.target.value)} className="rounded border border-slate-300 px-2 py-2">
+                    <option value="">Assign to</option>
+                    {taskAssigneeOptions.map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                  <input type="date" value={teamTaskDueDate} onChange={(e) => setTeamTaskDueDate(e.target.value)} className="rounded border border-slate-300 px-2 py-2" />
+                </div>
+                <button onClick={() => void createTeamTask()} className="mt-2 rounded bg-slate-900 px-3 py-2 text-xs font-semibold text-white">
+                  Add Team Task
+                </button>
+              </div>
               <div className="mt-3 space-y-2">
                 {tasks.map((t) => (
                   <article key={t.id} className="rounded-lg border border-slate-200 p-3 text-sm">
@@ -4202,6 +4303,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                     <p className="text-xs text-slate-500">
                       {t.caseId} • {t.priority} • {t.status} • assigned: {t.assignedTo}
                     </p>
+                    {t.dueDate ? <p className="text-xs text-slate-500">Due: {t.dueDate}</p> : null}
                     {t.description ? <p className="mt-1 text-xs">{t.description}</p> : null}
                     {t.status !== "completed" ? (
                       <button
