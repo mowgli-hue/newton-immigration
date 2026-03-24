@@ -791,7 +791,12 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const todayIsoDate = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const todaysResults = useMemo(
     () =>
-      legacyResults.filter((r) => String(r.resultDate || "").slice(0, 10) === todayIsoDate),
+      legacyResults.filter(
+        (r) =>
+          String(r.resultDate || "").slice(0, 10) === todayIsoDate &&
+          r.autoCategory === "new" &&
+          !r.informedToClient
+      ),
     [legacyResults, todayIsoDate]
   );
   const notInformedResults = useMemo(
@@ -4728,8 +4733,8 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
               </div>
 
               <div className="mt-3 rounded border-2 border-amber-300 bg-amber-50 p-3 text-xs">
-                <p className="font-semibold text-amber-900">Today&apos;s Results ({todaysResults.length})</p>
-                <p className="mt-1 text-amber-900">Highlighted daily list. NEW entries auto-link to case + client portal result.</p>
+                <p className="font-semibold text-amber-900">Today&apos;s Pending NEW Results ({todaysResults.length})</p>
+                <p className="mt-1 text-amber-900">Only NEW + not-informed items appear here. Old/sent items are hidden from this top list.</p>
                 <div className="mt-2 max-h-56 space-y-2 overflow-auto rounded border border-amber-200 bg-white p-2">
                   {todaysResults.map((item) => (
                     <article key={item.id} className="rounded border border-slate-200 p-2">
@@ -4768,7 +4773,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
               </div>
 
               <div className="mt-3 rounded border border-rose-200 bg-rose-50 p-3 text-xs">
-                <p className="font-semibold text-rose-900">Client IDs Not Informed Yet ({notInformedResults.length})</p>
+                <p className="font-semibold text-rose-900">Not Informed Yet ({notInformedResults.length})</p>
                 <div className="mt-2 max-h-48 space-y-2 overflow-auto rounded border border-rose-200 bg-white p-2">
                   {notInformedResults.map((item) => (
                     <article key={item.id} className="rounded border border-slate-200 p-2">
