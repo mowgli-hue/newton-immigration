@@ -144,7 +144,7 @@ export type CaseItem = {
   submittedFolderLink?: string;
   correspondenceFolderLink?: string;
   questionnaireLink: string;
-  paymentMethod?: "interac";
+  paymentMethod?: "interac" | "cash" | "card" | "bank_transfer" | "other";
   interacRecipient?: string;
   interacInstructions?: string;
   paymentStatus?: "pending" | "paid" | "not_required";

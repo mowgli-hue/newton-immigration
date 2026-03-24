@@ -23,6 +23,9 @@ export function resolveApplicationChecklistKey(formType: string):
   | "study_permit"
   | "study_permit_extension"
   | "super_visa"
+  | "express_entry"
+  | "family_sponsorship"
+  | "citizenship_prcard"
   | "us_b1b2"
   | "uk_visitor"
   | "refugee"
@@ -43,6 +46,9 @@ export function resolveApplicationChecklistKey(formType: string):
   if (ft.includes("study permit")) return "study_permit";
   if (ft.includes("study permit extension") || ft.includes("college change") || ft.includes("spe")) return "study_permit_extension";
   if (ft.includes("super visa") || ft.includes("supervisa")) return "super_visa";
+  if (ft.includes("express entry") || ft.includes("pnp") || ft.includes("pr application")) return "express_entry";
+  if (ft.includes("spousal sponsorship") || ft.includes("parents") || ft.includes("grandparents sponsorship") || ft.includes("family sponsorship")) return "family_sponsorship";
+  if (ft.includes("citizenship") || ft.includes("pr card renewal") || ft.includes("pr card replacement")) return "citizenship_prcard";
   if (ft.includes("ds 160") || ft.includes("b1") || ft.includes("b2") || ft.includes("usa")) return "us_b1b2";
   if (ft.includes("uk visa") || ft.includes("uk visitor")) return "uk_visitor";
   if (ft.includes("refugee")) return "refugee";
@@ -118,6 +124,28 @@ const CHECKLISTS: Record<string, ApplicationChecklistItem[]> = {
     { key: "sponsor_status", label: "Sponsor Status Proof (PR/Citizenship)", required: true, keywords: ["pr card", "canadian passport", "certificate"] },
     { key: "sponsor_income", label: "Sponsor Income Docs (NOA/T4/Job/Paystubs)", required: true, keywords: ["noa", "t4", "job letter", "paystub"] },
     { key: "sponsor_birth", label: "Sponsor Birth Certificate (if available)", required: false, keywords: ["birth certificate"] }
+  ],
+  express_entry: [
+    { key: "passport", label: "Passport", required: true, keywords: ["passport"] },
+    { key: "language", label: "Language Test (IELTS/CELPIP/TEF)", required: true, keywords: ["ielts", "celpip", "tef"] },
+    { key: "eca", label: "ECA Report (WES or equivalent)", required: true, keywords: ["eca", "wes"] },
+    { key: "work_reference", label: "Work Experience Reference Letters", required: true, keywords: ["reference letter", "employment letter", "experience letter"] },
+    { key: "education_docs", label: "Education Transcripts/Degree", required: true, keywords: ["degree", "diploma", "transcript"] },
+    { key: "proof_funds", label: "Proof of Funds", required: false, keywords: ["proof of funds", "bank statement", "bank certificate"] },
+    { key: "pcc", label: "Police Clearance Certificate (if available)", required: false, keywords: ["police clearance", "pcc"] }
+  ],
+  family_sponsorship: [
+    { key: "passport", label: "Passport(s)", required: true, keywords: ["passport"] },
+    { key: "status_docs", label: "Sponsor Status Proof (PR card/citizenship)", required: true, keywords: ["pr card", "citizenship", "canadian passport"] },
+    { key: "relationship", label: "Relationship Proof (marriage/birth/etc.)", required: true, keywords: ["marriage certificate", "birth certificate", "relationship proof"] },
+    { key: "financials", label: "Sponsor Financial Docs (NOA/T4/paystubs)", required: true, keywords: ["noa", "t4", "paystub", "job letter"] },
+    { key: "photos_chat", label: "Photos/Communication Evidence", required: false, keywords: ["photo", "chat", "call log"] }
+  ],
+  citizenship_prcard: [
+    { key: "id_docs", label: "Current ID + Existing PR card/Passport", required: true, keywords: ["id", "pr card", "passport"] },
+    { key: "travel_history", label: "Travel/Address history details", required: true, keywords: ["travel history", "address history"] },
+    { key: "photos", label: "Required photos", required: true, keywords: ["photo"] },
+    { key: "supporting", label: "Supporting documents (if requested)", required: false, keywords: ["supporting", "explanation"] }
   ],
   us_b1b2: [
     { key: "passport", label: "Passport", required: true, keywords: ["passport"] },

@@ -35,6 +35,13 @@ export async function PATCH(
   ) as "docs_pending" | "under_review" | "submitted" | "other" | undefined;
   const processingStatusOther =
     body?.processingStatusOther !== undefined ? boundedText(body.processingStatusOther, 200) : undefined;
+  const paymentMethodRaw = body?.paymentMethod !== undefined ? String(body.paymentMethod).trim().toLowerCase() : undefined;
+  const paymentMethod = (
+    paymentMethodRaw &&
+    ["interac", "cash", "card", "bank_transfer", "other"].includes(paymentMethodRaw)
+      ? paymentMethodRaw
+      : undefined
+  ) as "interac" | "cash" | "card" | "bank_transfer" | "other" | undefined;
   const applicationNumber =
     body?.applicationNumber !== undefined ? boundedText(body.applicationNumber, 120) : undefined;
   const submittedAt =
@@ -54,6 +61,7 @@ export async function PATCH(
     assignedTo !== undefined ||
     processingStatus !== undefined ||
     processingStatusOther !== undefined ||
+    paymentMethod !== undefined ||
     applicationNumber !== undefined ||
     submittedAt !== undefined ||
     finalOutcome !== undefined ||
@@ -64,6 +72,7 @@ export async function PATCH(
       assignedTo,
       processingStatus,
       processingStatusOther,
+      paymentMethod,
       applicationNumber,
       submittedAt,
       finalOutcome,

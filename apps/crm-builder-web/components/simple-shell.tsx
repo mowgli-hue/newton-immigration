@@ -625,7 +625,20 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     [tasks, selectedCase?.id]
   );
   const resultDocuments = useMemo(
-    () => documents.filter((d) => (d.category || "general") === "result"),
+    () =>
+      documents
+        .filter((d) => {
+          if ((d.category || "general") === "result") return true;
+          const name = String(d.name || "").toLowerCase();
+          return (
+            name.includes("result") ||
+            name.includes("approval") ||
+            name.includes("refusal") ||
+            name.includes("decision") ||
+            name.includes("request letter")
+          );
+        })
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
     [documents]
   );
   const resultCaseOptions = useMemo(() => {
@@ -1110,6 +1123,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     if (payload.document) {
       setDocuments((prev) => [...prev, payload.document as DocumentItem]);
     }
+    await loadCaseDetail(selectedCase.id);
     setResultUploadFile(null);
     setResultUploadName("");
     setResultUploadStatus("Result uploaded and available in client portal.");
@@ -1589,6 +1603,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
         | "assignedTo"
         | "processingStatus"
         | "processingStatusOther"
+        | "paymentMethod"
         | "applicationNumber"
         | "submittedAt"
         | "finalOutcome"
@@ -4105,6 +4120,24 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                           <div>
                             <p className="text-slate-500">Status</p>
                             <p className={`font-semibold ${payStatus === "paid" ? "text-emerald-700" : "text-amber-700"}`}>{payStatus}</p>
+                          </div>
+                          <div>
+                            <p className="text-slate-500">Payment Method</p>
+                            <select
+                              value={c.paymentMethod || "interac"}
+                              onChange={(e) =>
+                                void updateCaseProcessing(c.id, {
+                                  paymentMethod: e.target.value as "interac" | "cash" | "card" | "bank_transfer" | "other"
+                                })
+                              }
+                              className="w-full rounded border border-slate-300 px-2 py-1 text-[11px] font-semibold"
+                            >
+                              <option value="interac">Interac</option>
+                              <option value="cash">Cash</option>
+                              <option value="card">Card</option>
+                              <option value="bank_transfer">Bank Transfer</option>
+                              <option value="other">Other</option>
+                            </select>
                           </div>
                           <div>
                             <p className="text-slate-500">Last Updated</p>

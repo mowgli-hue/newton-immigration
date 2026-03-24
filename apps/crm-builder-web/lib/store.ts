@@ -229,7 +229,7 @@ function migrateStore(raw: Partial<AppStore>): AppStore {
       submittedFolderLink: c.submittedFolderLink ?? undefined,
       correspondenceFolderLink: c.correspondenceFolderLink ?? undefined,
       questionnaireLink: c.questionnaireLink ?? "",
-      paymentMethod: c.paymentMethod ?? "interac",
+    paymentMethod: c.paymentMethod ?? "interac",
       interacRecipient: c.interacRecipient ?? "",
       interacInstructions:
         c.interacInstructions ??
@@ -1382,6 +1382,7 @@ export async function updateCaseProcessing(
     assignedTo?: string;
     processingStatus?: "docs_pending" | "under_review" | "submitted" | "other";
     processingStatusOther?: string;
+    paymentMethod?: "interac" | "cash" | "card" | "bank_transfer" | "other";
     applicationNumber?: string;
     submittedAt?: string;
     finalOutcome?: "approved" | "refused" | "request_letter" | "withdrawn";
@@ -1415,6 +1416,10 @@ export async function updateCaseProcessing(
       patch.assignedTo !== undefined ? patch.assignedTo.trim() || "Unassigned" : current.assignedTo,
     processingStatus: nextStatus,
     processingStatusOther: nextOther,
+    paymentMethod:
+      patch.paymentMethod !== undefined
+        ? patch.paymentMethod
+        : current.paymentMethod,
     applicationNumber:
       patch.applicationNumber !== undefined
         ? patch.applicationNumber.trim() || undefined
