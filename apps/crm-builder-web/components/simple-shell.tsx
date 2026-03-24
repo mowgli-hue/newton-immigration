@@ -183,7 +183,8 @@ const APPLICATION_TYPES: string[] = [
   "PNP + PR",
   "LMIA + Work Permit",
   "PR Sponsorship + Open Work Permit",
-  "Study Permit + SOWP"
+  "Study Permit + SOWP",
+  "Other"
 ];
 
 const PROCESSING_TEAM_MEMBERS: string[] = [
@@ -241,6 +242,7 @@ const tabs: { id: Screen; label: string; icon: ReactNode }[] = [
   { id: "results", label: "Results", icon: <FileText size={16} /> },
   { id: "submission", label: "Submission", icon: <FileText size={16} /> },
   { id: "accounting", label: "Accounting", icon: <FileText size={16} /> },
+  { id: "settings", label: "Settings", icon: <FileText size={16} /> },
   { id: "tasks", label: "Tasks", icon: <CheckSquare size={16} /> },
   { id: "chat", label: "Chat", icon: <MessageCircle size={16} /> },
   { id: "files", label: "Files", icon: <FileText size={16} /> }
@@ -328,6 +330,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [retainerStatus, setRetainerStatus] = useState("");
   const [commClientName, setCommClientName] = useState("");
   const [commFormType, setCommFormType] = useState("PGWP");
+  const [commFormTypeOther, setCommFormTypeOther] = useState("");
   const [commPhone, setCommPhone] = useState("");
   const [commEmail, setCommEmail] = useState("");
   const [commTotalCharges, setCommTotalCharges] = useState("");
@@ -953,7 +956,9 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   }
 
   async function createCaseFromCommunications() {
-    if (!commClientName.trim() || !commFormType.trim()) {
+    const effectiveFormType =
+      commFormType === "Other" ? commFormTypeOther.trim() : commFormType.trim();
+    if (!commClientName.trim() || !effectiveFormType) {
       setCommCreateStatus("Client name and application type are required.");
       return;
     }
@@ -982,7 +987,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         client: commClientName.trim(),
-        formType: commFormType.trim(),
+        formType: effectiveFormType,
         leadPhone: commPhone.trim() || undefined,
         leadEmail: commEmail.trim() || undefined,
         totalCharges,
@@ -1002,7 +1007,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     setSelectedCaseId(created.id);
     setInviteEmail(String(created.leadEmail || ""));
     setInvitePhone(String(created.leadPhone || ""));
-    setSetupFormType(created.formType || commFormType.trim());
+    setSetupFormType(created.formType || effectiveFormType);
     const driveLinked = Boolean(payload?.drive?.linked);
     const driveReason = String(payload?.drive?.reason || "");
     if (driveLinked) {
@@ -1018,6 +1023,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     setCommTotalCharges("");
     setCommIrccFees("");
     setCommIrccFeePayer("client_card");
+    setCommFormTypeOther("");
     setCommUrgent(false);
     setCommUrgentDays("5");
   }
@@ -3117,8 +3123,117 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                 </div>
               </section>
             ) : null}
-          </>
-        ) : null}
+            </>
+          ) : null}
+
+          {screen === "settings" ? (
+            <>
+              <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
+                <h3 className="text-base font-semibold">Company Branding</h3>
+                <p className="mt-1 text-xs text-slate-500">Set company name, logo, and main Google Drive link.</p>
+                <div className="mt-3 grid gap-2 md:grid-cols-2">
+                  <input value={brandAppName} onChange={(e) => setBrandAppName(e.target.value)} className="rounded-lg border-2 border-slate-300 px-3 py-2 text-sm" placeholder="App name" />
+                  <input value={brandLogoText} onChange={(e) => setBrandLogoText(e.target.value)} className="rounded-lg border-2 border-slate-300 px-3 py-2 text-sm" placeholder="Header label text" />
+                  <input value={brandLogoUrl} onChange={(e) => setBrandLogoUrl(e.target.value)} className="rounded-lg border-2 border-slate-300 px-3 py-2 text-sm" placeholder="Logo image URL (https://...)" />
+                  <input value={brandDriveRootLink} onChange={(e) => setBrandDriveRootLink(e.target.value)} className="rounded-lg border-2 border-slate-300 px-3 py-2 text-sm" placeholder="Main Google Drive folder link" />
+                </div>
+                <button onClick={() => void saveBranding()} className="mt-2 rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white">
+                  Save Branding
+                </button>
+                {brandStatus ? <p className="mt-2 text-xs text-slate-600">{brandStatus}</p> : null}
+              </section>
+
+              <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
+                <h3 className="text-base font-semibold">System Checks</h3>
+                <p className="mt-1 text-xs text-slate-500">Run readiness and security checks before team operations.</p>
+                <button
+                  onClick={() => void runDiagnosticsBot()}
+                  className="mt-2 rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white"
+                >
+                  Run Security Bot
+                </button>
+                {diagnosticsStatus ? <p className="mt-2 text-xs text-slate-700">{diagnosticsStatus}</p> : null}
+              </section>
+
+              {sessionUser?.userType === "staff" && sessionUser.role === "Admin" ? (
+                <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
+                  <h3 className="text-base font-semibold">Audit Trail</h3>
+                  <p className="mt-1 text-xs text-slate-500">Immutable latest security and data-change events.</p>
+                  <div className="mt-2 max-h-52 space-y-2 overflow-auto rounded border border-slate-200 p-2 text-xs">
+                    {auditLogs.map((log) => (
+                      <div key={log.id} className="rounded border border-slate-200 p-2">
+                        <p className="font-semibold">{log.action}</p>
+                        <p className="text-slate-500">
+                          {new Date(log.createdAt).toLocaleString()} • {log.actorName} • {log.resourceId}
+                        </p>
+                      </div>
+                    ))}
+                    {auditLogs.length === 0 ? <p className="text-slate-500">No audit entries found.</p> : null}
+                  </div>
+                  {auditStatus ? <p className="mt-2 text-xs text-slate-700">{auditStatus}</p> : null}
+                </section>
+              ) : null}
+
+              {sessionUser?.userType === "staff" && canManageUsers(sessionUser.role) ? (
+                <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
+                  <h3 className="text-base font-semibold">Team Management</h3>
+                  <p className="mt-1 text-xs text-slate-500">Add users, reset passwords, and map Drive workspaces.</p>
+                  <div className="mt-3 grid gap-2 md:grid-cols-5">
+                    <input
+                      value={teamName}
+                      onChange={(e) => setTeamName(e.target.value)}
+                      className="rounded-lg border-2 border-slate-300 px-3 py-2 text-sm"
+                      placeholder="Full name"
+                    />
+                    <input
+                      value={teamEmail}
+                      onChange={(e) => setTeamEmail(e.target.value)}
+                      className="rounded-lg border-2 border-slate-300 px-3 py-2 text-sm"
+                      placeholder="Email"
+                    />
+                    <select
+                      value={teamRole}
+                      onChange={(e) => setTeamRole(e.target.value as Role)}
+                      className="rounded-lg border-2 border-slate-300 px-3 py-2 text-sm"
+                    >
+                      <option value="Marketing">Marketing</option>
+                      <option value="Processing">Processing</option>
+                      <option value="ProcessingLead">Processing Lead</option>
+                      <option value="Reviewer">Reviewer</option>
+                      <option value="Admin">Admin</option>
+                    </select>
+                    <input
+                      value={teamPassword}
+                      onChange={(e) => setTeamPassword(e.target.value)}
+                      className="rounded-lg border-2 border-slate-300 px-3 py-2 text-sm"
+                      placeholder="Temporary password"
+                    />
+                    <input
+                      value={teamDriveLink}
+                      onChange={(e) => setTeamDriveLink(e.target.value)}
+                      className="rounded-lg border-2 border-slate-300 px-3 py-2 text-sm md:col-span-2"
+                      placeholder="Workspace Drive folder link (optional)"
+                    />
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      onClick={() => void addTeamMember()}
+                      className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white"
+                    >
+                      Add Team Member
+                    </button>
+                    <button
+                      onClick={() => void syncNewtonTeamPreset()}
+                      className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold"
+                    >
+                      Sync Newton Team Preset
+                    </button>
+                  </div>
+                  {teamStatus ? <p className="mt-2 text-xs text-slate-600">{teamStatus}</p> : null}
+                </section>
+              ) : null}
+            </>
+          ) : null}
 
           {screen === "cases" ? (
             <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
@@ -3845,6 +3960,14 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                         </option>
                       ))}
                     </select>
+                    {commFormType === "Other" ? (
+                      <input
+                        value={commFormTypeOther}
+                        onChange={(e) => setCommFormTypeOther(e.target.value)}
+                        className="rounded border border-slate-300 px-2 py-2 text-xs"
+                        placeholder="Type custom application type"
+                      />
+                    ) : null}
                     <input
                       value={commPhone}
                       onChange={(e) => setCommPhone(e.target.value)}
