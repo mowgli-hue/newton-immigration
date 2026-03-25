@@ -6,20 +6,36 @@ const BLOG_DIR = path.join(ROOT, "apps", "jungle-labs-web", "content", "blog");
 
 const TOPICS = [
   {
-    title: "How AI Automation Reduces Operational Costs for Service Businesses",
-    keywords: ["ai automation", "operations", "cost reduction", "workflow"]
+    title: "How to Improve CLB French Speaking Score Fast for Canadian Immigration",
+    keywords: ["clb french speaking practice", "french for canadian immigration", "tef preparation", "franco app"]
   },
   {
-    title: "Practical CRM Architecture for Growing Teams",
-    keywords: ["crm", "sales workflow", "customer lifecycle", "automation"]
+    title: "Best Daily French Practice Routine for Busy Immigration Applicants",
+    keywords: ["daily french practice", "learn french for canada", "clb test prep", "french speaking drills"]
   },
   {
-    title: "Restaurant Tablet Ordering: What to Measure After Launch",
-    keywords: ["restaurant tech", "tablet ordering", "kds", "service speed"]
+    title: "Franco App vs Traditional French Courses for CLB and TEF Goals",
+    keywords: ["best app to learn french", "french clb preparation", "tef speaking practice", "franco app review"]
   },
   {
-    title: "Budget Intelligence: Connecting Marketing Spend to Revenue Outcomes",
-    keywords: ["budget analytics", "marketing roi", "business intelligence", "forecasting"]
+    title: "AI Automation Agents for Language Learning: What Actually Improves Results",
+    keywords: ["ai automation agents", "ai french tutor", "personalized learning path", "french pronunciation ai"]
+  },
+  {
+    title: "How Newton Immigration and Jungle Labs Build a Smarter French Success Path",
+    keywords: ["newton immigration", "jungle labs", "french immigration coaching", "clb roadmap"]
+  },
+  {
+    title: "Business AI Automation Systems: CRM, Analytics, and Workflow Orchestration",
+    keywords: ["ai automation systems", "custom crm systems", "business analytics platform", "workflow automation"]
+  },
+  {
+    title: "Restaurant Table Ordering System: Reducing Wait Time and Increasing Repeat Visits",
+    keywords: ["restaurant table ordering system", "tablet ordering app", "restaurant operations analytics", "digital ordering"]
+  },
+  {
+    title: "How to Build an Analytics Dashboard That Connects Budget to Revenue",
+    keywords: ["business budget analytics", "marketing spend dashboard", "revenue analytics", "decision intelligence"]
   }
 ];
 
@@ -41,26 +57,56 @@ function toDateString(date) {
   return date.toISOString().slice(0, 10);
 }
 
+function safeFrontmatterValue(value) {
+  return String(value ?? "")
+    .replace(/"/g, '\\"')
+    .trim();
+}
+
 async function generateBody(topic) {
   const key = process.env.OPENAI_API_KEY;
 
   if (!key) {
     return [
       "## Why This Topic Matters",
-      `Businesses looking at ${topic.keywords[0]} often hit execution gaps between planning and delivery.`,
-      "## Jungle Labs Implementation Perspective",
-      "We focus on practical deployment: integration, automation logic, reporting, and measurable outcomes.",
-      "## Recommended Execution Steps",
-      "- Audit current process and data flow",
-      "- Identify high-friction handoffs",
-      "- Deploy automation in phased milestones",
-      "- Measure impact weekly and optimize continuously",
-      "## Conclusion",
-      "Consistent systems outperform one-off tactics. A strong technical foundation compounds business growth."
+      `Teams searching for ${topic.keywords[0]} usually need a practical system, not generic advice.`,
+      "## Practical Framework",
+      "- Define current bottlenecks and baseline metrics",
+      "- Run focused weekly implementation sprints",
+      "- Measure score improvement with clear milestones",
+      "- Optimize based on real learner or customer behavior",
+      "## Recommended Internal Resources",
+      "- [Learn French with Franco](/learn-french)",
+      "- [Best App to Learn French](/best-app-to-learn-french)",
+      "- [Jungle Labs Services](/services)",
+      "## FAQ",
+      "### How long before results improve?",
+      "Most teams and learners see directional improvement in 2 to 4 weeks with consistent daily practice.",
+      "### Is this better than random practice?",
+      "Yes. Structured feedback loops and measurable progression beat unstructured repetition.",
+      "## Final Takeaway",
+      "Reliable progress comes from a clear system, daily execution, and weekly optimization."
     ].join("\n\n");
   }
 
-  const prompt = `Write a clear SEO blog post for Jungle Labs.\nTitle: ${topic.title}\nKeywords: ${topic.keywords.join(", ")}\nRequirements:\n- 700-900 words\n- practical, non-hype tone\n- headings and bullet points\n- focus on business outcomes\n- no markdown frontmatter\n- return markdown only`;
+  const prompt = `Write a clear SEO blog post for Jungle Labs.
+Title: ${topic.title}
+Primary keyword: ${topic.keywords[0]}
+Secondary keywords: ${topic.keywords.slice(1).join(", ")}
+
+Requirements:
+- 900-1200 words
+- practical, non-hype tone
+- include strong H2/H3 structure
+- include bullet points and a short FAQ section
+- include one section connecting to Franco where relevant
+- include these internal links naturally:
+  - [Learn French with Franco](/learn-french)
+  - [Best App to Learn French](/best-app-to-learn-french)
+  - [Jungle Labs Services](/services)
+  - [More AI Insights](/blog)
+- no markdown frontmatter
+- return markdown only`;
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -87,15 +133,11 @@ async function generateBody(topic) {
 
 async function run() {
   fs.mkdirSync(BLOG_DIR, { recursive: true });
-  const existingSlugs = readExistingSlugs();
-
-  const selected =
-    TOPICS.find((topic) => {
-      const baseSlug = slugify(topic.title);
-      return !Array.from(existingSlugs).some((slug) => slug.includes(baseSlug));
-    }) || TOPICS[0];
+  readExistingSlugs();
 
   const date = new Date();
+  const dayIndex = Math.floor(date.getTime() / (24 * 60 * 60 * 1000));
+  const selected = TOPICS[dayIndex % TOPICS.length];
   const slug = `${toDateString(date)}-${slugify(selected.title)}`;
   const filePath = path.join(BLOG_DIR, `${slug}.md`);
 
@@ -107,11 +149,13 @@ async function run() {
   const body = await generateBody(selected);
   const frontmatter = [
     "---",
-    `title: ${selected.title}`,
-    `description: ${selected.title}. A practical execution guide from Jungle Labs.`,
+    `title: ${safeFrontmatterValue(selected.title)}`,
+    `description: ${safeFrontmatterValue(
+      `${selected.title}. Practical strategy from Jungle Labs with Franco-focused execution guidance.`
+    )}`,
     `date: ${toDateString(date)}`,
     "author: Jungle Labs",
-    `tags: ${selected.keywords.join(",")}`,
+    `tags: ${safeFrontmatterValue(selected.keywords.join(","))}`,
     "---",
     ""
   ].join("\n");

@@ -36,6 +36,11 @@ function markdownToHtml(markdown: string) {
     .replace(/^## (.*)$/gm, "<h2>$1</h2>")
     .replace(/^- (.*)$/gm, "<li>$1</li>")
     .replace(/(<li>.*<\/li>\n?)+/g, (match) => `<ul>${match}</ul>`)
+    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+    .replace(
+      /\[([^\]]+)\]\(([^)]+)\)/g,
+      '<a href="$2" class="text-cyan-200 underline decoration-cyan-300/40 underline-offset-4 hover:text-cyan-100">$1</a>'
+    )
     .replace(/\n\n/g, "</p><p>")
     .replace(/^(?!<(h2|h3|ul|li|\/ul|\/li|p|\/p))(.*)$/gm, "<p>$2</p>")
     .replace(/<p><\/p>/g, "");
