@@ -67,20 +67,14 @@ const CHECKLISTS: Record<string, ApplicationChecklistItem[]> = {
     { key: "old_studies", label: "Old/Past College Documents (if transfer)", required: false, keywords: ["old college", "past stud", "previous college"] }
   ],
   trv_inside: [
+    { key: "current_permit", label: "Current Permit", required: true, keywords: ["current permit", "permit"] },
     { key: "passport", label: "Passport", required: true, keywords: ["passport"] },
-    { key: "proof_funds", label: "Proof of Funds (bank statements/certificate/ITR/CA report)", required: true, keywords: ["fund", "bank", "statement", "itr", "ca report"] },
-    { key: "employment_docs", label: "Employment Docs (job letter + payslips if working)", required: false, keywords: ["job letter", "payslip", "employment"] },
-    { key: "study_docs", label: "Study Docs (if studying)", required: false, keywords: ["enrollment", "loa", "transcript", "school"] },
-    { key: "visit_docs", label: "Visit Purpose/Host Docs", required: false, keywords: ["invitation", "host", "relationship", "visit reason"] },
-    { key: "sponsor_docs", label: "Sponsor Docs (passport/permit/LOA/T4 etc.)", required: false, keywords: ["sponsor", "t4", "permit", "noa", "passport"] }
+    { key: "digital_photo", label: "Digital Photo", required: true, keywords: ["digital photo", "photo"] }
   ],
   visitor_visa: [
+    { key: "current_permit", label: "Current Permit", required: true, keywords: ["current permit", "permit"] },
     { key: "passport", label: "Passport", required: true, keywords: ["passport"] },
-    { key: "proof_funds", label: "Proof of Funds", required: true, keywords: ["fund", "bank", "statement", "itr", "ca report"] },
-    { key: "employment_or_study", label: "Employment/Study Docs", required: false, keywords: ["job letter", "payslip", "enrollment", "school", "loa"] },
-    { key: "travel_history", label: "Travel History + Refusal Details", required: false, keywords: ["travel", "refusal", "visa refusal"] },
-    { key: "family_info", label: "Parents/Children/Family Details", required: false, keywords: ["parents", "children", "family"] },
-    { key: "sponsor_docs", label: "Sponsor Docs (if applicable)", required: false, keywords: ["sponsor", "permit", "t4", "noa"] }
+    { key: "digital_photo", label: "Digital Photo", required: true, keywords: ["digital photo", "photo"] }
   ],
   visitor_record: [
     { key: "passport", label: "Passport", required: true, keywords: ["passport"] },

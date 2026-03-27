@@ -61,6 +61,9 @@ export async function POST(request: NextRequest) {
   const totalCharges = body?.totalCharges !== undefined ? Number(body.totalCharges) : undefined;
   const irccFees = body?.irccFees !== undefined ? Number(body.irccFees) : undefined;
   const irccFeePayerRaw = body?.irccFeePayer !== undefined ? String(body.irccFeePayer) : undefined;
+  const familyMembers = body?.familyMembers !== undefined ? boundedText(body.familyMembers, 600) : undefined;
+  const familyTotalCharges =
+    body?.familyTotalCharges !== undefined ? Number(body.familyTotalCharges) : undefined;
   const irccFeePayer =
     irccFeePayerRaw === "sir_card" || irccFeePayerRaw === "client_card"
       ? (irccFeePayerRaw as "sir_card" | "client_card")
@@ -88,6 +91,9 @@ export async function POST(request: NextRequest) {
   if (irccFeePayerRaw !== undefined && !irccFeePayer) {
     return NextResponse.json({ error: "Invalid irccFeePayer" }, { status: 400 });
   }
+  if (familyTotalCharges !== undefined && (!Number.isFinite(familyTotalCharges) || familyTotalCharges < 0)) {
+    return NextResponse.json({ error: "Invalid familyTotalCharges" }, { status: 400 });
+  }
 
   const created = await createCase({
     companyId: user.companyId,
@@ -99,7 +105,9 @@ export async function POST(request: NextRequest) {
     dueInDays,
     totalCharges,
     irccFees,
-    irccFeePayer
+    irccFeePayer,
+    familyMembers,
+    familyTotalCharges
   });
   await addAuditLog({
     companyId: user.companyId,

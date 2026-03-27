@@ -197,6 +197,9 @@ const APPLICATION_TYPES: string[] = [
   "PGWP",
   "Post-Graduation Work Permit (PGWP)",
   "Webform Submission",
+  "PR Consultation",
+  "Not for Processing",
+  "Refugee Extension",
   "Visitor Visa (TRV - Outside Canada)",
   "TRV (Inside Canada)",
   "Visitor Record (Extension)",
@@ -249,6 +252,8 @@ const APPLICATION_TYPES: string[] = [
   "Other"
 ];
 
+const NON_PROCESSING_APPLICATION_TYPES = new Set(["PR Consultation", "Not for Processing"]);
+
 const PROCESSING_TEAM_MEMBERS: string[] = [
   "Unassigned",
   "sarbleen",
@@ -257,7 +262,8 @@ const PROCESSING_TEAM_MEMBERS: string[] = [
   "simi",
   "ramandeep",
   "rajwinder",
-  "avneet"
+  "avneet",
+  "sukhman"
 ];
 
 const PROCESSING_STATUS_OPTIONS: Array<{ value: "docs_pending" | "under_review" | "submitted" | "other"; label: string }> = [
@@ -413,6 +419,8 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [commTotalCharges, setCommTotalCharges] = useState("");
   const [commIrccFees, setCommIrccFees] = useState("");
   const [commIrccFeePayer, setCommIrccFeePayer] = useState<"sir_card" | "client_card">("client_card");
+  const [commFamilyMembers, setCommFamilyMembers] = useState("");
+  const [commFamilyTotalCharges, setCommFamilyTotalCharges] = useState("");
   const [commCreateStatus, setCommCreateStatus] = useState("");
   const [commUrgent, setCommUrgent] = useState(false);
   const [commUrgentDays, setCommUrgentDays] = useState("5");
@@ -1075,6 +1083,21 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
         return;
       }
     }
+    if (NON_PROCESSING_APPLICATION_TYPES.has(effectiveFormType)) {
+      setCommCreateStatus(
+        `${effectiveFormType} is marked as non-processing. It will not be pushed to Cases.`
+      );
+      return;
+    }
+    const familyTotalChargesRaw = commFamilyTotalCharges.trim();
+    const familyTotalCharges = familyTotalChargesRaw ? Number(familyTotalChargesRaw) : undefined;
+    if (
+      familyTotalChargesRaw &&
+      (!Number.isFinite(Number(familyTotalCharges)) || Number(familyTotalCharges) < 0)
+    ) {
+      setCommCreateStatus("Enter a valid Family Total Charges amount.");
+      return;
+    }
     setCommCreateStatus("Creating case...");
     const res = await apiFetch("/cases", {
       method: "POST",
@@ -1087,6 +1110,8 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
         totalCharges,
         irccFees,
         irccFeePayer: commIrccFeePayer,
+        familyMembers: commFamilyMembers.trim() || undefined,
+        familyTotalCharges,
         isUrgent: commUrgent,
         dueInDays: commUrgent ? Number(commUrgentDays || 0) : undefined
       })
@@ -1117,6 +1142,8 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     setCommTotalCharges("");
     setCommIrccFees("");
     setCommIrccFeePayer("client_card");
+    setCommFamilyMembers("");
+    setCommFamilyTotalCharges("");
     setCommFormTypeOther("");
     setCommUrgent(false);
     setCommUrgentDays("5");
@@ -4591,6 +4618,12 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                       placeholder="IRCC fees (CAD)"
                       className="rounded border border-slate-300 px-2 py-2 text-xs"
                     />
+                    <input
+                      value={commFamilyTotalCharges}
+                      onChange={(e) => setCommFamilyTotalCharges(e.target.value)}
+                      placeholder="Family total charges (CAD)"
+                      className="rounded border border-slate-300 px-2 py-2 text-xs"
+                    />
                     <select
                       value={commIrccFeePayer}
                       onChange={(e) => setCommIrccFeePayer(e.target.value as "sir_card" | "client_card")}
@@ -4600,6 +4633,13 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                       <option value="client_card">IRCC fees by Client card</option>
                     </select>
                   </div>
+                  <textarea
+                    value={commFamilyMembers}
+                    onChange={(e) => setCommFamilyMembers(e.target.value)}
+                    placeholder="Family members (optional): spouse/children names or count"
+                    className="mt-2 w-full rounded border border-slate-300 px-2 py-2 text-xs"
+                    rows={2}
+                  />
                   <div className="mt-2 flex flex-wrap items-center gap-3">
                     <label className="inline-flex items-center gap-2 text-xs text-slate-700">
                       <input

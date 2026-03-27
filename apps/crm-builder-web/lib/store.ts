@@ -260,6 +260,11 @@ function migrateStore(raw: Partial<AppStore>): AppStore {
         c.irccFeePayer === "sir_card" || c.irccFeePayer === "client_card"
           ? c.irccFeePayer
           : "client_card",
+      familyMembers: String((c as CaseItem).familyMembers || "").trim() || undefined,
+      familyTotalCharges:
+        Number.isFinite(Number((c as CaseItem).familyTotalCharges))
+          ? Number((c as CaseItem).familyTotalCharges)
+          : undefined,
       imm5710Automation: c.imm5710Automation ?? { status: "idle" },
       pgwpIntake: c.pgwpIntake ?? undefined,
       docRequests: Array.isArray(c.docRequests) ? c.docRequests : [],
@@ -742,6 +747,8 @@ export async function createCase(input: {
   totalCharges?: number;
   irccFees?: number;
   irccFeePayer?: "sir_card" | "client_card";
+  familyMembers?: string;
+  familyTotalCharges?: number;
 }): Promise<CaseItem> {
   const store = await readStore();
   const company = store.companies.find((c) => c.id === input.companyId);
@@ -804,6 +811,11 @@ export async function createCase(input: {
       ? Number(input.irccFees)
       : 0;
   const irccFeePayer = input.irccFeePayer === "sir_card" ? "sir_card" : "client_card";
+  const familyMembers = String(input.familyMembers || "").trim();
+  const familyTotalCharges =
+    Number.isFinite(Number(input.familyTotalCharges)) && Number(input.familyTotalCharges) >= 0
+      ? Number(input.familyTotalCharges)
+      : undefined;
   const item: CaseItem = {
     id: nextId,
     companyId: input.companyId,
@@ -845,6 +857,8 @@ export async function createCase(input: {
     totalCharges,
     irccFees,
     irccFeePayer,
+    familyMembers: familyMembers || undefined,
+    familyTotalCharges,
     imm5710Automation: { status: "idle" },
     pgwpIntake: undefined,
     docRequests: [],

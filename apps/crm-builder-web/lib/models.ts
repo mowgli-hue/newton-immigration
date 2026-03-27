@@ -180,6 +180,8 @@ export type CaseItem = {
   totalCharges?: number;
   irccFees?: number;
   irccFeePayer?: "sir_card" | "client_card";
+  familyMembers?: string;
+  familyTotalCharges?: number;
   submittedAt?: string;
   decisionDate?: string;
   finalOutcome?: "approved" | "refused" | "request_letter" | "withdrawn";
