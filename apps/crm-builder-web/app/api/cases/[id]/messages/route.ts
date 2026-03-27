@@ -9,6 +9,7 @@ import {
   getCase,
   listDocuments,
   listMessages,
+  resolveUserFromInviteToken,
   syncCaseAutomation,
   updateCaseImm5710Automation,
   updateCasePgwpIntake
@@ -100,11 +101,22 @@ async function getOpenAiReply(input: {
   }
 }
 
+async function resolveRequestUser(request: NextRequest, caseId: string) {
+  const user = await getCurrentUserFromRequest(request);
+  if (user) return user;
+
+  const inviteToken =
+    String(request.nextUrl.searchParams.get("t") || "").trim() ||
+    String(request.headers.get("x-client-invite-token") || "").trim();
+  if (!inviteToken) return null;
+  return resolveUserFromInviteToken(inviteToken, caseId);
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const user = await getCurrentUserFromRequest(request);
+  const user = await resolveRequestUser(request, params.id);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const caseItem = await getCase(user.companyId, params.id);
@@ -124,7 +136,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const user = await getCurrentUserFromRequest(request);
+  const user = await resolveRequestUser(request, params.id);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const caseItem = await getCase(user.companyId, params.id);

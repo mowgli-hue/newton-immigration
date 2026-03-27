@@ -322,10 +322,22 @@ function filterCasesByRole(allCases: CaseItem[], role: Role) {
 }
 
 function questionnaireUrl(link: string | undefined, caseId: string) {
+  const inviteToken =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("t") ||
+        new URLSearchParams(window.location.search).get("token") ||
+        new URLSearchParams(window.location.search).get("invite") ||
+        new URLSearchParams(window.location.search).get("invite_token")
+      : "";
+
   const clean = (link ?? "").trim();
-  if (!clean) return `/questionnaire/${caseId}`;
-  if (clean.includes("newton.local")) return `/questionnaire/${caseId}`;
-  return clean;
+  const base =
+    !clean || clean.includes("newton.local")
+      ? `/questionnaire/${caseId}`
+      : clean;
+  if (!inviteToken) return base;
+  const join = base.includes("?") ? "&" : "?";
+  return `${base}${join}t=${encodeURIComponent(inviteToken)}`;
 }
 
 function clientAccessLinkFromPayload(payload: any) {

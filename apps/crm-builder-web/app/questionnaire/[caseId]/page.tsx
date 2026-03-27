@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { resolveApplicationChecklistKey } from "@/lib/application-checklists";
 import { getQuestionPromptsForFormType } from "@/lib/application-question-flows";
 
@@ -323,6 +324,7 @@ function toEducationHistoryText(entries: EducationEntry[]): string {
 }
 
 export default function QuestionnairePage({ params }: { params: { caseId: string } }) {
+  const searchParams = useSearchParams();
   const [form, setForm] = useState<IntakeForm>(EMPTY_FORM);
   const [employmentEntries, setEmploymentEntries] = useState<EmploymentEntry[]>([emptyEmploymentEntry()]);
   const [travelEntries, setTravelEntries] = useState<TravelEntry[]>([emptyTravelEntry()]);
@@ -336,9 +338,33 @@ export default function QuestionnairePage({ params }: { params: { caseId: string
   const [specificAnswers, setSpecificAnswers] = useState<Record<string, string>>({});
   const appKey = useMemo(() => resolveApplicationChecklistKey(form.applicationType || "generic"), [form.applicationType]);
   const appPrompts = useMemo(() => getQuestionPromptsForFormType(form.applicationType || appKey), [appKey, form.applicationType]);
+  const inviteToken = useMemo(
+    () =>
+      String(
+        searchParams.get("t") ||
+          searchParams.get("token") ||
+          searchParams.get("invite") ||
+          searchParams.get("invite_token") ||
+          ""
+      ).trim(),
+    [searchParams]
+  );
+
+  function withInviteToken(path: string) {
+    if (!inviteToken) return path;
+    return `${path}${path.includes("?") ? "&" : "?"}t=${encodeURIComponent(inviteToken)}`;
+  }
+
+  function tokenHeaders(): HeadersInit | undefined {
+    if (!inviteToken) return undefined;
+    return { "x-client-invite-token": inviteToken };
+  }
 
   async function loadAssistantMessages() {
-    const res = await fetch(`/api/cases/${params.caseId}/messages`, { cache: "no-store" });
+    const res = await fetch(withInviteToken(`/api/cases/${params.caseId}/messages`), {
+      cache: "no-store",
+      headers: tokenHeaders()
+    });
     const payload = await res.json().catch(() => ({}));
     if (!res.ok) return;
     const list = (payload.messages || []) as CaseMessage[];
@@ -350,7 +376,10 @@ export default function QuestionnairePage({ params }: { params: { caseId: string
       setLoading(true);
       setStatus("");
       try {
-        const res = await fetch(`/api/cases/${params.caseId}/intake`, { cache: "no-store" });
+        const res = await fetch(withInviteToken(`/api/cases/${params.caseId}/intake`), {
+          cache: "no-store",
+          headers: tokenHeaders()
+        });
         const payload = await res.json().catch(() => ({}));
         if (!res.ok) {
           setStatus(String(payload.error || "Could not load intake"));
@@ -378,7 +407,7 @@ export default function QuestionnairePage({ params }: { params: { caseId: string
     }
 
     void load();
-  }, [params.caseId]);
+  }, [params.caseId, inviteToken]);
 
   function updateField<K extends keyof IntakeForm>(key: K, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -490,9 +519,9 @@ export default function QuestionnairePage({ params }: { params: { caseId: string
       ...form,
       applicationSpecificAnswers: serializeSpecificAnswers(specificAnswers, appPrompts)
     };
-    const res = await fetch(`/api/cases/${params.caseId}/intake`, {
+    const res = await fetch(withInviteToken(`/api/cases/${params.caseId}/intake`), {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(tokenHeaders() || {}) },
       body: JSON.stringify({ ...payloadForm, finalizeIntake: true })
     });
     const payload = await res.json().catch(() => ({}));
@@ -516,9 +545,9 @@ export default function QuestionnairePage({ params }: { params: { caseId: string
     const text = assistantInput.trim();
     if (!text) return;
     setAssistantStatus("Sending...");
-    const res = await fetch(`/api/cases/${params.caseId}/messages`, {
+    const res = await fetch(withInviteToken(`/api/cases/${params.caseId}/messages`), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(tokenHeaders() || {}) },
       body: JSON.stringify({ text, mode: "ai" })
     });
     const payload = await res.json().catch(() => ({}));

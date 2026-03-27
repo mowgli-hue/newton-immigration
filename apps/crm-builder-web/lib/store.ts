@@ -541,6 +541,37 @@ export async function getClientInviteByToken(token: string): Promise<ClientInvit
   return store.invites.find((i) => i.token === token) ?? null;
 }
 
+export async function resolveUserFromInviteToken(
+  token: string,
+  expectedCaseId?: string
+): Promise<AppUser | null> {
+  const rawToken = String(token || "").trim();
+  if (!rawToken) return null;
+
+  const store = await readStore();
+  const invite = store.invites.find((i) => i.token === rawToken);
+  if (!invite) return null;
+
+  if (expectedCaseId && invite.caseId !== expectedCaseId) return null;
+
+  const enableExpiry =
+    String(process.env.INVITE_LINK_ENABLE_EXPIRY || "true").toLowerCase() === "true";
+  if (enableExpiry && invite.status === "pending" && new Date(invite.expiresAt).getTime() <= Date.now()) {
+    return null;
+  }
+
+  if (invite.status !== "accepted" || !invite.usedByUserId) return null;
+
+  const user = store.users.find(
+    (u) =>
+      u.id === invite.usedByUserId &&
+      u.companyId === invite.companyId &&
+      u.userType === "client" &&
+      u.active !== false
+  );
+  return user ?? null;
+}
+
 export async function acceptClientInvite(input: {
   token: string;
   name: string;

@@ -5,7 +5,14 @@ import { getCurrentUserFromRequest } from "@/lib/auth";
 import { canStaffAccessCase } from "@/lib/rbac";
 import { maybeAutoRunImm5710 } from "@/lib/imm5710-runner";
 import { buildReadyPackage, writeReadyPackageToDisk } from "@/lib/ready-package";
-import { getCase, listDocuments, syncCaseAutomation, updateCaseImm5710Automation, updateCasePgwpIntake } from "@/lib/store";
+import {
+  getCase,
+  listDocuments,
+  resolveUserFromInviteToken,
+  syncCaseAutomation,
+  updateCaseImm5710Automation,
+  updateCasePgwpIntake
+} from "@/lib/store";
 import { PgwpIntakeData } from "@/lib/models";
 import { buildCaseFolderNameWithApp, createCaseDriveStructure, extractDriveFolderId, uploadFileToDriveFolder } from "@/lib/google-drive";
 import { resolveCaseDriveRootLink, updateCaseLinks } from "@/lib/store";
@@ -228,8 +235,19 @@ async function ensureCaseDriveFolders(companyId: string, caseId: string) {
   return { created: true as const, folderLink: structure.caseFolder.webViewLink };
 }
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+async function resolveRequestUser(request: NextRequest, caseId: string) {
   const user = await getCurrentUserFromRequest(request);
+  if (user) return user;
+
+  const inviteToken =
+    String(request.nextUrl.searchParams.get("t") || "").trim() ||
+    String(request.headers.get("x-client-invite-token") || "").trim();
+  if (!inviteToken) return null;
+  return resolveUserFromInviteToken(inviteToken, caseId);
+}
+
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+  const user = await resolveRequestUser(request, params.id);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const caseItem = await getCase(user.companyId, params.id);
@@ -245,7 +263,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
-  const user = await getCurrentUserFromRequest(request);
+  const user = await resolveRequestUser(request, params.id);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const caseItem = await getCase(user.companyId, params.id);
