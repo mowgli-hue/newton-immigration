@@ -419,7 +419,8 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [commTotalCharges, setCommTotalCharges] = useState("");
   const [commIrccFees, setCommIrccFees] = useState("");
   const [commIrccFeePayer, setCommIrccFeePayer] = useState<"sir_card" | "client_card">("client_card");
-  const [commFamilyMembers, setCommFamilyMembers] = useState("");
+  const [commAdditionalApplicants, setCommAdditionalApplicants] = useState<string[]>([]);
+  const [commApplicantDraft, setCommApplicantDraft] = useState("");
   const [commFamilyTotalCharges, setCommFamilyTotalCharges] = useState("");
   const [commCreateStatus, setCommCreateStatus] = useState("");
   const [commUrgent, setCommUrgent] = useState(false);
@@ -1098,6 +1099,9 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       setCommCreateStatus("Enter a valid Family Total Charges amount.");
       return;
     }
+    const normalizedAdditionalApplicants = commAdditionalApplicants
+      .map((name) => String(name || "").trim())
+      .filter(Boolean);
     setCommCreateStatus("Creating case...");
     const res = await apiFetch("/cases", {
       method: "POST",
@@ -1110,7 +1114,10 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
         totalCharges,
         irccFees,
         irccFeePayer: commIrccFeePayer,
-        familyMembers: commFamilyMembers.trim() || undefined,
+        familyMembers:
+          normalizedAdditionalApplicants.length > 0
+            ? normalizedAdditionalApplicants.join(", ")
+            : undefined,
         familyTotalCharges,
         isUrgent: commUrgent,
         dueInDays: commUrgent ? Number(commUrgentDays || 0) : undefined
@@ -1142,11 +1149,33 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     setCommTotalCharges("");
     setCommIrccFees("");
     setCommIrccFeePayer("client_card");
-    setCommFamilyMembers("");
+    setCommAdditionalApplicants([]);
+    setCommApplicantDraft("");
     setCommFamilyTotalCharges("");
     setCommFormTypeOther("");
     setCommUrgent(false);
     setCommUrgentDays("5");
+  }
+
+  function addAdditionalApplicant() {
+    const draft = commApplicantDraft.trim();
+    if (!draft) return;
+    if (draft.toLowerCase() === commClientName.trim().toLowerCase()) {
+      setCommCreateStatus("Main applicant is already included.");
+      return;
+    }
+    const exists = commAdditionalApplicants.some((n) => n.toLowerCase() === draft.toLowerCase());
+    if (exists) {
+      setCommCreateStatus("Applicant already added.");
+      return;
+    }
+    setCommAdditionalApplicants((prev) => [...prev, draft]);
+    setCommApplicantDraft("");
+    setCommCreateStatus("");
+  }
+
+  function removeAdditionalApplicant(index: number) {
+    setCommAdditionalApplicants((prev) => prev.filter((_, i) => i !== index));
   }
 
   async function pruneToRealCases() {
@@ -4633,13 +4662,48 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                       <option value="client_card">IRCC fees by Client card</option>
                     </select>
                   </div>
-                  <textarea
-                    value={commFamilyMembers}
-                    onChange={(e) => setCommFamilyMembers(e.target.value)}
-                    placeholder="Family members (optional): spouse/children names or count"
-                    className="mt-2 w-full rounded border border-slate-300 px-2 py-2 text-xs"
-                    rows={2}
-                  />
+                  <div className="mt-2 rounded border border-slate-200 p-2">
+                    <p className="text-[11px] font-semibold text-slate-600">
+                      Additional Applicants (same case)
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <input
+                        value={commApplicantDraft}
+                        onChange={(e) => setCommApplicantDraft(e.target.value)}
+                        placeholder="Applicant full name"
+                        className="min-w-[220px] flex-1 rounded border border-slate-300 px-2 py-2 text-xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={addAdditionalApplicant}
+                        className="rounded border border-slate-300 px-3 py-2 text-xs font-semibold"
+                      >
+                        + Add Applicant
+                      </button>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {commAdditionalApplicants.map((name, idx) => (
+                        <span
+                          key={`${name}-${idx}`}
+                          className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-slate-50 px-2 py-1 text-xs"
+                        >
+                          {name}
+                          <button
+                            type="button"
+                            onClick={() => removeAdditionalApplicant(idx)}
+                            className="rounded border border-slate-300 px-1 text-[10px] font-semibold"
+                          >
+                            x
+                          </button>
+                        </span>
+                      ))}
+                      {commAdditionalApplicants.length === 0 ? (
+                        <p className="text-[11px] text-slate-500">
+                          No additional applicants added.
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
                   <div className="mt-2 flex flex-wrap items-center gap-3">
                     <label className="inline-flex items-center gap-2 text-xs text-slate-700">
                       <input
