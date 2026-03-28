@@ -2140,10 +2140,11 @@ export async function addTask(input: {
   dueDate?: string;
 }): Promise<TaskItem> {
   const store = await readStore();
+  const normalizedCaseId = String(input.caseId || "").trim() || "GENERAL";
   const task: TaskItem = {
     id: `TSK-${store.tasks.length + 1}`,
     companyId: input.companyId,
-    caseId: input.caseId,
+    caseId: normalizedCaseId,
     title: input.title.trim(),
     description: String(input.description || "").trim(),
     assignedTo: String(input.assignedTo || "Unassigned").trim() || "Unassigned",
@@ -2154,6 +2155,41 @@ export async function addTask(input: {
     createdAt: new Date().toISOString()
   };
   store.tasks.unshift(task);
+
+  const assignedToLower = String(task.assignedTo || "").trim().toLowerCase();
+  const assignedUser =
+    assignedToLower && assignedToLower !== "unassigned"
+      ? store.users.find(
+          (u) =>
+            u.companyId === input.companyId &&
+            u.userType === "staff" &&
+            String(u.name || "").trim().toLowerCase() === assignedToLower
+        )
+      : null;
+  if (assignedUser) {
+    addAutomationNotification(store, {
+      companyId: input.companyId,
+      userId: assignedUser.id,
+      type: "ai_alert",
+      message: `New task assigned: ${task.title} (${task.caseId}).${task.dueDate ? ` Due: ${task.dueDate}.` : ""}`
+    });
+  }
+
+  const teamMailboxUser = store.users.find(
+    (u) =>
+      u.companyId === input.companyId &&
+      u.userType === "staff" &&
+      String(u.email || "").trim().toLowerCase() === "team.newtonimmigration@gmail.com"
+  );
+  if (teamMailboxUser) {
+    addAutomationNotification(store, {
+      companyId: input.companyId,
+      userId: teamMailboxUser.id,
+      type: "ai_alert",
+      message: `Task alert: ${task.title} (${task.caseId}) assigned to ${task.assignedTo}.${task.dueDate ? ` Due: ${task.dueDate}.` : ""}`
+    });
+  }
+
   await writeStore(store);
   return task;
 }
@@ -2203,6 +2239,7 @@ export async function updateTaskStatus(
 
 export async function listNotifications(companyId: string, userId: string): Promise<NotificationItem[]> {
   const store = await readStore();
+  const currentUser = store.users.find((u) => u.companyId === companyId && u.id === userId) || null;
   const saved = store.notifications
     .filter((n) => n.companyId === companyId && n.userId === userId)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -2224,7 +2261,32 @@ export async function listNotifications(companyId: string, userId: string): Prom
       } satisfies NotificationItem;
     })
     .filter((n) => !n.message.includes("NaN"));
-  return [...urgent, ...saved];
+  const assignedTaskReminders = store.tasks
+    .filter((t) => t.companyId === companyId && t.status === "pending" && t.dueDate)
+    .filter((t) => {
+      const assignedTo = String(t.assignedTo || "").trim().toLowerCase();
+      const byName = assignedTo && currentUser ? assignedTo === String(currentUser.name || "").trim().toLowerCase() : false;
+      const byTeamMailbox =
+        currentUser && String(currentUser.email || "").trim().toLowerCase() === "team.newtonimmigration@gmail.com";
+      return byName || byTeamMailbox;
+    })
+    .map((t) => {
+      const diffMs = new Date(String(t.dueDate)).getTime() - now;
+      const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+      if (Number.isNaN(days) || days > 1) return null;
+      const dueText = days < 0 ? `${Math.abs(days)} day(s) overdue` : days === 0 ? "due today" : `${days} day left`;
+      return {
+        id: `TSKDL-${t.id}-${userId}`,
+        companyId,
+        userId,
+        type: "deadline" as const,
+        message: `Task deadline alert: ${t.title} (${t.caseId}) is ${dueText}.`,
+        read: false,
+        createdAt: new Date().toISOString()
+      } satisfies NotificationItem;
+    })
+    .filter(Boolean) as NotificationItem[];
+  return [...assignedTaskReminders, ...urgent, ...saved];
 }
 
 export async function markNotificationRead(companyId: string, userId: string, id: string): Promise<NotificationItem | null> {

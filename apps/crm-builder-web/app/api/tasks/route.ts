@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const caseId = request.nextUrl.searchParams.get("caseId") || undefined;
-  const tasks = await listTasks(user.companyId, caseId);
+  const tasks = (await listTasks(user.companyId, caseId)).filter((t) => t.createdBy === "admin");
   if (user.userType !== "staff") return NextResponse.json({ tasks: [] });
   const allCases = await listCases(user.companyId);
   const allowedCaseIds = new Set(
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
   if (user.userType !== "staff") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await request.json().catch(() => ({}));
-  const caseId = String(body.caseId ?? "").trim();
+  const caseId = String(body.caseId ?? "").trim() || "GENERAL";
   const title = String(body.title ?? "").trim();
   const description = String(body.description ?? "").trim();
   const assignedTo = String(body.assignedTo ?? user.name).trim();
@@ -33,8 +33,8 @@ export async function POST(request: NextRequest) {
   const priority = priorityRaw === "low" || priorityRaw === "high" ? priorityRaw : "medium";
   const dueDate = String(body.dueDate ?? "").trim();
 
-  if (!caseId || !title) {
-    return NextResponse.json({ error: "caseId and title are required" }, { status: 400 });
+  if (!title) {
+    return NextResponse.json({ error: "title is required" }, { status: 400 });
   }
 
   const task = await addTask({
