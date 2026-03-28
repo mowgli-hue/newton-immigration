@@ -811,18 +811,17 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     return resultLinkedCase ? "new" : "old";
   }, [resultLinkedCase, resultApplicationNumber, resultCaseNumberInput]);
   const todayIsoDate = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const isTeamUploadedResult = (item: LegacyResultItem) =>
+    String(item.createdByUserId || "").startsWith("USR-");
   const todaysResults = useMemo(
     () =>
       legacyResults.filter(
         (r) =>
-          String(r.resultDate || "").slice(0, 10) === todayIsoDate &&
+          String(r.createdAt || "").slice(0, 10) === todayIsoDate &&
+          isTeamUploadedResult(r) &&
           !r.informedToClient
       ),
     [legacyResults, todayIsoDate]
-  );
-  const notInformedResults = useMemo(
-    () => legacyResults.filter((r) => !r.informedToClient),
-    [legacyResults]
   );
   const normalizeAppNumber = (value: string) =>
     String(value || "")
