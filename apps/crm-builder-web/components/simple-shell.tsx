@@ -1411,6 +1411,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   }
 
   function buildResultMessage(caseItem: CaseItem) {
+    const resultsSupportPhone = "6046535031";
     const outcome =
       caseItem.finalOutcome === "approved"
         ? "approved"
@@ -1436,6 +1437,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       lines.push("If you found our service helpful, please share your review:");
       lines.push("https://g.page/r/CYTdpFJ-nDr7EAE/review");
     }
+    lines.push("", `For result support, contact us at ${resultsSupportPhone}.`);
     lines.push("", "Newton Immigration Team");
     return lines.join("\n");
   }
@@ -1474,18 +1476,21 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       setResultShareStatus("Enter client phone number first.");
       return;
     }
-    const dispatchStatus = await tryServerDispatch(channel, cleanedPhone, message);
-    if (dispatchStatus === "sent") {
-      setResultShareStatus(channel === "whatsapp" ? "Result WhatsApp sent." : "Result SMS sent.");
-      return;
-    }
+
+    // For Results workflow, WhatsApp should always open directly.
     if (channel === "whatsapp") {
       window.open(`https://wa.me/${cleanedPhone}?text=${encodeURIComponent(message)}`, "_blank");
-      setResultShareStatus("WhatsApp opened. Provider not configured for server send.");
-    } else {
-      window.open(`sms:${cleanedPhone}?body=${encodeURIComponent(message)}`, "_blank");
-      setResultShareStatus("SMS app opened. Provider not configured for server send.");
+      setResultShareStatus("WhatsApp opened.");
+      return;
     }
+
+    const dispatchStatus = await tryServerDispatch(channel, cleanedPhone, message);
+    if (dispatchStatus === "sent") {
+      setResultShareStatus("Result SMS sent.");
+      return;
+    }
+    window.open(`sms:${cleanedPhone}?body=${encodeURIComponent(message)}`, "_blank");
+    setResultShareStatus("SMS app opened. Provider not configured for server send.");
   }
 
   async function submitLegacyResult() {
