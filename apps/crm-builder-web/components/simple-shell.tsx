@@ -825,6 +825,10 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     () => legacyResults.filter((r) => !r.informedToClient),
     [legacyResults]
   );
+  const normalizeAppNumber = (value: string) =>
+    String(value || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "");
   const legacyApplicationNumberOptions = useMemo(() => {
     const seen = new Set<string>();
     return legacyResults
@@ -838,15 +842,30 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       })
       .sort((a, b) => a.localeCompare(b));
   }, [legacyResults]);
+  const matchingLegacyCandidates = useMemo(() => {
+    const key = normalizeAppNumber(resultApplicationNumber);
+    if (!key) return [];
+    return legacyResults
+      .filter((r) => {
+        const appKey = normalizeAppNumber(String(r.applicationNumber || ""));
+        return appKey.includes(key) || key.includes(appKey);
+      })
+      .slice(0, 6);
+  }, [legacyResults, resultApplicationNumber]);
   const selectedLegacyByAppNo = useMemo(() => {
-    const key = resultApplicationNumber.trim().toLowerCase();
+    const key = normalizeAppNumber(resultApplicationNumber);
     if (!key) return null;
+    const exact = legacyResults.find(
+      (r) => normalizeAppNumber(String(r.applicationNumber || "")) === key
+    );
+    if (exact) return exact;
+    const prefix = legacyResults.find((r) =>
+      normalizeAppNumber(String(r.applicationNumber || "")).startsWith(key)
+    );
+    if (prefix) return prefix;
     return (
       legacyResults.find(
-        (r) =>
-          String(r.applicationNumber || "")
-            .trim()
-            .toLowerCase() === key
+        (r) => normalizeAppNumber(String(r.applicationNumber || "")).includes(key)
       ) || null
     );
   }, [legacyResults, resultApplicationNumber]);
@@ -4864,6 +4883,24 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                     <option value="request_letter">Request Letter</option>
                   </select>
                 </div>
+                {matchingLegacyCandidates.length > 0 ? (
+                  <div className="mt-2 rounded border border-slate-200 bg-slate-50 p-2">
+                    <p className="text-[11px] font-semibold text-slate-700">Matching history records</p>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {matchingLegacyCandidates.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setResultApplicationNumber(String(item.applicationNumber || ""))}
+                          className="rounded border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-700"
+                        >
+                          {item.applicationNumber} • {item.clientName}
+                          {item.phone ? ` • ${item.phone}` : ""}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
                 <div className="mt-2 grid gap-2 md:grid-cols-3">
                   <input
                     value={legacyResultClientName}
