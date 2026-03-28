@@ -1546,6 +1546,32 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     setLegacyResultStatus("Marked as sent to client.");
   }
 
+  function buildLegacyResultMessage(item: LegacyResultItem) {
+    const lines = [
+      `Hi ${item.clientName || "Client"},`,
+      "",
+      `Application number: ${item.applicationNumber}`,
+      `Result status: ${item.outcome.replace(/_/g, " ")}`
+    ];
+    if (item.fileLink) {
+      lines.push("", `Result document: ${item.fileLink}`);
+    }
+    lines.push("", "Newton Immigration Team");
+    return lines.join("\n");
+  }
+
+  async function sendLegacyResultOnWhatsApp(item: LegacyResultItem) {
+    const phoneDigits = String(item.phone || "").replace(/[^\d]/g, "");
+    const waPhone = phoneDigits.length === 10 ? `1${phoneDigits}` : phoneDigits;
+    if (!waPhone) {
+      setLegacyResultStatus(`No phone found for ${item.applicationNumber}.`);
+      return;
+    }
+    const text = encodeURIComponent(buildLegacyResultMessage(item));
+    window.open(`https://wa.me/${waPhone}?text=${text}`, "_blank");
+    setLegacyResultStatus(`WhatsApp opened for ${item.applicationNumber}.`);
+  }
+
   async function setLegacyResultInformedState(item: LegacyResultItem, nextState: "not_informed" | "informed") {
     if (nextState === "not_informed") {
       setLegacyResultStatus("This entry is already stored as not informed or cannot be reverted from here.");
@@ -4964,69 +4990,38 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                 <div className="mt-2 max-h-56 space-y-2 overflow-auto rounded border border-amber-200 bg-white p-2">
                   {todaysResults.map((item) => (
                     <article key={item.id} className="rounded border border-slate-200 p-2">
-                      <p className="font-semibold">
-                        {item.applicationNumber} • {item.clientName}
-                      </p>
-                      <p className="text-slate-500">
-                        {item.resultDate} • {item.outcome} • {item.autoCategory.toUpperCase()}
-                      </p>
-                      <p className="text-slate-500">
-                        {item.matchedCaseId ? `Case: ${item.matchedCaseId}` : "Old client result"} • {item.matchedClientId ? `Client ID: ${item.matchedClientId}` : "Client ID: N/A"}
-                      </p>
+                      <p className="font-semibold">{item.clientName || "Legacy Client"}</p>
+                      <p className="text-slate-500">Application No: {item.applicationNumber}</p>
+                      <p className="text-slate-500">Phone: {item.phone || "N/A"}</p>
+                      <p className="text-slate-500">{item.resultDate} • {item.outcome}</p>
                       {item.fileLink ? (
                         <a href={item.fileLink} target="_blank" className="text-blue-700 underline">
                           Open uploaded result
                         </a>
                       ) : null}
-                      <div className="mt-2">
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <button
+                          onClick={() => void sendLegacyResultOnWhatsApp(item)}
+                          className="rounded border border-slate-300 px-2 py-1 font-semibold"
+                        >
+                          Send on WhatsApp
+                        </button>
                         {item.informedToClient ? (
                           <p className="text-emerald-700">
                             Sent to client {item.informedAt ? `on ${new Date(item.informedAt).toLocaleString()}` : ""}.
                           </p>
                         ) : (
-                          <div className="flex items-center gap-2">
-                            <select
-                              defaultValue="not_informed"
-                              onChange={(e) =>
-                                void setLegacyResultInformedState(
-                                  item,
-                                  e.target.value === "informed" ? "informed" : "not_informed"
-                                )
-                              }
-                              className="rounded border border-slate-300 px-2 py-1 text-xs"
-                            >
-                              <option value="not_informed">Not informed yet</option>
-                              <option value="informed">Informed now</option>
-                            </select>
-                            <button
-                              onClick={() => void markResultInformed(item.id)}
-                              className="rounded border border-slate-300 px-2 py-1 font-semibold"
-                            >
-                              Mark Sent
-                            </button>
-                          </div>
+                          <button
+                            onClick={() => void markResultInformed(item.id)}
+                            className="rounded border border-slate-300 px-2 py-1 font-semibold"
+                          >
+                            Mark Informed
+                          </button>
                         )}
                       </div>
                     </article>
                   ))}
                   {todaysResults.length === 0 ? <p className="text-slate-500">No results uploaded today.</p> : null}
-                </div>
-              </div>
-
-              <div className="mt-3 rounded border border-rose-200 bg-rose-50 p-3 text-xs">
-                <p className="font-semibold text-rose-900">Not Informed Yet ({notInformedResults.length})</p>
-                <div className="mt-2 max-h-48 space-y-2 overflow-auto rounded border border-rose-200 bg-white p-2">
-                  {notInformedResults.map((item) => (
-                    <article key={item.id} className="rounded border border-slate-200 p-2">
-                      <p className="font-semibold">
-                        {item.matchedClientId || "N/A"} • {item.applicationNumber}
-                      </p>
-                      <p className="text-slate-500">
-                        {item.clientName} • {item.matchedCaseId || "old-client"} • {item.resultDate}
-                      </p>
-                    </article>
-                  ))}
-                  {notInformedResults.length === 0 ? <p className="text-slate-500">All uploaded results are marked informed.</p> : null}
                 </div>
               </div>
             </section>
