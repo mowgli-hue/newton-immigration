@@ -892,6 +892,15 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
         return bTs - aTs;
       });
   }, [visibleCases, submissionSearch]);
+  const todaysSubmissions = useMemo(
+    () =>
+      visibleCases.filter(
+        (c) =>
+          String(c.submittedAt || "").slice(0, 10) === todayIsoDate &&
+          (c.processingStatus || "docs_pending") === "submitted"
+      ),
+    [visibleCases, todayIsoDate]
+  );
   const communicationSearchList = useMemo(() => {
     const query = commSearch.trim().toLowerCase();
     const byPayment =
@@ -1644,6 +1653,29 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     }
     setSubmissionUploadFile(null);
     setSubmissionUploadStatus("Uploaded successfully to submission folder.");
+  }
+
+  function buildSubmissionMessage(caseItem: CaseItem) {
+    return [
+      `Hi ${caseItem.client},`,
+      "",
+      `Your application has been submitted.`,
+      `Case: ${caseItem.id}`,
+      `Application number: ${caseItem.applicationNumber || "-"}`,
+      "",
+      "Newton Immigration Team"
+    ].join("\n");
+  }
+
+  async function sendSubmissionOnWhatsApp(caseItem: CaseItem) {
+    const phone = normalizePhoneForWa(String(caseItem.leadPhone || ""));
+    if (!phone) {
+      setSubmissionStatus(`No phone found for ${caseItem.id}.`);
+      return;
+    }
+    const text = encodeURIComponent(buildSubmissionMessage(caseItem));
+    window.open(`https://wa.me/${phone}?text=${text}`, "_blank");
+    setSubmissionStatus(`WhatsApp opened for ${caseItem.id}.`);
   }
 
   async function syncLeadsFromSheet() {
@@ -5098,18 +5130,30 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                 {submissionUploadStatus ? <p className="mt-2 text-slate-700">{submissionUploadStatus}</p> : null}
               </div>
               {submissionStatus ? <p className="mt-2 text-xs text-slate-700">{submissionStatus}</p> : null}
-              <div className="mt-4 space-y-2">
-                {visibleCases
-                  .filter((c) => (c.processingStatus || "docs_pending") === "submitted")
-                  .slice(0, 30)
-                  .map((c) => (
-                    <article key={c.id} className="rounded border border-slate-200 p-2 text-xs">
-                      <p className="font-semibold">{c.id} - {c.client} - {c.formType}</p>
-                      <p className="text-slate-600">
-                        Application No: {c.applicationNumber || "-"} | Submitted: {c.submittedAt ? new Date(c.submittedAt).toLocaleDateString() : "-"}
+              <div className="mt-4 rounded border-2 border-amber-300 bg-amber-50 p-3 text-xs">
+                <p className="font-semibold text-amber-900">Today&apos;s Submissions ({todaysSubmissions.length})</p>
+                <p className="mt-1 text-amber-900">Rows submitted today with quick WhatsApp action.</p>
+                <div className="mt-2 max-h-56 space-y-2 overflow-auto rounded border border-amber-200 bg-white p-2">
+                  {todaysSubmissions.map((c) => (
+                    <article key={c.id} className="rounded border border-slate-200 p-2">
+                      <p className="font-semibold">{c.client}</p>
+                      <p className="text-slate-500">Application No: {c.applicationNumber || "-"}</p>
+                      <p className="text-slate-500">Phone: {c.leadPhone || "N/A"}</p>
+                      <p className="text-slate-500">
+                        Submitted: {c.submittedAt ? new Date(c.submittedAt).toLocaleString() : "-"}
                       </p>
+                      <div className="mt-2">
+                        <button
+                          onClick={() => void sendSubmissionOnWhatsApp(c)}
+                          className="rounded border border-slate-300 px-2 py-1 font-semibold"
+                        >
+                          Send on WhatsApp
+                        </button>
+                      </div>
                     </article>
                   ))}
+                  {todaysSubmissions.length === 0 ? <p className="text-slate-500">No submissions marked today.</p> : null}
+                </div>
               </div>
             </section>
           ) : null}
