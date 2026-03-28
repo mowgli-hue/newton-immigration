@@ -1552,7 +1552,9 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     }
     const updated = payload.item as LegacyResultItem;
     setLegacyResults((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
-    setLegacyResultStatus("Marked as sent to client.");
+    setLegacyResultStatus(
+      `Marked informed${updated.informedAt ? ` on ${new Date(updated.informedAt).toLocaleString()}` : ""}.`
+    );
   }
 
   function buildLegacyResultMessage(item: LegacyResultItem) {
