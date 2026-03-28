@@ -825,6 +825,41 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     () => legacyResults.filter((r) => !r.informedToClient),
     [legacyResults]
   );
+  const legacyApplicationNumberOptions = useMemo(() => {
+    const seen = new Set<string>();
+    return legacyResults
+      .map((r) => String(r.applicationNumber || "").trim())
+      .filter((v) => {
+        if (!v) return false;
+        const k = v.toLowerCase();
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      })
+      .sort((a, b) => a.localeCompare(b));
+  }, [legacyResults]);
+  const selectedLegacyByAppNo = useMemo(() => {
+    const key = resultApplicationNumber.trim().toLowerCase();
+    if (!key) return null;
+    return (
+      legacyResults.find(
+        (r) =>
+          String(r.applicationNumber || "")
+            .trim()
+            .toLowerCase() === key
+      ) || null
+    );
+  }, [legacyResults, resultApplicationNumber]);
+
+  useEffect(() => {
+    if (!selectedLegacyByAppNo) return;
+    setLegacyResultClientName((prev) =>
+      prev.trim() ? prev : String(selectedLegacyByAppNo.clientName || "").trim()
+    );
+    setLegacyResultPhone((prev) =>
+      prev.trim() ? prev : String(selectedLegacyByAppNo.phone || "").trim()
+    );
+  }, [selectedLegacyByAppNo]);
   const submissionCaseOptions = useMemo(() => {
     const query = submissionSearch.trim().toLowerCase();
     return visibleCases
@@ -1486,6 +1521,18 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     const updated = payload.item as LegacyResultItem;
     setLegacyResults((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
     setLegacyResultStatus("Marked as sent to client.");
+  }
+
+  async function setLegacyResultInformedState(item: LegacyResultItem, nextState: "not_informed" | "informed") {
+    if (nextState === "not_informed") {
+      setLegacyResultStatus("This entry is already stored as not informed or cannot be reverted from here.");
+      return;
+    }
+    if (item.informedToClient) {
+      setLegacyResultStatus("Already marked informed.");
+      return;
+    }
+    await markResultInformed(item.id);
   }
 
   async function submitCaseWithApplicationNumber() {
@@ -4793,7 +4840,13 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                     onChange={(e) => setResultApplicationNumber(e.target.value)}
                     className="rounded border border-slate-300 px-2 py-2"
                     placeholder="Application number"
+                    list="legacy-appnos"
                   />
+                  <datalist id="legacy-appnos">
+                    {legacyApplicationNumberOptions.map((appNo) => (
+                      <option key={appNo} value={appNo} />
+                    ))}
+                  </datalist>
                   <input
                     type="date"
                     value={legacyResultDate}
@@ -4849,6 +4902,12 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                     Client ID: {resultLinkedCase.clientId || "N/A"} | Phone: {resultLinkedCase.leadPhone || "N/A"}
                   </div>
                 ) : null}
+                {selectedLegacyByAppNo ? (
+                  <div className="mt-2 rounded border border-blue-200 bg-blue-50 p-2 text-blue-900">
+                    Existing history found for this app no: {selectedLegacyByAppNo.clientName}
+                    {selectedLegacyByAppNo.phone ? ` • ${selectedLegacyByAppNo.phone}` : ""}
+                  </div>
+                ) : null}
                 <button
                   onClick={() => void submitLegacyResult()}
                   className="mt-2 rounded bg-slate-900 px-3 py-2 font-semibold text-white"
@@ -4884,12 +4943,27 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                             Sent to client {item.informedAt ? `on ${new Date(item.informedAt).toLocaleString()}` : ""}.
                           </p>
                         ) : (
-                          <button
-                            onClick={() => void markResultInformed(item.id)}
-                            className="rounded border border-slate-300 px-2 py-1 font-semibold"
-                          >
-                            Send to Client (Mark Sent)
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <select
+                              defaultValue="not_informed"
+                              onChange={(e) =>
+                                void setLegacyResultInformedState(
+                                  item,
+                                  e.target.value === "informed" ? "informed" : "not_informed"
+                                )
+                              }
+                              className="rounded border border-slate-300 px-2 py-1 text-xs"
+                            >
+                              <option value="not_informed">Not informed yet</option>
+                              <option value="informed">Informed now</option>
+                            </select>
+                            <button
+                              onClick={() => void markResultInformed(item.id)}
+                              className="rounded border border-slate-300 px-2 py-1 font-semibold"
+                            >
+                              Mark Sent
+                            </button>
+                          </div>
                         )}
                       </div>
                     </article>
