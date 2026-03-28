@@ -437,6 +437,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [commCreateStatus, setCommCreateStatus] = useState("");
   const [commUrgent, setCommUrgent] = useState(false);
   const [commUrgentDays, setCommUrgentDays] = useState("5");
+  const [commPermitExpiryDate, setCommPermitExpiryDate] = useState("");
   const [commSearch, setCommSearch] = useState("");
   const [commPaymentFilter, setCommPaymentFilter] = useState<"all" | "pending" | "paid">("all");
   const [commPaymentStatus, setCommPaymentStatus] = useState("");
@@ -1132,7 +1133,8 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
             : undefined,
         familyTotalCharges,
         isUrgent: commUrgent,
-        dueInDays: commUrgent ? Number(commUrgentDays || 0) : undefined
+        dueInDays: commUrgent ? Number(commUrgentDays || 0) : undefined,
+        permitExpiryDate: commPermitExpiryDate || undefined
       })
     });
     const payload = await res.json().catch(() => ({}));
@@ -1167,6 +1169,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     setCommFormTypeOther("");
     setCommUrgent(false);
     setCommUrgentDays("5");
+    setCommPermitExpiryDate("");
   }
 
   function addAdditionalApplicant() {
@@ -4645,6 +4648,13 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                       value={commEmail}
                       onChange={(e) => setCommEmail(e.target.value)}
                       placeholder="Email address"
+                      className="rounded border border-slate-300 px-2 py-2 text-xs"
+                    />
+                    <input
+                      type="date"
+                      value={commPermitExpiryDate}
+                      onChange={(e) => setCommPermitExpiryDate(e.target.value)}
+                      title="Permit expiry date"
                       className="rounded border border-slate-300 px-2 py-2 text-xs"
                     />
                     <input

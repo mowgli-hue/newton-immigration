@@ -156,6 +156,7 @@ export type CaseItem = {
   processingStatusOther?: string;
   isUrgent?: boolean;
   deadlineDate?: string;
+  permitExpiryDate?: string;
   owner: string;
   reviewer: string;
   stage: Stage;

@@ -775,6 +775,7 @@ export async function createCase(input: {
   sourceLeadKey?: string;
   isUrgent?: boolean;
   dueInDays?: number;
+  permitExpiryDate?: string;
   totalCharges?: number;
   irccFees?: number;
   irccFeePayer?: "sir_card" | "client_card";
@@ -865,6 +866,7 @@ export async function createCase(input: {
     processingStatusOther: undefined,
     isUrgent: Boolean(input.isUrgent),
     deadlineDate,
+    permitExpiryDate: input.permitExpiryDate || undefined,
     owner: "N/A",
     reviewer: "N/A",
     stage: "Lead",
@@ -2261,6 +2263,29 @@ export async function listNotifications(companyId: string, userId: string): Prom
       } satisfies NotificationItem;
     })
     .filter((n) => !n.message.includes("NaN"));
+  const permitExpiry = store.cases
+    .filter((c) => c.companyId === companyId && c.permitExpiryDate)
+    .map((c) => {
+      const diffMs = new Date(String(c.permitExpiryDate)).getTime() - now;
+      const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+      if (Number.isNaN(days) || days > 30) return null;
+      const dueText =
+        days < 0
+          ? `expired ${Math.abs(days)} day(s) ago`
+          : days === 0
+            ? "expires today"
+            : `expires in ${days} day(s)`;
+      return {
+        id: `PRM-${c.id}-${days}`,
+        companyId,
+        userId,
+        type: "deadline" as const,
+        message: `Permit expiry alert: ${c.id} (${c.client}) ${dueText}.`,
+        read: false,
+        createdAt: new Date().toISOString()
+      } satisfies NotificationItem;
+    })
+    .filter(Boolean) as NotificationItem[];
   const assignedTaskReminders = store.tasks
     .filter((t) => t.companyId === companyId && t.status === "pending" && t.dueDate)
     .filter((t) => {
@@ -2286,7 +2311,7 @@ export async function listNotifications(companyId: string, userId: string): Prom
       } satisfies NotificationItem;
     })
     .filter(Boolean) as NotificationItem[];
-  return [...assignedTaskReminders, ...urgent, ...saved];
+  return [...permitExpiry, ...assignedTaskReminders, ...urgent, ...saved];
 }
 
 export async function markNotificationRead(companyId: string, userId: string, id: string): Promise<NotificationItem | null> {

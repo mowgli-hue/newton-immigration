@@ -58,6 +58,9 @@ export async function POST(request: NextRequest) {
   const leadPhone = body?.leadPhone !== undefined ? normalizePhone(body.leadPhone) : undefined;
   const leadEmail = body?.leadEmail !== undefined ? normalizeEmail(body.leadEmail) : undefined;
   const isUrgent = Boolean(body?.isUrgent);
+  const permitExpiryDateRaw =
+    body?.permitExpiryDate !== undefined ? String(body.permitExpiryDate).trim() : undefined;
+  const permitExpiryDate = permitExpiryDateRaw || undefined;
   const totalCharges = body?.totalCharges !== undefined ? Number(body.totalCharges) : undefined;
   const irccFees = body?.irccFees !== undefined ? Number(body.irccFees) : undefined;
   const irccFeePayerRaw = body?.irccFeePayer !== undefined ? String(body.irccFeePayer) : undefined;
@@ -82,6 +85,12 @@ export async function POST(request: NextRequest) {
   if (leadPhone && !isReasonablePhone(leadPhone)) {
     return NextResponse.json({ error: "Invalid leadPhone format" }, { status: 400 });
   }
+  if (permitExpiryDate) {
+    const parsed = new Date(permitExpiryDate);
+    if (Number.isNaN(parsed.getTime())) {
+      return NextResponse.json({ error: "Invalid permitExpiryDate" }, { status: 400 });
+    }
+  }
   if (totalCharges !== undefined && (!Number.isFinite(totalCharges) || totalCharges < 0)) {
     return NextResponse.json({ error: "Invalid totalCharges" }, { status: 400 });
   }
@@ -103,6 +112,7 @@ export async function POST(request: NextRequest) {
     leadEmail,
     isUrgent,
     dueInDays,
+    permitExpiryDate,
     totalCharges,
     irccFees,
     irccFeePayer,
