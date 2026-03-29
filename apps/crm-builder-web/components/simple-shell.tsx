@@ -146,6 +146,8 @@ type AuditItem = {
   id: string;
   action: string;
   actorName: string;
+  actorUserId?: string;
+  resourceType?: string;
   resourceId: string;
   createdAt: string;
   metadata?: Record<string, string>;
@@ -1286,6 +1288,13 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     }
     setDiagnosticsReport(payload as DiagnosticsReport);
     setDiagnosticsStatus("Diagnostics completed.");
+  }
+
+  function downloadAuditCsv() {
+    setAuditStatus("Preparing audit export...");
+    const url = `/api/audit?format=csv&limit=5000`;
+    window.open(url, "_blank");
+    setAuditStatus("Audit CSV export started.");
   }
 
   async function sendMessage(mode: "human" | "ai") {
@@ -3573,14 +3582,28 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
 
               {sessionUser?.userType === "staff" && sessionUser.role === "Admin" ? (
                 <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
-                  <h3 className="text-base font-semibold">Audit Trail</h3>
-                  <p className="mt-1 text-xs text-slate-500">Immutable latest security and data-change events.</p>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h3 className="text-base font-semibold">Audit Trail</h3>
+                      <p className="mt-1 text-xs text-slate-500">Immutable latest security and data-change events.</p>
+                    </div>
+                    <button
+                      onClick={downloadAuditCsv}
+                      className="rounded border border-slate-300 px-2 py-1 text-xs font-semibold"
+                    >
+                      Export CSV
+                    </button>
+                  </div>
                   <div className="mt-2 max-h-52 space-y-2 overflow-auto rounded border border-slate-200 p-2 text-xs">
                     {auditLogs.map((log) => (
                       <div key={log.id} className="rounded border border-slate-200 p-2">
                         <p className="font-semibold">{log.action}</p>
                         <p className="text-slate-500">
-                          {new Date(log.createdAt).toLocaleString()} • {log.actorName} • {log.resourceId}
+                          {new Date(log.createdAt).toLocaleString()} • {log.actorName}
+                          {log.actorUserId ? ` (${log.actorUserId})` : ""}
+                        </p>
+                        <p className="text-slate-500">
+                          {log.resourceType || "resource"} • {log.resourceId}
                         </p>
                       </div>
                     ))}
@@ -3943,14 +3966,28 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
 
               {sessionUser?.userType === "staff" && sessionUser.role === "Admin" ? (
                 <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
-                  <h3 className="text-base font-semibold">Audit Trail</h3>
-                  <p className="mt-1 text-xs text-slate-500">Immutable latest security and data-change events.</p>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h3 className="text-base font-semibold">Audit Trail</h3>
+                      <p className="mt-1 text-xs text-slate-500">Immutable latest security and data-change events.</p>
+                    </div>
+                    <button
+                      onClick={downloadAuditCsv}
+                      className="rounded border border-slate-300 px-2 py-1 text-xs font-semibold"
+                    >
+                      Export CSV
+                    </button>
+                  </div>
                   <div className="mt-2 max-h-52 space-y-2 overflow-auto rounded border border-slate-200 p-2 text-xs">
                     {auditLogs.map((log) => (
                       <div key={log.id} className="rounded border border-slate-200 p-2">
                         <p className="font-semibold">{log.action}</p>
                         <p className="text-slate-500">
-                          {new Date(log.createdAt).toLocaleString()} • {log.actorName} • {log.resourceId}
+                          {new Date(log.createdAt).toLocaleString()} • {log.actorName}
+                          {log.actorUserId ? ` (${log.actorUserId})` : ""}
+                        </p>
+                        <p className="text-slate-500">
+                          {log.resourceType || "resource"} • {log.resourceId}
                         </p>
                       </div>
                     ))}
