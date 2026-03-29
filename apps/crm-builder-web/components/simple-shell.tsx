@@ -827,19 +827,6 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     String(value || "")
       .toLowerCase()
       .replace(/[^a-z0-9]/g, "");
-  const legacyApplicationNumberOptions = useMemo(() => {
-    const seen = new Set<string>();
-    return legacyResults
-      .map((r) => String(r.applicationNumber || "").trim())
-      .filter((v) => {
-        if (!v) return false;
-        const k = v.toLowerCase();
-        if (seen.has(k)) return false;
-        seen.add(k);
-        return true;
-      })
-      .sort((a, b) => a.localeCompare(b));
-  }, [legacyResults]);
   const matchingLegacyCandidates = useMemo(() => {
     const key = normalizeAppNumber(resultApplicationNumber);
     if (!key) return [];
@@ -4922,13 +4909,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                     onChange={(e) => setResultApplicationNumber(e.target.value)}
                     className="rounded border border-slate-300 px-2 py-2"
                     placeholder="Application number"
-                    list="legacy-appnos"
                   />
-                  <datalist id="legacy-appnos">
-                    {legacyApplicationNumberOptions.map((appNo) => (
-                      <option key={appNo} value={appNo} />
-                    ))}
-                  </datalist>
                   <input
                     type="date"
                     value={legacyResultDate}
