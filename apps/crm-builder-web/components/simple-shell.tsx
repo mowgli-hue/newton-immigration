@@ -83,6 +83,7 @@ type NotificationItem = {
 };
 type LegacyResultItem = {
   id: string;
+  entryType?: "result" | "submission";
   clientName: string;
   phone?: string;
   applicationNumber: string;
@@ -393,6 +394,8 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [submissionSearch, setSubmissionSearch] = useState("");
   const [submissionCaseId, setSubmissionCaseId] = useState("");
   const [submissionApplicationNumber, setSubmissionApplicationNumber] = useState("");
+  const [submissionClientName, setSubmissionClientName] = useState("");
+  const [submissionPhone, setSubmissionPhone] = useState("");
   const [submissionStatus, setSubmissionStatus] = useState("");
   const [submissionUploadType, setSubmissionUploadType] = useState<"submission_letter" | "wp_extension_letter">(
     "submission_letter"
@@ -820,6 +823,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     () =>
       legacyResults.filter(
         (r) =>
+          (r.entryType || "result") === "result" &&
           String(r.createdAt || "").slice(0, 10) === todayIsoDate &&
           isTeamUploadedResult(r) &&
           !r.informedToClient
@@ -835,6 +839,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     if (!key) return [];
     return legacyResults
       .filter((r) => {
+        if ((r.entryType || "result") !== "result") return false;
         const appKey = normalizeAppNumber(String(r.applicationNumber || ""));
         return appKey.includes(key) || key.includes(appKey);
       })
@@ -844,16 +849,21 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     const key = normalizeAppNumber(resultApplicationNumber);
     if (!key) return null;
     const exact = legacyResults.find(
-      (r) => normalizeAppNumber(String(r.applicationNumber || "")) === key
+      (r) =>
+        (r.entryType || "result") === "result" &&
+        normalizeAppNumber(String(r.applicationNumber || "")) === key
     );
     if (exact) return exact;
     const prefix = legacyResults.find((r) =>
+      (r.entryType || "result") === "result" &&
       normalizeAppNumber(String(r.applicationNumber || "")).startsWith(key)
     );
     if (prefix) return prefix;
     return (
       legacyResults.find(
-        (r) => normalizeAppNumber(String(r.applicationNumber || "")).includes(key)
+        (r) =>
+          (r.entryType || "result") === "result" &&
+          normalizeAppNumber(String(r.applicationNumber || "")).includes(key)
       ) || null
     );
   }, [legacyResults, resultApplicationNumber]);
@@ -912,17 +922,29 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   }, [roleScopedCases, submissionApplicationNumber]);
   const todaysSubmissions = useMemo(
     () =>
-      visibleCases.filter(
-        (c) =>
-          Boolean(c.applicationNumber) &&
-          Boolean(c.submittedAt) &&
-          Boolean(c.submissionDocumentUploadedAt) &&
-          String(c.submittedAt || "").slice(0, 10) === todayIsoDate &&
-          String(c.submissionDocumentUploadedAt || "").slice(0, 10) === todayIsoDate &&
-          (c.processingStatus || "docs_pending") === "submitted"
-      ),
-    [visibleCases, todayIsoDate]
+      legacyResults
+        .filter(
+          (r) =>
+            (r.entryType || "result") === "submission" &&
+            String(r.createdAt || "").slice(0, 10) === todayIsoDate &&
+            isTeamUploadedResult(r) &&
+            !r.informedToClient
+        )
+        .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
+        .slice(0, 50),
+    [legacyResults, todayIsoDate]
   );
+
+  useEffect(() => {
+    if (!submissionLegacyByAppNo) return;
+    setSubmissionClientName((prev) =>
+      prev.trim() ? prev : String(submissionLegacyByAppNo.clientName || "").trim()
+    );
+    setSubmissionPhone((prev) =>
+      prev.trim() ? prev : String(submissionLegacyByAppNo.phone || "").trim()
+    );
+  }, [submissionLegacyByAppNo]);
+
   const communicationSearchList = useMemo(() => {
     const query = commSearch.trim().toLowerCase();
     const byPayment =
@@ -1647,65 +1669,145 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       } else if (matches.length > 1) {
         setSubmissionStatus("Multiple cases matched this application number. Please select case.");
         return;
-      } else {
-        if (submissionLegacyByAppNo) {
-          setSubmissionStatus(
-            `Old submission found for ${submissionLegacyByAppNo.clientName}. No CRM upload required.`
-          );
-          return;
-        }
-        setSubmissionStatus("No CRM case matched this application number. Select case or treat as old record.");
-        return;
       }
     }
     if (!submissionUploadFile) {
       setSubmissionStatus("Upload submission document before marking submitted.");
       return;
     }
-    setSubmissionStatus("Uploading document and submitting case...");
+    setSubmissionStatus("Submitting and uploading document...");
 
-    const formData = new FormData();
-    formData.append("file", submissionUploadFile);
-    formData.append(
-      "name",
-      submissionUploadType === "submission_letter" ? "Submission Letter" : "WP Extension Letter"
-    );
-    formData.append("driveFolderType", "submission");
-    formData.append("category", "general");
-
-    const docRes = await apiFetch(`/cases/${targetCase.id}/documents`, {
-      method: "POST",
-      body: formData
-    });
-    const docPayload = await docRes.json().catch(() => ({}));
-    if (!docRes.ok) {
-      setSubmissionStatus(String(docPayload.error || "Could not upload submission document."));
-      return;
-    }
-    if (docPayload.document) {
-      setDocuments((prev) => [...prev, docPayload.document as DocumentItem]);
-    }
-
+    let storedFileName = "";
+    let storedFileLink = "";
     const nowIso = new Date().toISOString();
-    const res = await apiFetch(`/cases/${targetCase.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        processingStatus: "submitted",
-        applicationNumber: appNo,
-        submittedAt: nowIso,
-        submissionDocumentUploadedAt: nowIso
-      })
-    });
-    const payload = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setSubmissionStatus(String(payload.error || "Could not submit case."));
-      return;
+    if (targetCase) {
+      const formData = new FormData();
+      formData.append("file", submissionUploadFile);
+      formData.append(
+        "name",
+        submissionUploadType === "submission_letter" ? "Submission Letter" : "WP Extension Letter"
+      );
+      formData.append("driveFolderType", "submission");
+      formData.append("category", "general");
+
+      const docRes = await apiFetch(`/cases/${targetCase.id}/documents`, {
+        method: "POST",
+        body: formData
+      });
+      const docPayload = await docRes.json().catch(() => ({}));
+      if (!docRes.ok) {
+        setSubmissionStatus(String(docPayload.error || "Could not upload submission document."));
+        return;
+      }
+      if (docPayload.document) {
+        const newDoc = docPayload.document as DocumentItem;
+        storedFileName = String(newDoc.name || "").trim();
+        storedFileLink = String(newDoc.link || "").trim();
+        setDocuments((prev) => [...prev, newDoc]);
+      }
+
+      const res = await apiFetch(`/cases/${targetCase.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          processingStatus: "submitted",
+          applicationNumber: appNo,
+          submittedAt: nowIso,
+          submissionDocumentUploadedAt: nowIso
+        })
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSubmissionStatus(String(payload.error || "Could not submit case."));
+        return;
+      }
+      const updated = payload.case as CaseItem;
+      setCases((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
     }
-    const updated = payload.case as CaseItem;
-    setCases((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
-    setSubmissionStatus(`Submitted ${updated.id} with document and application number ${appNo}.`);
+
+    const submissionForm = new FormData();
+    submissionForm.append("entryType", "submission");
+    submissionForm.append("applicationNumber", appNo);
+    submissionForm.append("resultDate", nowIso.slice(0, 10));
+    submissionForm.append("outcome", "other");
+    submissionForm.append("notes", "Submitted");
+    submissionForm.append(
+      "clientName",
+      String(submissionClientName || "").trim() ||
+        targetCase?.client ||
+        submissionLegacyByAppNo?.clientName ||
+        "Client"
+    );
+    submissionForm.append(
+      "phone",
+      String(submissionPhone || "").trim() ||
+        targetCase?.leadPhone ||
+        submissionLegacyByAppNo?.phone ||
+        ""
+    );
+    if (targetCase?.id) {
+      submissionForm.append("selectedCaseId", targetCase.id);
+    }
+
+    if (storedFileLink && storedFileName) {
+      const recordRes = await apiFetch("/results/legacy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entryType: "submission",
+          applicationNumber: appNo,
+          resultDate: nowIso.slice(0, 10),
+          outcome: "other",
+          notes: "Submitted",
+          clientName:
+            String(submissionClientName || "").trim() ||
+            targetCase?.client ||
+            submissionLegacyByAppNo?.clientName ||
+            "Client",
+          phone:
+            String(submissionPhone || "").trim() ||
+            targetCase?.leadPhone ||
+            submissionLegacyByAppNo?.phone ||
+            "",
+          selectedCaseId: targetCase?.id || undefined,
+          fileName: storedFileName,
+          fileLink: storedFileLink
+        })
+      });
+      const recordPayload = await recordRes.json().catch(() => ({}));
+      if (!recordRes.ok) {
+        setSubmissionStatus(String(recordPayload.error || "Submission saved on case, but history record failed."));
+        return;
+      }
+      if (recordPayload.item) {
+        setLegacyResults((prev) => [recordPayload.item as LegacyResultItem, ...prev]);
+      }
+    } else {
+      submissionForm.append("file", submissionUploadFile);
+      const recordRes = await apiFetch("/results/legacy", {
+        method: "POST",
+        body: submissionForm
+      });
+      const recordPayload = await recordRes.json().catch(() => ({}));
+      if (!recordRes.ok) {
+        setSubmissionStatus(String(recordPayload.error || "Could not create submission history record."));
+        return;
+      }
+      if (recordPayload.item) {
+        setLegacyResults((prev) => [recordPayload.item as LegacyResultItem, ...prev]);
+      }
+    }
+
+    setSubmissionStatus(
+      targetCase
+        ? `Submitted ${targetCase.id} and saved submission history for ${appNo}.`
+        : `Saved standalone submission history for ${appNo}.`
+    );
     setSubmissionApplicationNumber("");
+    setSubmissionClientName("");
+    setSubmissionPhone("");
+    setSubmissionSearch("");
+    setSubmissionCaseId("");
     setSubmissionUploadFile(null);
   }
 
@@ -1744,27 +1846,33 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     setSubmissionUploadStatus("Uploaded successfully to submission folder.");
   }
 
-  function buildSubmissionMessage(caseItem: CaseItem) {
+  function buildSubmissionMessage(entry: { clientName: string; applicationNumber?: string; caseId?: string }) {
     return [
-      `Hi ${caseItem.client},`,
+      `Hi ${entry.clientName || "Client"},`,
       "",
       `Your application has been submitted.`,
-      `Case: ${caseItem.id}`,
-      `Application number: ${caseItem.applicationNumber || "-"}`,
+      `Case: ${entry.caseId || "-"}`,
+      `Application number: ${entry.applicationNumber || "-"}`,
       "",
       "Newton Immigration Team"
     ].join("\n");
   }
 
-  async function sendSubmissionOnWhatsApp(caseItem: CaseItem) {
-    const phone = normalizePhoneForWa(String(caseItem.leadPhone || ""));
+  async function sendSubmissionOnWhatsApp(item: LegacyResultItem) {
+    const phone = normalizePhoneForWa(String(item.phone || ""));
     if (!phone) {
-      setSubmissionStatus(`No phone found for ${caseItem.id}.`);
+      setSubmissionStatus(`No phone found for ${item.applicationNumber}.`);
       return;
     }
-    const text = encodeURIComponent(buildSubmissionMessage(caseItem));
+    const text = encodeURIComponent(
+      buildSubmissionMessage({
+        clientName: item.clientName || "Client",
+        applicationNumber: item.applicationNumber,
+        caseId: item.matchedCaseId
+      })
+    );
     window.open(`https://wa.me/${phone}?text=${text}`, "_blank");
-    setSubmissionStatus(`WhatsApp opened for ${caseItem.id}.`);
+    setSubmissionStatus(`WhatsApp opened for ${item.applicationNumber}.`);
   }
 
   async function syncLeadsFromSheet() {
@@ -5089,10 +5197,12 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                   />
                   <input
                     type="file"
+                    accept=".pdf,application/pdf"
                     onChange={(e) => setLegacyResultFile(e.target.files?.[0] || null)}
                     className="rounded border border-slate-300 px-2 py-2"
                   />
                 </div>
+                <p className="mt-1 text-[11px] text-slate-500">Result file upload supports PDF only.</p>
                 <textarea
                   value={legacyResultNotes}
                   onChange={(e) => setLegacyResultNotes(e.target.value)}
@@ -5174,7 +5284,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
             <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
               <h3 className="text-base font-semibold">Submission</h3>
               <p className="mt-1 text-xs text-slate-500">
-                Daily submission upload by application number. System auto-fetches case/history like Results.
+                Submission flow like Results: app number + document required. Case selection is optional.
               </p>
               <div className="mt-2 rounded border border-slate-200 p-3 text-xs">
                 <p className="font-semibold">Daily Submission Upload</p>
@@ -5203,6 +5313,20 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                     <option value="submission_letter">Submission Letter</option>
                     <option value="wp_extension_letter">WP Extension Letter</option>
                   </select>
+                </div>
+                <div className="mt-2 grid gap-2 md:grid-cols-2">
+                  <input
+                    value={submissionClientName}
+                    onChange={(e) => setSubmissionClientName(e.target.value)}
+                    className="rounded border border-slate-300 px-2 py-2"
+                    placeholder="Client name (optional)"
+                  />
+                  <input
+                    value={submissionPhone}
+                    onChange={(e) => setSubmissionPhone(e.target.value)}
+                    className="rounded border border-slate-300 px-2 py-2"
+                    placeholder="Phone (optional)"
+                  />
                 </div>
                 <div className="mt-2 grid gap-2 md:grid-cols-3">
                   <select
@@ -5244,7 +5368,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                   <div className="mt-2 rounded border border-blue-200 bg-blue-50 p-2 text-blue-900">
                     Existing history found: {submissionLegacyByAppNo.clientName}
                     {submissionLegacyByAppNo.phone ? ` • ${submissionLegacyByAppNo.phone}` : ""}
-                    {" • "}Old submission (no upload needed).
+                    {" • "}Use these details or continue with manual submit.
                   </div>
                 ) : null}
                 {submissionUploadStatus ? <p className="mt-2 text-slate-700">{submissionUploadStatus}</p> : null}
@@ -5253,24 +5377,41 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
               <div className="mt-4 rounded border-2 border-amber-300 bg-amber-50 p-3 text-xs">
                 <p className="font-semibold text-amber-900">Today&apos;s Submissions ({todaysSubmissions.length})</p>
                 <p className="mt-1 text-amber-900">
-                  Only complete submissions are shown here (application number + uploaded submission document).
+                  Submissions uploaded today. Mark informed after sending to client.
                 </p>
                 <div className="mt-2 max-h-56 space-y-2 overflow-auto rounded border border-amber-200 bg-white p-2">
-                  {todaysSubmissions.map((c) => (
-                    <article key={c.id} className="rounded border border-slate-200 p-2">
-                      <p className="font-semibold">{c.client}</p>
-                      <p className="text-slate-500">Application No: {c.applicationNumber || "-"}</p>
-                      <p className="text-slate-500">Phone: {c.leadPhone || "N/A"}</p>
+                  {todaysSubmissions.map((item) => (
+                    <article key={item.id} className="rounded border border-slate-200 p-2">
+                      <p className="font-semibold">{item.clientName || "Client"}</p>
+                      <p className="text-slate-500">Application No: {item.applicationNumber || "-"}</p>
+                      <p className="text-slate-500">Phone: {item.phone || "N/A"}</p>
                       <p className="text-slate-500">
-                        Submitted: {c.submittedAt ? new Date(c.submittedAt).toLocaleString() : "-"}
+                        Submitted: {item.createdAt ? new Date(item.createdAt).toLocaleString() : "-"}
                       </p>
+                      {item.fileLink ? (
+                        <a href={item.fileLink} target="_blank" className="text-blue-700 underline">
+                          Open uploaded submission
+                        </a>
+                      ) : null}
                       <div className="mt-2">
                         <button
-                          onClick={() => void sendSubmissionOnWhatsApp(c)}
+                          onClick={() => void sendSubmissionOnWhatsApp(item)}
                           className="rounded border border-slate-300 px-2 py-1 font-semibold"
                         >
                           Send on WhatsApp
                         </button>
+                        {item.informedToClient ? (
+                          <p className="mt-1 text-emerald-700">
+                            Informed {item.informedAt ? `on ${new Date(item.informedAt).toLocaleString()}` : ""}.
+                          </p>
+                        ) : (
+                          <button
+                            onClick={() => void setLegacyResultInformedState(item, "informed")}
+                            className="ml-2 rounded border border-slate-300 px-2 py-1 font-semibold"
+                          >
+                            Mark Informed
+                          </button>
+                        )}
                       </div>
                     </article>
                   ))}

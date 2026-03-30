@@ -382,6 +382,7 @@ export type NotificationItem = {
 export type LegacyResultItem = {
   id: string;
   companyId: string;
+  entryType?: "result" | "submission";
   clientName: string;
   phone?: string;
   applicationNumber: string;

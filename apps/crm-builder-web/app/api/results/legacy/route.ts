@@ -30,7 +30,13 @@ import {
 
 function sanitizeFilename(name: string): string {
   const cleaned = name.replace(/[^a-zA-Z0-9._-]/g, "_");
-  return cleaned.slice(0, 120) || "result.bin";
+  return cleaned.slice(0, 120) || "result.pdf";
+}
+
+function isPdfFile(file: File): boolean {
+  const mime = String(file.type || "").toLowerCase();
+  const name = String(file.name || "").toLowerCase();
+  return mime === "application/pdf" || name.endsWith(".pdf");
 }
 
 async function ensureCaseDriveFolders(companyId: string, caseId: string) {
@@ -95,8 +101,10 @@ export async function POST(request: NextRequest) {
   let phone = "";
   let applicationNumber = "";
   let resultDate = "";
+  let entryType: "result" | "submission" = "result";
   let outcome = "other";
   let notes = "";
+  let selectedCaseId = "";
   let fileName = "";
   let fileLink = "";
   let uploadedBuffer: Buffer | null = null;
@@ -108,15 +116,26 @@ export async function POST(request: NextRequest) {
     phone = String(formData.get("phone") || "").trim();
     applicationNumber = String(formData.get("applicationNumber") || "").trim();
     resultDate = String(formData.get("resultDate") || "").trim();
+    const rawEntryType = String(formData.get("entryType") || "").trim().toLowerCase();
+    entryType = rawEntryType === "submission" ? "submission" : "result";
     outcome = String(formData.get("outcome") || "other").trim().toLowerCase();
     notes = String(formData.get("notes") || "").trim();
+    selectedCaseId = String(formData.get("selectedCaseId") || "").trim();
     const maybeFile = formData.get("file");
 
     if (maybeFile instanceof File && maybeFile.size > 0) {
+      if (!isPdfFile(maybeFile)) {
+        return NextResponse.json(
+          { error: "Only PDF files are allowed for results upload." },
+          { status: 400 }
+        );
+      }
       const buffer = Buffer.from(await maybeFile.arrayBuffer());
       uploadedBuffer = buffer;
-      uploadedMimeType = maybeFile.type || "application/octet-stream";
-      const safe = `${Date.now()}_${sanitizeFilename(maybeFile.name || "result.bin")}`;
+      uploadedMimeType = "application/pdf";
+      const rawName = String(maybeFile.name || "result.pdf");
+      const normalizedName = rawName.toLowerCase().endsWith(".pdf") ? rawName : `${rawName}.pdf`;
+      const safe = `${Date.now()}_${sanitizeFilename(normalizedName)}`;
       fileName = safe;
       if (isS3StorageEnabled()) {
         await putObjectToS3({
@@ -148,8 +167,11 @@ export async function POST(request: NextRequest) {
     phone = String(body.phone || "").trim();
     applicationNumber = String(body.applicationNumber || "").trim();
     resultDate = String(body.resultDate || "").trim();
+    const rawEntryType = String(body.entryType || "").trim().toLowerCase();
+    entryType = rawEntryType === "submission" ? "submission" : "result";
     outcome = String(body.outcome || "other").trim().toLowerCase();
     notes = String(body.notes || "").trim();
+    selectedCaseId = String(body.selectedCaseId || "").trim();
     fileName = String(body.fileName || "").trim();
     fileLink = String(body.fileLink || "").trim();
   }
@@ -164,6 +186,7 @@ export async function POST(request: NextRequest) {
 
   const item = await addLegacyResult({
     companyId: user.companyId,
+    entryType,
     clientName,
     phone,
     applicationNumber,
@@ -172,10 +195,11 @@ export async function POST(request: NextRequest) {
     notes,
     fileName: fileName || undefined,
     fileLink: fileLink || undefined,
+    forceMatchedCaseId: selectedCaseId || undefined,
     createdByUserId: user.id,
     createdByName: user.name
   });
-  if (item.autoCategory === "new" && item.matchedCaseId && item.fileLink) {
+  if (entryType === "result" && item.autoCategory === "new" && item.matchedCaseId && item.fileLink) {
     await addDocument({
       companyId: user.companyId,
       caseId: item.matchedCaseId,
@@ -191,7 +215,10 @@ export async function POST(request: NextRequest) {
           String(caseWithFolders?.submittedFolderLink || "")
         );
         if (submittedFolderId) {
-          const resultsFolder = await getOrCreateDriveSubfolder(submittedFolderId, "Results");
+          const resultsFolder = await getOrCreateDriveSubfolder(
+            submittedFolderId,
+            entryType === "submission" ? "Submission" : "Results"
+          );
           await uploadFileToDriveFolder({
             folderId: resultsFolder.id,
             fileName: item.fileName || `Result_${item.applicationNumber}.pdf`,

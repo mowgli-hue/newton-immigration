@@ -316,6 +316,8 @@ function migrateStore(raw: Partial<AppStore>): AppStore {
       const matchedCaseId = (r as LegacyResultItem).matchedCaseId;
       return {
         ...r,
+        entryType:
+          ((r as LegacyResultItem).entryType || "result") as "result" | "submission",
         clientName: String((r as LegacyResultItem).clientName || "").trim() || "Legacy Client",
         resultDate,
         autoCategory: ((r as LegacyResultItem).autoCategory || (matchedCaseId ? "new" : "old")) as
@@ -1990,6 +1992,7 @@ export async function listLegacyResults(companyId: string): Promise<LegacyResult
 
 export async function addLegacyResult(input: {
   companyId: string;
+  entryType?: "result" | "submission";
   clientName: string;
   phone?: string;
   applicationNumber: string;
@@ -1998,12 +2001,20 @@ export async function addLegacyResult(input: {
   notes?: string;
   fileName?: string;
   fileLink?: string;
+  forceMatchedCaseId?: string;
   createdByUserId: string;
   createdByName: string;
 }): Promise<LegacyResultItem> {
   const store = await readStore();
   const appNo = String(input.applicationNumber || "").trim().toLowerCase();
+  const forcedCase =
+    input.forceMatchedCaseId
+      ? store.cases.find(
+          (c) => c.companyId === input.companyId && c.id === input.forceMatchedCaseId
+        ) ?? null
+      : null;
   const matchedCase =
+    forcedCase ??
     store.cases.find(
       (c) =>
         c.companyId === input.companyId &&
@@ -2020,6 +2031,7 @@ export async function addLegacyResult(input: {
   const item: LegacyResultItem = {
     id: `LRES-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     companyId: input.companyId,
+    entryType: input.entryType || "result",
     clientName: String(input.clientName || "").trim() || matchedCase?.client || "Legacy Client",
     phone: String(input.phone || "").trim() || matchedCase?.leadPhone || matchedClient?.phone || undefined,
     applicationNumber: String(input.applicationNumber || "").trim(),
