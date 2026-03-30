@@ -47,6 +47,8 @@ export async function PATCH(
     body?.applicationNumber !== undefined ? boundedText(body.applicationNumber, 120) : undefined;
   const submittedAt =
     body?.submittedAt !== undefined ? String(body.submittedAt) : undefined;
+  const submissionDocumentUploadedAt =
+    body?.submissionDocumentUploadedAt !== undefined ? String(body.submissionDocumentUploadedAt) : undefined;
   const finalOutcomeRaw = body?.finalOutcome !== undefined ? String(body.finalOutcome).trim().toLowerCase() : undefined;
   const finalOutcome = (
     finalOutcomeRaw &&
@@ -65,6 +67,7 @@ export async function PATCH(
     paymentMethod !== undefined ||
     applicationNumber !== undefined ||
     submittedAt !== undefined ||
+    submissionDocumentUploadedAt !== undefined ||
     finalOutcome !== undefined ||
     decisionDate !== undefined ||
     remarks !== undefined
@@ -76,6 +79,7 @@ export async function PATCH(
       paymentMethod,
       applicationNumber,
       submittedAt,
+      submissionDocumentUploadedAt,
       finalOutcome,
       decisionDate,
       remarks

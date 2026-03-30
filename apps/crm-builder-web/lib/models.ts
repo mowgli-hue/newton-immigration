@@ -184,6 +184,7 @@ export type CaseItem = {
   familyMembers?: string;
   familyTotalCharges?: number;
   submittedAt?: string;
+  submissionDocumentUploadedAt?: string;
   decisionDate?: string;
   finalOutcome?: "approved" | "refused" | "request_letter" | "withdrawn";
   remarks?: string;

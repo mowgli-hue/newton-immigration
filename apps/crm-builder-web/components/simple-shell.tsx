@@ -885,6 +885,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       visibleCases.filter(
         (c) =>
           String(c.submittedAt || "").slice(0, 10) === todayIsoDate &&
+          String(c.submissionDocumentUploadedAt || "").slice(0, 10) === todayIsoDate &&
           (c.processingStatus || "docs_pending") === "submitted"
       ),
     [visibleCases, todayIsoDate]
@@ -1597,14 +1598,43 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       setSubmissionStatus("Application number is required.");
       return;
     }
-    setSubmissionStatus("Submitting case...");
+    if (!submissionUploadFile) {
+      setSubmissionStatus("Upload submission document before marking submitted.");
+      return;
+    }
+    setSubmissionStatus("Uploading document and submitting case...");
+
+    const formData = new FormData();
+    formData.append("file", submissionUploadFile);
+    formData.append(
+      "name",
+      submissionUploadType === "submission_letter" ? "Submission Letter" : "WP Extension Letter"
+    );
+    formData.append("driveFolderType", "submission");
+    formData.append("category", "general");
+
+    const docRes = await apiFetch(`/cases/${selectedCase.id}/documents`, {
+      method: "POST",
+      body: formData
+    });
+    const docPayload = await docRes.json().catch(() => ({}));
+    if (!docRes.ok) {
+      setSubmissionStatus(String(docPayload.error || "Could not upload submission document."));
+      return;
+    }
+    if (docPayload.document) {
+      setDocuments((prev) => [...prev, docPayload.document as DocumentItem]);
+    }
+
+    const nowIso = new Date().toISOString();
     const res = await apiFetch(`/cases/${selectedCase.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         processingStatus: "submitted",
         applicationNumber: appNo,
-        submittedAt: new Date().toISOString()
+        submittedAt: nowIso,
+        submissionDocumentUploadedAt: nowIso
       })
     });
     const payload = await res.json().catch(() => ({}));
@@ -1614,8 +1644,9 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     }
     const updated = payload.case as CaseItem;
     setCases((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
-    setSubmissionStatus(`Submitted ${updated.id} with application number ${appNo}.`);
+    setSubmissionStatus(`Submitted ${updated.id} with document and application number ${appNo}.`);
     setSubmissionApplicationNumber("");
+    setSubmissionUploadFile(null);
   }
 
   async function uploadSubmissionDocument() {
@@ -5082,7 +5113,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
             <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
               <h3 className="text-base font-semibold">Submission</h3>
               <p className="mt-1 text-xs text-slate-500">
-                Select a pending case, enter application number, then mark it submitted.
+                Select pending case, enter application number, choose submission document, then submit in one step.
               </p>
               <input
                 value={submissionSearch}
@@ -5112,7 +5143,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                   onClick={() => void submitCaseWithApplicationNumber()}
                   className="rounded bg-slate-900 px-3 py-2 text-xs font-semibold text-white"
                 >
-                  Mark Submitted
+                  Submit + Upload Document
                 </button>
                 <div className="rounded border border-slate-200 px-2 py-2 text-xs">
                   {selectedCase?.applicationNumber ? `Current: ${selectedCase.applicationNumber}` : "No application number yet"}
@@ -5139,12 +5170,9 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                     onChange={(e) => setSubmissionUploadFile(e.target.files?.[0] || null)}
                     className="rounded border border-slate-300 px-2 py-2"
                   />
-                  <button
-                    onClick={() => void uploadSubmissionDocument()}
-                    className="rounded bg-slate-900 px-3 py-2 font-semibold text-white"
-                  >
-                    Upload Document
-                  </button>
+                  <div className="rounded border border-slate-200 px-3 py-2 text-slate-600">
+                    This document is uploaded when you click "Submit + Upload Document".
+                  </div>
                 </div>
                 {submissionUploadStatus ? <p className="mt-2 text-slate-700">{submissionUploadStatus}</p> : null}
               </div>

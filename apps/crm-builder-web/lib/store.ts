@@ -1451,6 +1451,7 @@ export async function updateCaseProcessing(
     paymentMethod?: "interac" | "cash" | "card" | "bank_transfer" | "other";
     applicationNumber?: string;
     submittedAt?: string;
+    submissionDocumentUploadedAt?: string;
     finalOutcome?: "approved" | "refused" | "request_letter" | "withdrawn";
     decisionDate?: string;
     remarks?: string;
@@ -1496,6 +1497,10 @@ export async function updateCaseProcessing(
         : nextStatus === "submitted"
           ? current.submittedAt ?? new Date().toISOString()
           : current.submittedAt,
+    submissionDocumentUploadedAt:
+      patch.submissionDocumentUploadedAt !== undefined
+        ? patch.submissionDocumentUploadedAt.trim() || undefined
+        : current.submissionDocumentUploadedAt,
     finalOutcome: patch.finalOutcome !== undefined ? patch.finalOutcome : current.finalOutcome,
     decisionDate:
       patch.decisionDate !== undefined
