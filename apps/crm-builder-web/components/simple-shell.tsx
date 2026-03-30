@@ -391,6 +391,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [legacyResultStatus, setLegacyResultStatus] = useState("");
   const [legacyResults, setLegacyResults] = useState<LegacyResultItem[]>([]);
   const [submissionSearch, setSubmissionSearch] = useState("");
+  const [submissionCaseId, setSubmissionCaseId] = useState("");
   const [submissionApplicationNumber, setSubmissionApplicationNumber] = useState("");
   const [submissionStatus, setSubmissionStatus] = useState("");
   const [submissionUploadType, setSubmissionUploadType] = useState<"submission_letter" | "wp_extension_letter">(
@@ -880,6 +881,10 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
         return bTs - aTs;
       });
   }, [visibleCases, submissionSearch]);
+  const selectedSubmissionCase = useMemo(
+    () => submissionCaseOptions.find((c) => c.id === submissionCaseId) ?? null,
+    [submissionCaseOptions, submissionCaseId]
+  );
   const todaysSubmissions = useMemo(
     () =>
       visibleCases.filter(
@@ -1053,6 +1058,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     setResultShareStatus("");
     setResultSendEmail(String(selectedCase.leadEmail || ""));
     setResultSendPhone(String(selectedCase.leadPhone || ""));
+    setSubmissionCaseId(selectedCase.id || "");
     setSubmissionApplicationNumber(selectedCase.applicationNumber || "");
     setSubmissionStatus("");
     setNewTaskAssignedTo(String(selectedCase.assignedTo || sessionUser?.name || ""));
@@ -1595,11 +1601,31 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   }
 
   async function submitCaseWithApplicationNumber() {
-    if (!selectedCase) return;
     const appNo = submissionApplicationNumber.trim();
     if (!appNo) {
       setSubmissionStatus("Application number is required.");
       return;
+    }
+    const normalizeAppNo = (value: string) =>
+      String(value || "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "");
+    let targetCase = selectedSubmissionCase;
+    if (!targetCase) {
+      const key = normalizeAppNo(appNo);
+      const matches = submissionCaseOptions.filter(
+        (c) => normalizeAppNo(String(c.applicationNumber || "")) === key
+      );
+      if (matches.length === 1) {
+        targetCase = matches[0];
+        setSubmissionCaseId(matches[0].id);
+      } else if (matches.length > 1) {
+        setSubmissionStatus("Multiple cases matched this application number. Please select case.");
+        return;
+      } else {
+        setSubmissionStatus("Please select case for this submission.");
+        return;
+      }
     }
     if (!submissionUploadFile) {
       setSubmissionStatus("Upload submission document before marking submitted.");
@@ -1616,7 +1642,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     formData.append("driveFolderType", "submission");
     formData.append("category", "general");
 
-    const docRes = await apiFetch(`/cases/${selectedCase.id}/documents`, {
+    const docRes = await apiFetch(`/cases/${targetCase.id}/documents`, {
       method: "POST",
       body: formData
     });
@@ -1630,7 +1656,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     }
 
     const nowIso = new Date().toISOString();
-    const res = await apiFetch(`/cases/${selectedCase.id}`, {
+    const res = await apiFetch(`/cases/${targetCase.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1653,7 +1679,8 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   }
 
   async function uploadSubmissionDocument() {
-    if (!selectedCase) {
+    const targetCase = selectedSubmissionCase || selectedCase;
+    if (!targetCase) {
       setSubmissionUploadStatus("Select a case first.");
       return;
     }
@@ -1670,7 +1697,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     );
     formData.append("driveFolderType", "submission");
     formData.append("category", "general");
-    const res = await apiFetch(`/cases/${selectedCase.id}/documents`, {
+    const res = await apiFetch(`/cases/${targetCase.id}/documents`, {
       method: "POST",
       body: formData
     });
@@ -5116,7 +5143,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
             <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
               <h3 className="text-base font-semibold">Submission</h3>
               <p className="mt-1 text-xs text-slate-500">
-                Select pending case, enter application number, choose submission document, then submit in one step.
+                Similar to Results flow: enter application number, attach document, and submit in one step. Case selection is optional.
               </p>
               <input
                 value={submissionSearch}
@@ -5125,10 +5152,15 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                 placeholder="Search case by ID, name, or application type"
               />
               <select
-                value={selectedCase?.id ?? ""}
-                onChange={(e) => setSelectedCaseId(e.target.value)}
+                value={submissionCaseId}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setSubmissionCaseId(id);
+                  if (id) setSelectedCaseId(id);
+                }}
                 className="mt-2 w-full rounded-lg border-2 border-slate-300 px-2 py-2 text-sm"
               >
+                <option value="">Optional: auto-match by application number</option>
                 {submissionCaseOptions.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.id} - {c.client} - {c.formType}
@@ -5149,7 +5181,9 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                   Submit + Upload Document
                 </button>
                 <div className="rounded border border-slate-200 px-2 py-2 text-xs">
-                  {selectedCase?.applicationNumber ? `Current: ${selectedCase.applicationNumber}` : "No application number yet"}
+                  {selectedSubmissionCase?.applicationNumber
+                    ? `Current: ${selectedSubmissionCase.applicationNumber}`
+                    : "No application number yet"}
                 </div>
               </div>
               <div className="mt-3 rounded border border-slate-200 p-3 text-xs">
