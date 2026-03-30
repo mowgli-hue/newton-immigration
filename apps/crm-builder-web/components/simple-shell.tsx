@@ -5143,53 +5143,23 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
             <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
               <h3 className="text-base font-semibold">Submission</h3>
               <p className="mt-1 text-xs text-slate-500">
-                Similar to Results flow: enter application number, attach document, and submit in one step. Case selection is optional.
+                Daily submission upload by application number. Case selection is optional.
               </p>
-              <input
-                value={submissionSearch}
-                onChange={(e) => setSubmissionSearch(e.target.value)}
-                className="mt-2 w-full rounded border border-slate-300 px-2 py-2 text-xs"
-                placeholder="Search case by ID, name, or application type"
-              />
-              <select
-                value={submissionCaseId}
-                onChange={(e) => {
-                  const id = e.target.value;
-                  setSubmissionCaseId(id);
-                  if (id) setSelectedCaseId(id);
-                }}
-                className="mt-2 w-full rounded-lg border-2 border-slate-300 px-2 py-2 text-sm"
-              >
-                <option value="">Optional: auto-match by application number</option>
-                {submissionCaseOptions.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.id} - {c.client} - {c.formType}
-                  </option>
-                ))}
-              </select>
-              <div className="mt-3 grid gap-2 md:grid-cols-3">
-                <input
-                  value={submissionApplicationNumber}
-                  onChange={(e) => setSubmissionApplicationNumber(e.target.value)}
-                  className="rounded border border-slate-300 px-2 py-2 text-xs"
-                  placeholder="Application number"
-                />
-                <button
-                  onClick={() => void submitCaseWithApplicationNumber()}
-                  className="rounded bg-slate-900 px-3 py-2 text-xs font-semibold text-white"
-                >
-                  Submit + Upload Document
-                </button>
-                <div className="rounded border border-slate-200 px-2 py-2 text-xs">
-                  {selectedSubmissionCase?.applicationNumber
-                    ? `Current: ${selectedSubmissionCase.applicationNumber}`
-                    : "No application number yet"}
-                </div>
-              </div>
-              <div className="mt-3 rounded border border-slate-200 p-3 text-xs">
-                <p className="font-semibold">Upload Submission Document</p>
-                <p className="mt-1 text-slate-500">Files are stored in Drive under: Submitted / Submission.</p>
+              <div className="mt-2 rounded border border-slate-200 p-3 text-xs">
+                <p className="font-semibold">Daily Submission Upload</p>
                 <div className="mt-2 grid gap-2 md:grid-cols-3">
+                  <input
+                    value={submissionApplicationNumber}
+                    onChange={(e) => setSubmissionApplicationNumber(e.target.value)}
+                    className="rounded border border-slate-300 px-2 py-2"
+                    placeholder="Application number"
+                  />
+                  <input
+                    value={submissionSearch}
+                    onChange={(e) => setSubmissionSearch(e.target.value)}
+                    className="rounded border border-slate-300 px-2 py-2"
+                    placeholder="Search case (optional)"
+                  />
                   <select
                     value={submissionUploadType}
                     onChange={(e) =>
@@ -5202,15 +5172,37 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                     <option value="submission_letter">Submission Letter</option>
                     <option value="wp_extension_letter">WP Extension Letter</option>
                   </select>
+                </div>
+                <div className="mt-2 grid gap-2 md:grid-cols-3">
+                  <select
+                    value={submissionCaseId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      setSubmissionCaseId(id);
+                      if (id) setSelectedCaseId(id);
+                    }}
+                    className="rounded border border-slate-300 px-2 py-2"
+                  >
+                    <option value="">Optional case selection (auto-match by app no)</option>
+                    {submissionCaseOptions.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.id} - {c.client} - {c.formType}
+                      </option>
+                    ))}
+                  </select>
                   <input
                     type="file"
                     onChange={(e) => setSubmissionUploadFile(e.target.files?.[0] || null)}
                     className="rounded border border-slate-300 px-2 py-2"
                   />
-                  <div className="rounded border border-slate-200 px-3 py-2 text-slate-600">
-                    This document is uploaded when you click "Submit + Upload Document".
-                  </div>
+                  <button
+                    onClick={() => void submitCaseWithApplicationNumber()}
+                    className="rounded bg-slate-900 px-3 py-2 font-semibold text-white"
+                  >
+                    Upload + Mark Submitted
+                  </button>
                 </div>
+                <p className="mt-2 text-slate-500">Files are stored in Drive under: Submitted / Submission.</p>
                 {submissionUploadStatus ? <p className="mt-2 text-slate-700">{submissionUploadStatus}</p> : null}
               </div>
               {submissionStatus ? <p className="mt-2 text-xs text-slate-700">{submissionStatus}</p> : null}
