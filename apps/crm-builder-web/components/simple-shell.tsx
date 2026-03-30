@@ -440,6 +440,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [commAdditionalApplicants, setCommAdditionalApplicants] = useState<string[]>([]);
   const [commApplicantDraft, setCommApplicantDraft] = useState("");
   const [commFamilyTotalCharges, setCommFamilyTotalCharges] = useState("");
+  const [commAdditionalNotes, setCommAdditionalNotes] = useState("");
   const [commCreateStatus, setCommCreateStatus] = useState("");
   const [commUrgent, setCommUrgent] = useState(false);
   const [commUrgentDays, setCommUrgentDays] = useState("5");
@@ -1239,6 +1240,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
             ? normalizedAdditionalApplicants.join(", ")
             : undefined,
         familyTotalCharges,
+        additionalNotes: commAdditionalNotes.trim() || undefined,
         isUrgent: commUrgent,
         dueInDays: commUrgent ? Number(commUrgentDays || 0) : undefined,
         permitExpiryDate: commPermitExpiryDate || undefined
@@ -1273,6 +1275,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     setCommAdditionalApplicants([]);
     setCommApplicantDraft("");
     setCommFamilyTotalCharges("");
+    setCommAdditionalNotes("");
     setCommFormTypeOther("");
     setCommUrgent(false);
     setCommUrgentDays("5");
@@ -2843,10 +2846,6 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   }
 
   async function createTeamTask() {
-    if (!teamTaskCaseId.trim()) {
-      setTaskActionStatus("Select case first.");
-      return;
-    }
     if (!teamTaskTitle.trim()) {
       setTaskActionStatus("Task title is required.");
       return;
@@ -2857,7 +2856,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        caseId: teamTaskCaseId,
+        caseId: teamTaskCaseId.trim() || undefined,
         title: teamTaskTitle.trim(),
         description: teamTaskDescription.trim(),
         priority: teamTaskPriority,
@@ -2874,12 +2873,12 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     setTeamTaskDescription("");
     setTeamTaskPriority("medium");
     setTeamTaskDueDate("");
+    setTeamTaskCaseId("");
     setTaskActionStatus("Team task created.");
     await refreshTasks();
   }
 
   async function markTaskCompleted(taskId: string) {
-    if (!selectedCase) return;
     const res = await apiFetch(`/tasks/${taskId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -2891,7 +2890,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       return;
     }
     setTaskActionStatus("Task marked completed.");
-    await refreshTasks(selectedCase.id);
+    await refreshTasks();
   }
 
   async function signRetainer(caseId: string) {
@@ -5037,6 +5036,13 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                       <option value="client_card">IRCC fees by Client card</option>
                     </select>
                   </div>
+                  <textarea
+                    value={commAdditionalNotes}
+                    onChange={(e) => setCommAdditionalNotes(e.target.value)}
+                    placeholder="Additional notes (optional)"
+                    rows={3}
+                    className="mt-2 w-full rounded border border-slate-300 px-2 py-2 text-xs"
+                  />
                   <div className="mt-2 rounded border border-slate-200 p-2">
                     <p className="text-[11px] font-semibold text-slate-600">
                       Additional Applicants (same case)
@@ -5568,7 +5574,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                 <p className="font-semibold">Create Task (Any Team Workspace)</p>
                 <div className="mt-2 grid gap-2 md:grid-cols-3">
                   <select value={teamTaskCaseId} onChange={(e) => setTeamTaskCaseId(e.target.value)} className="rounded border border-slate-300 px-2 py-2">
-                    <option value="">Select case</option>
+                    <option value="">General task (no case)</option>
                     {visibleCases.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.id} - {c.client}
@@ -5601,7 +5607,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                   <article key={t.id} className="rounded-lg border border-slate-200 p-3 text-sm">
                     <p className="font-semibold">{t.title}</p>
                     <p className="text-xs text-slate-500">
-                      {t.caseId} • {t.priority} • {t.status} • assigned: {t.assignedTo}
+                      {t.caseId === "GENERAL" ? "General" : t.caseId} • {t.priority} • {t.status} • assigned: {t.assignedTo}
                     </p>
                     {t.dueDate ? <p className="text-xs text-slate-500">Due: {t.dueDate}</p> : null}
                     {t.description ? <p className="mt-1 text-xs">{t.description}</p> : null}

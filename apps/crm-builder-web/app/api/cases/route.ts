@@ -57,6 +57,8 @@ export async function POST(request: NextRequest) {
   const formType = boundedText(body.formType, 120);
   const leadPhone = body?.leadPhone !== undefined ? normalizePhone(body.leadPhone) : undefined;
   const leadEmail = body?.leadEmail !== undefined ? normalizeEmail(body.leadEmail) : undefined;
+  const additionalNotes =
+    body?.additionalNotes !== undefined ? boundedText(body.additionalNotes, 1000) : undefined;
   const isUrgent = Boolean(body?.isUrgent);
   const permitExpiryDateRaw =
     body?.permitExpiryDate !== undefined ? String(body.permitExpiryDate).trim() : undefined;
@@ -110,6 +112,7 @@ export async function POST(request: NextRequest) {
     formType,
     leadPhone,
     leadEmail,
+    additionalNotes,
     isUrgent,
     dueInDays,
     permitExpiryDate,

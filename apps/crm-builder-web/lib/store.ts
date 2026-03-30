@@ -774,6 +774,7 @@ export async function createCase(input: {
   formType: string;
   leadPhone?: string;
   leadEmail?: string;
+  additionalNotes?: string;
   sourceLeadKey?: string;
   isUrgent?: boolean;
   dueInDays?: number;
@@ -894,6 +895,7 @@ export async function createCase(input: {
     irccFeePayer,
     familyMembers: familyMembers || undefined,
     familyTotalCharges,
+    remarks: String(input.additionalNotes || "").trim() || undefined,
     imm5710Automation: { status: "idle" },
     pgwpIntake: undefined,
     docRequests: [],

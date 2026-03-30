@@ -16,7 +16,9 @@ export async function GET(request: NextRequest) {
       .filter((c) => canStaffAccessCase(user.role, user.name, c.assignedTo))
       .map((c) => c.id)
   );
-  return NextResponse.json({ tasks: tasks.filter((t) => allowedCaseIds.has(t.caseId)) });
+  return NextResponse.json({
+    tasks: tasks.filter((t) => t.caseId === "GENERAL" || allowedCaseIds.has(t.caseId))
+  });
 }
 
 export async function POST(request: NextRequest) {
