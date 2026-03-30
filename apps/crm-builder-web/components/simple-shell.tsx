@@ -884,6 +884,9 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     () =>
       visibleCases.filter(
         (c) =>
+          Boolean(c.applicationNumber) &&
+          Boolean(c.submittedAt) &&
+          Boolean(c.submissionDocumentUploadedAt) &&
           String(c.submittedAt || "").slice(0, 10) === todayIsoDate &&
           String(c.submissionDocumentUploadedAt || "").slice(0, 10) === todayIsoDate &&
           (c.processingStatus || "docs_pending") === "submitted"
@@ -5179,7 +5182,9 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
               {submissionStatus ? <p className="mt-2 text-xs text-slate-700">{submissionStatus}</p> : null}
               <div className="mt-4 rounded border-2 border-amber-300 bg-amber-50 p-3 text-xs">
                 <p className="font-semibold text-amber-900">Today&apos;s Submissions ({todaysSubmissions.length})</p>
-                <p className="mt-1 text-amber-900">Rows submitted today with quick WhatsApp action.</p>
+                <p className="mt-1 text-amber-900">
+                  Only complete submissions are shown here (application number + uploaded submission document).
+                </p>
                 <div className="mt-2 max-h-56 space-y-2 overflow-auto rounded border border-amber-200 bg-white p-2">
                   {todaysSubmissions.map((c) => (
                     <article key={c.id} className="rounded border border-slate-200 p-2">

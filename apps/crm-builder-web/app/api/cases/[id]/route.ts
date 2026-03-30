@@ -72,6 +72,23 @@ export async function PATCH(
     decisionDate !== undefined ||
     remarks !== undefined
   ) {
+    if (processingStatus === "submitted") {
+      const safeAppNo = String(applicationNumber || currentCase.applicationNumber || "").trim();
+      const safeSubmissionDocTs = String(submissionDocumentUploadedAt || currentCase.submissionDocumentUploadedAt || "").trim();
+      if (!safeAppNo) {
+        return NextResponse.json(
+          { error: "Application number is required before marking submitted." },
+          { status: 400 }
+        );
+      }
+      if (!safeSubmissionDocTs) {
+        return NextResponse.json(
+          { error: "Submission document is required before marking submitted." },
+          { status: 400 }
+        );
+      }
+    }
+
     const updated = await updateCaseProcessing(user.companyId, params.id, {
       assignedTo,
       processingStatus,
