@@ -857,6 +857,23 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       ) || null
     );
   }, [legacyResults, resultApplicationNumber]);
+  const submissionLegacyByAppNo = useMemo(() => {
+    const key = normalizeAppNumber(submissionApplicationNumber);
+    if (!key) return null;
+    const exact = legacyResults.find(
+      (r) => normalizeAppNumber(String(r.applicationNumber || "")) === key
+    );
+    if (exact) return exact;
+    const prefix = legacyResults.find((r) =>
+      normalizeAppNumber(String(r.applicationNumber || "")).includes(key)
+    );
+    if (prefix) return prefix;
+    return (
+      legacyResults.find(
+        (r) => key.includes(normalizeAppNumber(String(r.applicationNumber || "")))
+      ) || null
+    );
+  }, [legacyResults, submissionApplicationNumber]);
 
   useEffect(() => {
     if (!selectedLegacyByAppNo) return;
@@ -885,6 +902,14 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     () => submissionCaseOptions.find((c) => c.id === submissionCaseId) ?? null,
     [submissionCaseOptions, submissionCaseId]
   );
+  const submissionAutoMatchedCase = useMemo(() => {
+    const key = normalizeAppNumber(submissionApplicationNumber);
+    if (!key) return null;
+    const matches = roleScopedCases.filter(
+      (c) => normalizeAppNumber(String(c.applicationNumber || "")) === key
+    );
+    return matches.length === 1 ? matches[0] : null;
+  }, [roleScopedCases, submissionApplicationNumber]);
   const todaysSubmissions = useMemo(
     () =>
       visibleCases.filter(
@@ -1610,7 +1635,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       String(value || "")
         .toLowerCase()
         .replace(/[^a-z0-9]/g, "");
-    let targetCase = selectedSubmissionCase;
+    let targetCase = selectedSubmissionCase || submissionAutoMatchedCase;
     if (!targetCase) {
       const key = normalizeAppNo(appNo);
       const matches = submissionCaseOptions.filter(
@@ -1623,7 +1648,13 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
         setSubmissionStatus("Multiple cases matched this application number. Please select case.");
         return;
       } else {
-        setSubmissionStatus("Please select case for this submission.");
+        if (submissionLegacyByAppNo) {
+          setSubmissionStatus(
+            `Old submission found for ${submissionLegacyByAppNo.clientName}. No CRM upload required.`
+          );
+          return;
+        }
+        setSubmissionStatus("No CRM case matched this application number. Select case or treat as old record.");
         return;
       }
     }
@@ -5143,7 +5174,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
             <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
               <h3 className="text-base font-semibold">Submission</h3>
               <p className="mt-1 text-xs text-slate-500">
-                Daily submission upload by application number. Case selection is optional.
+                Daily submission upload by application number. System auto-fetches case/history like Results.
               </p>
               <div className="mt-2 rounded border border-slate-200 p-3 text-xs">
                 <p className="font-semibold">Daily Submission Upload</p>
@@ -5203,6 +5234,19 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                   </button>
                 </div>
                 <p className="mt-2 text-slate-500">Files are stored in Drive under: Submitted / Submission.</p>
+                {submissionAutoMatchedCase ? (
+                  <div className="mt-2 rounded border border-emerald-300 bg-emerald-50 p-2 text-emerald-900">
+                    Auto-matched case: {submissionAutoMatchedCase.id} - {submissionAutoMatchedCase.client}
+                    {submissionAutoMatchedCase.leadPhone ? ` • ${submissionAutoMatchedCase.leadPhone}` : ""}
+                  </div>
+                ) : null}
+                {!submissionAutoMatchedCase && submissionLegacyByAppNo ? (
+                  <div className="mt-2 rounded border border-blue-200 bg-blue-50 p-2 text-blue-900">
+                    Existing history found: {submissionLegacyByAppNo.clientName}
+                    {submissionLegacyByAppNo.phone ? ` • ${submissionLegacyByAppNo.phone}` : ""}
+                    {" • "}Old submission (no upload needed).
+                  </div>
+                ) : null}
                 {submissionUploadStatus ? <p className="mt-2 text-slate-700">{submissionUploadStatus}</p> : null}
               </div>
               {submissionStatus ? <p className="mt-2 text-xs text-slate-700">{submissionStatus}</p> : null}
