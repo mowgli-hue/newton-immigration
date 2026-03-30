@@ -99,9 +99,17 @@ export async function getSignedDownloadUrl(input: {
 }) {
   const client = await getS3Client();
   const bucket = getS3Bucket();
+  const fileName = String(input.key || "").split("/").pop() || "download.pdf";
+  const isPdf = fileName.toLowerCase().endsWith(".pdf");
   const command = new GetObjectCommand({
     Bucket: bucket,
-    Key: input.key
+    Key: input.key,
+    ...(isPdf
+      ? {
+          ResponseContentType: "application/pdf",
+          ResponseContentDisposition: `attachment; filename="${fileName}"`
+        }
+      : {})
   });
   const expiresIn = Math.max(60, Math.min(900, Number(input.expiresInSeconds || 300)));
   return getSignedUrl(client, command, { expiresIn });
