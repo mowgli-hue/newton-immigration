@@ -3980,7 +3980,10 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                       <p className="text-sm font-semibold">{d.name}</p>
                       <p className="text-xs text-slate-500">{new Date(d.createdAt).toLocaleString()}</p>
                       {d.link ? (
-                        <a href={d.link} download className="text-xs text-blue-700 underline">
+                        <a
+                          href={`/api/cases/${encodeURIComponent(c.id)}/documents/${encodeURIComponent(d.id)}/download`}
+                          className="text-xs text-blue-700 underline"
+                        >
                           Download Result
                         </a>
                       ) : null}
