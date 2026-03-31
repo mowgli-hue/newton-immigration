@@ -126,7 +126,7 @@ export async function POST(request: NextRequest) {
     if (maybeFile instanceof File && maybeFile.size > 0) {
       if (!isPdfFile(maybeFile)) {
         return NextResponse.json(
-          { error: "Only PDF files are allowed for results upload." },
+          { error: "Only PDF files are allowed for results/submission upload." },
           { status: 400 }
         );
       }

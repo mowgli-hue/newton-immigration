@@ -1678,6 +1678,12 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       setSubmissionStatus("Upload submission document before marking submitted.");
       return;
     }
+    const submissionFileName = String(submissionUploadFile.name || "").toLowerCase();
+    const submissionFileType = String(submissionUploadFile.type || "").toLowerCase();
+    if (submissionFileType !== "application/pdf" && !submissionFileName.endsWith(".pdf")) {
+      setSubmissionStatus("Submission attachment must be a PDF file.");
+      return;
+    }
     setSubmissionStatus("Submitting and uploading document...");
 
     let storedFileName = "";
@@ -1822,6 +1828,12 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     }
     if (!submissionUploadFile) {
       setSubmissionUploadStatus("Choose a file first.");
+      return;
+    }
+    const submissionFileName = String(submissionUploadFile.name || "").toLowerCase();
+    const submissionFileType = String(submissionUploadFile.type || "").toLowerCase();
+    if (submissionFileType !== "application/pdf" && !submissionFileName.endsWith(".pdf")) {
+      setSubmissionUploadStatus("Only PDF files are allowed for submission uploads.");
       return;
     }
     setSubmissionUploadStatus("Uploading to submission folder...");
@@ -5359,6 +5371,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                   </select>
                   <input
                     type="file"
+                    accept=".pdf,application/pdf"
                     onChange={(e) => setSubmissionUploadFile(e.target.files?.[0] || null)}
                     className="rounded border border-slate-300 px-2 py-2"
                   />
