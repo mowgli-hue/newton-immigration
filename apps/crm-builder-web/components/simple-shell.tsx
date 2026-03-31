@@ -266,7 +266,8 @@ const PROCESSING_ASSIGNEE_FALLBACK: string[] = [
   "ramandeep",
   "rajwinder",
   "avneet",
-  "sukhman"
+  "sukhman",
+  "manisha"
 ];
 
 const PROCESSING_STATUS_OPTIONS: Array<{ value: "docs_pending" | "under_review" | "submitted" | "other"; label: string }> = [
