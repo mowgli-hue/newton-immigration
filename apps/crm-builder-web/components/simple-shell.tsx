@@ -257,7 +257,7 @@ const APPLICATION_TYPES: string[] = [
 
 const NON_PROCESSING_APPLICATION_TYPES = new Set(["PR Consultation", "Not for Processing"]);
 
-const PROCESSING_TEAM_MEMBERS: string[] = [
+const PROCESSING_ASSIGNEE_FALLBACK: string[] = [
   "Unassigned",
   "sarbleen",
   "rapneet",
@@ -982,6 +982,29 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     names.delete("");
     return Array.from(names).sort((a, b) => a.localeCompare(b));
   }, [teamUsers, sessionUser?.name, selectedCase?.assignedTo]);
+  const processingAssigneeOptions = useMemo(() => {
+    const names = new Set<string>(PROCESSING_ASSIGNEE_FALLBACK);
+    teamUsers
+      .filter((u) => u.active !== false)
+      .forEach((u) => {
+        const role = String(u.role || "").toLowerCase();
+        const name = String(u.name || "").trim();
+        if (!name) return;
+        if (role.includes("processing") || role.includes("reviewer") || role.includes("admin")) {
+          names.add(name);
+        }
+      });
+    roleScopedCases.forEach((c) => {
+      const assigned = String(c.assignedTo || "").trim();
+      if (assigned) names.add(assigned);
+    });
+    const ordered = Array.from(names).filter(Boolean).sort((a, b) => {
+      if (a === "Unassigned") return -1;
+      if (b === "Unassigned") return 1;
+      return a.localeCompare(b);
+    });
+    return ordered;
+  }, [teamUsers, roleScopedCases]);
 
   useEffect(() => {
     if (!visibleTabs.length) return;
@@ -4337,7 +4360,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                         className="w-full rounded border border-slate-300 px-2 py-2 text-xs"
                       >
                         <option value="all">All assignees</option>
-                        {PROCESSING_TEAM_MEMBERS.filter((m) => m !== "Unassigned").map((member) => (
+                        {processingAssigneeOptions.filter((m) => m !== "Unassigned").map((member) => (
                           <option key={member} value={member}>
                             {member}
                           </option>
@@ -4407,7 +4430,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                               onChange={(e) => void updateCaseProcessing(c.id, { assignedTo: e.target.value })}
                               className="w-full rounded border border-slate-300 px-2 py-1 text-[11px] font-semibold"
                             >
-                              {PROCESSING_TEAM_MEMBERS.map((member) => (
+                              {processingAssigneeOptions.map((member) => (
                                 <option key={member} value={member}>
                                   {member}
                                 </option>
