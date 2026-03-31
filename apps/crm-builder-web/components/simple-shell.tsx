@@ -5257,7 +5257,10 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                       <p className="text-slate-500">Phone: {item.phone || "N/A"}</p>
                       <p className="text-slate-500">{item.resultDate} • {item.outcome}</p>
                       {item.fileLink ? (
-                        <a href={item.fileLink} download className="text-blue-700 underline">
+                        <a
+                          href={`/api/results/legacy/${encodeURIComponent(item.id)}/download`}
+                          className="text-blue-700 underline"
+                        >
                           Download uploaded result
                         </a>
                       ) : null}
@@ -5398,7 +5401,10 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                         Submitted: {item.createdAt ? new Date(item.createdAt).toLocaleString() : "-"}
                       </p>
                       {item.fileLink ? (
-                        <a href={item.fileLink} download className="text-blue-700 underline">
+                        <a
+                          href={`/api/results/legacy/${encodeURIComponent(item.id)}/download`}
+                          className="text-blue-700 underline"
+                        >
                           Download uploaded submission
                         </a>
                       ) : null}
