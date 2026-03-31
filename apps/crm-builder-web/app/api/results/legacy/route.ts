@@ -138,22 +138,17 @@ export async function POST(request: NextRequest) {
       const safe = `${Date.now()}_${sanitizeFilename(normalizedName)}`;
       fileName = safe;
       if (isS3StorageEnabled()) {
+        const objectKey = buildS3ObjectKey({
+          companyId: user.companyId,
+          caseId: "legacy-results",
+          fileName: safe
+        });
         await putObjectToS3({
-          key: buildS3ObjectKey({
-            companyId: user.companyId,
-            caseId: "legacy-results",
-            fileName: safe
-          }),
+          key: objectKey,
           content: buffer,
           contentType: uploadedMimeType
         });
-        fileLink = toS3StoredLink(
-          buildS3ObjectKey({
-            companyId: user.companyId,
-            caseId: "legacy-results",
-            fileName: safe
-          })
-        );
+        fileLink = toS3StoredLink(objectKey);
       } else {
         const dir = join(process.cwd(), "public", "uploads", "legacy-results");
         await mkdir(dir, { recursive: true });
