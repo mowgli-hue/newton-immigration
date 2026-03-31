@@ -54,7 +54,22 @@ export async function GET(
       key,
       expiresInSeconds: Number(process.env.S3_SIGNED_URL_EXPIRES || 300)
     });
-    return NextResponse.redirect(signed, { status: 302 });
+    const upstream = await fetch(signed, { cache: "no-store" });
+    if (!upstream.ok) {
+      return NextResponse.json({ error: "Could not fetch file from storage" }, { status: 502 });
+    }
+    const buffer = Buffer.from(await upstream.arrayBuffer());
+    const upstreamType =
+      String(upstream.headers.get("content-type") || "").trim() ||
+      detectContentTypeFromPath(downloadName);
+    return new NextResponse(buffer, {
+      status: 200,
+      headers: {
+        "Content-Type": upstreamType,
+        "Content-Disposition": `attachment; filename="${downloadName}"`,
+        "Cache-Control": "private, no-store"
+      }
+    });
   }
 
   if (link.startsWith("/uploads/")) {
@@ -76,9 +91,23 @@ export async function GET(
   }
 
   if (link.startsWith("http://") || link.startsWith("https://")) {
-    return NextResponse.redirect(link, { status: 302 });
+    const upstream = await fetch(link, { cache: "no-store" });
+    if (!upstream.ok) {
+      return NextResponse.json({ error: "Could not fetch file from source" }, { status: 502 });
+    }
+    const buffer = Buffer.from(await upstream.arrayBuffer());
+    const upstreamType =
+      String(upstream.headers.get("content-type") || "").trim() ||
+      detectContentTypeFromPath(downloadName);
+    return new NextResponse(buffer, {
+      status: 200,
+      headers: {
+        "Content-Type": upstreamType,
+        "Content-Disposition": `attachment; filename="${downloadName}"`,
+        "Cache-Control": "private, no-store"
+      }
+    });
   }
 
   return NextResponse.json({ error: "Unsupported document link type" }, { status: 400 });
 }
-
