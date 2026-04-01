@@ -291,6 +291,11 @@ function prettyStatus(value: string) {
     .trim();
 }
 
+function formatCurrencyValue(value: number) {
+  if (!Number.isFinite(value)) return "$0";
+  return `$${Math.max(0, value).toFixed(0)}`;
+}
+
 function caseStatusChipClass(status: string) {
   const s = String(status || "lead").toLowerCase();
   if (s === "submitted") return "border-emerald-300 bg-emerald-50 text-emerald-800";
@@ -560,6 +565,10 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [inviteShareStatus, setInviteShareStatus] = useState("");
   const [clientUpdateText, setClientUpdateText] = useState("");
   const [clientUpdateStatus, setClientUpdateStatus] = useState("");
+  const [clientUpdateChannel, setClientUpdateChannel] = useState<"whatsapp" | "email" | "sms" | "copy">("whatsapp");
+  const [outboundFilterChannel, setOutboundFilterChannel] = useState<"all" | "email" | "whatsapp" | "sms" | "link" | "copy">("all");
+  const [outboundFilterStatus, setOutboundFilterStatus] = useState<"all" | "queued" | "opened_app" | "sent" | "failed">("all");
+  const [outboundSearch, setOutboundSearch] = useState("");
   const [paymentLinkStatus, setPaymentLinkStatus] = useState("");
   const [leadSheetCsvUrl, setLeadSheetCsvUrl] = useState(
     process.env.NEXT_PUBLIC_LEADS_SHEET_CSV_URL || ""
@@ -1092,6 +1101,17 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     return sorted[0]?.name || "Unassigned";
   }, [assigneeWorkloadRows]);
 
+  const filteredOutboundMessages = useMemo(() => {
+    return outboundMessages.filter((item) => {
+      if (outboundFilterChannel !== "all" && item.channel !== outboundFilterChannel) return false;
+      if (outboundFilterStatus !== "all" && item.status !== outboundFilterStatus) return false;
+      const q = outboundSearch.trim().toLowerCase();
+      if (!q) return true;
+      const hay = `${item.channel} ${item.status} ${item.target || ""} ${item.message || ""} ${item.createdByName || ""}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }, [outboundMessages, outboundFilterChannel, outboundFilterStatus, outboundSearch]);
+
   useEffect(() => {
     if (!visibleTabs.length) return;
     if (!visibleTabs.some((t) => t.id === screen)) {
@@ -1194,6 +1214,9 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     }
     setInviteEmail(String(selectedCase.leadEmail || ""));
     setInvitePhone(String(selectedCase.leadPhone || ""));
+    setOutboundFilterChannel("all");
+    setOutboundFilterStatus("all");
+    setOutboundSearch("");
     setClientUpdateText("");
     void loadLatestInviteForCase(selectedCase.id);
   }, [selectedCase?.id, sessionUser?.userType]);
@@ -2208,6 +2231,52 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     ].join("\n");
   }
 
+  function buildDocsReminderMessage(caseItem: CaseItem) {
+    return [
+      `Hi ${caseItem.client},`,
+      "",
+      `Quick reminder from Newton Immigration for ${caseItem.formType} (${caseItem.id}).`,
+      "Please complete your pending questionnaire and upload all required documents in your portal.",
+      inviteUrl ? `Portal link: ${inviteUrl}` : "Use your secure portal link shared with you.",
+      "",
+      "If you need help, reply here and our team will assist you.",
+      "",
+      "Newton Immigration Team"
+    ].join("\n");
+  }
+
+  function buildPaymentReminderMessage(caseItem: CaseItem) {
+    const total = Number(caseItem.totalCharges || caseItem.servicePackage?.retainerAmount || 0);
+    const paid = Number(caseItem.amountPaid || 0);
+    const pending = Math.max(0, total - paid);
+    return [
+      `Hi ${caseItem.client},`,
+      "",
+      `Payment reminder for case ${caseItem.id} (${caseItem.formType}).`,
+      `Total service fee: ${formatCurrencyValue(total)} CAD`,
+      `Received: ${formatCurrencyValue(paid)} CAD`,
+      `Pending: ${formatCurrencyValue(pending)} CAD`,
+      "",
+      `Interac recipient: ${fixedInteracRecipient}`,
+      "Please include your case number in transfer message.",
+      "",
+      "Newton Immigration Team"
+    ].join("\n");
+  }
+
+  function buildGeneralFollowupMessage(caseItem: CaseItem) {
+    return [
+      `Hi ${caseItem.client},`,
+      "",
+      `This is a follow-up update for your case ${caseItem.id} (${caseItem.formType}).`,
+      "Our team is actively working on your file. We will keep updating you in this portal.",
+      "",
+      "If you need support, reply with your question and we will help.",
+      "",
+      "Newton Immigration Team"
+    ].join("\n");
+  }
+
   async function shareInvite(channel: "copy" | "email" | "whatsapp" | "sms") {
     const caseItem = selectedCase;
     if (!caseItem || !inviteUrl) {
@@ -2326,6 +2395,26 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     }
     setClientUpdateText(buildInviteMessage(selectedCase, inviteUrl));
     setClientUpdateStatus("Default update message inserted.");
+  }
+
+  function insertTemplateMessage(type: "invite" | "docs" | "payment" | "followup") {
+    if (!selectedCase) return;
+    if (type === "invite") {
+      insertDefaultClientUpdateMessage();
+      return;
+    }
+    if (type === "docs") {
+      setClientUpdateText(buildDocsReminderMessage(selectedCase));
+      setClientUpdateStatus("Document reminder template inserted.");
+      return;
+    }
+    if (type === "payment") {
+      setClientUpdateText(buildPaymentReminderMessage(selectedCase));
+      setClientUpdateStatus("Payment reminder template inserted.");
+      return;
+    }
+    setClientUpdateText(buildGeneralFollowupMessage(selectedCase));
+    setClientUpdateStatus("Follow-up template inserted.");
   }
 
   async function sendClientUpdate(channel: "copy" | "email" | "whatsapp" | "sms") {
@@ -5261,10 +5350,28 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                               </a>
                             ) : null}
                             <button
-                              onClick={insertDefaultClientUpdateMessage}
+                              onClick={() => insertTemplateMessage("invite")}
                               className="rounded border border-slate-300 px-3 py-2 font-semibold"
                             >
-                              Insert Default Message
+                              Template: Portal Link
+                            </button>
+                            <button
+                              onClick={() => insertTemplateMessage("docs")}
+                              className="rounded border border-slate-300 px-3 py-2 font-semibold"
+                            >
+                              Template: Docs Reminder
+                            </button>
+                            <button
+                              onClick={() => insertTemplateMessage("payment")}
+                              className="rounded border border-slate-300 px-3 py-2 font-semibold"
+                            >
+                              Template: Payment Reminder
+                            </button>
+                            <button
+                              onClick={() => insertTemplateMessage("followup")}
+                              className="rounded border border-slate-300 px-3 py-2 font-semibold"
+                            >
+                              Template: Follow-up
                             </button>
                           </div>
                           <textarea
@@ -5274,18 +5381,24 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                             className="mt-2 w-full rounded border border-slate-300 px-2 py-2"
                             placeholder="Write update message for client..."
                           />
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            <button onClick={() => void sendClientUpdate("whatsapp")} className="rounded border border-slate-300 px-2 py-1 font-semibold">
-                              Send WhatsApp
-                            </button>
-                            <button onClick={() => void sendClientUpdate("email")} className="rounded border border-slate-300 px-2 py-1 font-semibold">
-                              Send Email
-                            </button>
-                            <button onClick={() => void sendClientUpdate("sms")} className="rounded border border-slate-300 px-2 py-1 font-semibold">
-                              Send SMS
-                            </button>
-                            <button onClick={() => void sendClientUpdate("copy")} className="rounded border border-slate-300 px-2 py-1 font-semibold">
-                              Copy Message
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <select
+                              value={clientUpdateChannel}
+                              onChange={(e) =>
+                                setClientUpdateChannel(e.target.value as "whatsapp" | "email" | "sms" | "copy")
+                              }
+                              className="rounded border border-slate-300 px-2 py-1"
+                            >
+                              <option value="whatsapp">WhatsApp</option>
+                              <option value="email">Email</option>
+                              <option value="sms">SMS</option>
+                              <option value="copy">Copy only</option>
+                            </select>
+                            <button
+                              onClick={() => void sendClientUpdate(clientUpdateChannel)}
+                              className="rounded bg-slate-900 px-3 py-1.5 font-semibold text-white"
+                            >
+                              Send Update
                             </button>
                           </div>
                           {inviteStatus ? <p className="mt-1 text-slate-700">{inviteStatus}</p> : null}
@@ -5294,8 +5407,47 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                         </div>
                         <div className="mb-3 rounded border border-slate-200 p-2 text-xs">
                           <p className="font-semibold">Sent Link History</p>
+                          <div className="mt-2 grid gap-2 md:grid-cols-3">
+                            <select
+                              value={outboundFilterChannel}
+                              onChange={(e) =>
+                                setOutboundFilterChannel(
+                                  e.target.value as "all" | "email" | "whatsapp" | "sms" | "link" | "copy"
+                                )
+                              }
+                              className="rounded border border-slate-300 px-2 py-1"
+                            >
+                              <option value="all">All channels</option>
+                              <option value="whatsapp">WhatsApp</option>
+                              <option value="email">Email</option>
+                              <option value="sms">SMS</option>
+                              <option value="link">Link</option>
+                              <option value="copy">Copy</option>
+                            </select>
+                            <select
+                              value={outboundFilterStatus}
+                              onChange={(e) =>
+                                setOutboundFilterStatus(
+                                  e.target.value as "all" | "queued" | "opened_app" | "sent" | "failed"
+                                )
+                              }
+                              className="rounded border border-slate-300 px-2 py-1"
+                            >
+                              <option value="all">All statuses</option>
+                              <option value="sent">Sent</option>
+                              <option value="queued">Queued</option>
+                              <option value="opened_app">Opened app</option>
+                              <option value="failed">Failed</option>
+                            </select>
+                            <input
+                              value={outboundSearch}
+                              onChange={(e) => setOutboundSearch(e.target.value)}
+                              placeholder="Search target or message"
+                              className="rounded border border-slate-300 px-2 py-1"
+                            />
+                          </div>
                           <div className="mt-2 max-h-40 space-y-2 overflow-auto">
-                            {outboundMessages.map((o) => (
+                            {filteredOutboundMessages.map((o) => (
                               <div key={o.id} className="rounded border border-slate-200 p-2">
                                 <p className="font-semibold">
                                   {o.channel.toUpperCase()} • {o.status}
@@ -5306,7 +5458,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                                 {o.target ? <p className="text-slate-600">To: {o.target}</p> : null}
                               </div>
                             ))}
-                            {outboundMessages.length === 0 ? (
+                            {filteredOutboundMessages.length === 0 ? (
                               <p className="text-slate-500">No sent link records yet.</p>
                             ) : null}
                           </div>
