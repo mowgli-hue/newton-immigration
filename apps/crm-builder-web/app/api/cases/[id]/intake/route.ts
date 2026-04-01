@@ -18,6 +18,7 @@ import { buildCaseFolderNameWithApp, createCaseDriveStructure, extractDriveFolde
 import { resolveCaseDriveRootLink, updateCaseLinks } from "@/lib/store";
 import { buildSimpleTextPdf } from "@/lib/simple-pdf";
 import { getDataDir } from "@/lib/storage-paths";
+import { runAiIntakeCheckAndCreateTasks } from "@/lib/ai-intake-automation";
 
 const INTAKE_FIELDS: Array<keyof PgwpIntakeData> = [
   "fullName",
@@ -336,12 +337,21 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 
   const latest = await getCase(user.companyId, params.id);
+  const autoIntake = await runAiIntakeCheckAndCreateTasks({
+    companyId: user.companyId,
+    caseId: params.id,
+    actorUserId: user.id,
+    actorName: user.name,
+    maxTasks: Number(process.env.AI_INTAKE_AUTO_TASKS_MAX || 8),
+    auditAction: "case.ai.intake_check.auto_from_intake"
+  }).catch(() => null);
   return NextResponse.json({
     intake: latest?.pgwpIntake ?? {},
     case: latest ?? synced,
     automation,
     drive,
     intakePdf,
-    intakePdfError
+    intakePdfError,
+    autoIntakeCheck: autoIntake
   });
 }

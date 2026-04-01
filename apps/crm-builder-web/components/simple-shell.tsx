@@ -459,6 +459,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [commPaymentStatus, setCommPaymentStatus] = useState("");
   const [commPruneCaseIds, setCommPruneCaseIds] = useState("CASE-1006, CASE-1007");
   const [commPruneStatus, setCommPruneStatus] = useState("");
+  const [commAutoSendInvite, setCommAutoSendInvite] = useState(true);
   const [caseActionStatus, setCaseActionStatus] = useState("");
   const [diagnosticsStatus, setDiagnosticsStatus] = useState("");
   const [diagnosticsReport, setDiagnosticsReport] = useState<DiagnosticsReport | null>(null);
@@ -1213,6 +1214,51 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     setCases([]);
   }
 
+  async function createInviteForCase(caseId: string, email?: string) {
+    const res = await apiFetch(`/cases/${caseId}/invite`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: String(email || "").trim() || undefined })
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { ok: false as const, error: String(payload.error || "Could not create invite.") };
+    }
+    return {
+      ok: true as const,
+      url: clientAccessLinkFromPayload(payload)
+    };
+  }
+
+  async function tryServerDispatchForCase(
+    caseId: string,
+    channel: "email" | "whatsapp" | "sms",
+    target: string,
+    message: string
+  ): Promise<"sent" | "provider_missing" | "failed" | "not_applicable"> {
+    const trimmedTarget = String(target || "").trim();
+    if (!trimmedTarget) return "not_applicable";
+    const res = await apiFetch(`/cases/${caseId}/dispatch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        channel,
+        target: trimmedTarget,
+        message
+      })
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) return "failed";
+    const status = String(payload?.result?.status || "");
+    const log = payload?.log as OutboundMessageItem | undefined;
+    if (log && selectedCaseId === caseId) {
+      setOutboundMessages((prev) => [log, ...prev]);
+    }
+    if (status === "sent") return "sent";
+    if (status === "provider_missing") return "provider_missing";
+    return "failed";
+  }
+
   async function createCaseFromCommunications() {
     const effectiveFormType =
       commFormType === "Other" ? commFormTypeOther.trim() : commFormType.trim();
@@ -1293,11 +1339,48 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     setSetupFormType(created.formType || effectiveFormType);
     const driveLinked = Boolean(payload?.drive?.linked);
     const driveReason = String(payload?.drive?.reason || "");
+    let inviteOutcome = "";
+    if (commAutoSendInvite) {
+      const inviteCreated = await createInviteForCase(created.id, String(created.leadEmail || commEmail).trim() || undefined);
+      if (!inviteCreated.ok) {
+        inviteOutcome = ` Invite auto-send skipped: ${inviteCreated.error}`;
+      } else {
+        const inviteLink = inviteCreated.url;
+        setInviteUrl(inviteLink);
+        const message = buildInviteMessage(created, inviteLink);
+        const leadEmail = String(created.leadEmail || commEmail || "").trim();
+        const leadPhone = String(created.leadPhone || commPhone || "").trim();
+        const waPhone = normalizePhoneForWa(leadPhone);
+
+        let sent = false;
+        if (waPhone) {
+          const waStatus = await tryServerDispatchForCase(created.id, "whatsapp", waPhone, message);
+          if (waStatus === "sent") {
+            inviteOutcome = " Invite auto-sent on WhatsApp.";
+            sent = true;
+          } else if (waStatus === "provider_missing") {
+            inviteOutcome = " Invite created (WhatsApp provider missing).";
+          }
+        }
+        if (!sent && leadEmail) {
+          const emailStatus = await tryServerDispatchForCase(created.id, "email", leadEmail, message);
+          if (emailStatus === "sent") {
+            inviteOutcome = " Invite auto-sent by email.";
+            sent = true;
+          } else if (!inviteOutcome && emailStatus === "provider_missing") {
+            inviteOutcome = " Invite created (email provider missing).";
+          }
+        }
+        if (!sent && !inviteOutcome) {
+          inviteOutcome = " Invite created. No delivery target/provider available.";
+        }
+      }
+    }
     if (driveLinked) {
-      setCommCreateStatus(`Case created: ${created.id}. Drive folder linked. Now create invite link below.`);
+      setCommCreateStatus(`Case created: ${created.id}. Drive folder linked.${inviteOutcome}`);
     } else {
       setCommCreateStatus(
-        `Case created: ${created.id}. Drive link pending (${driveReason || "not configured"}). Please check Company Branding Drive root.`
+        `Case created: ${created.id}. Drive link pending (${driveReason || "not configured"}).${inviteOutcome} Please check Company Branding Drive root.`
       );
     }
     setCommClientName("");
@@ -5214,6 +5297,14 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                         className="w-36 rounded border border-slate-300 px-2 py-2 text-xs"
                       />
                     ) : null}
+                    <label className="inline-flex items-center gap-2 text-xs text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={commAutoSendInvite}
+                        onChange={(e) => setCommAutoSendInvite(e.target.checked)}
+                      />
+                      Auto-create and auto-send client portal link
+                    </label>
                   </div>
                   <button onClick={() => void createCaseFromCommunications()} className="mt-2 rounded bg-slate-900 px-3 py-2 text-xs font-semibold text-white">
                     Create Case

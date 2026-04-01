@@ -32,10 +32,17 @@ import {
   putObjectToS3,
   toS3StoredLink
 } from "@/lib/object-storage";
+import { runAiIntakeCheckAndCreateTasks } from "@/lib/ai-intake-automation";
 
 function sanitizeFilename(name: string): string {
   const cleaned = name.replace(/[^a-zA-Z0-9._-]/g, "_");
   return cleaned.slice(0, 120) || "document.bin";
+}
+
+function isPdfFile(file: File): boolean {
+  const mime = String(file.type || "").toLowerCase();
+  const name = String(file.name || "").toLowerCase();
+  return mime === "application/pdf" || name.endsWith(".pdf");
 }
 
 async function ensureCaseDriveFolders(companyId: string, caseId: string) {
@@ -158,6 +165,12 @@ export async function POST(
     }
     if (maybeFile.size > 25 * 1024 * 1024) {
       return NextResponse.json({ error: "File too large (max 25MB)." }, { status: 400 });
+    }
+    if ((driveFolderType === "submission" || driveFolderType === "results") && !isPdfFile(maybeFile)) {
+      return NextResponse.json(
+        { error: "Only PDF files are allowed for submission/results uploads." },
+        { status: 400 }
+      );
     }
 
     const buffer = Buffer.from(await maybeFile.arrayBuffer());
@@ -308,7 +321,16 @@ export async function POST(
       }
     }
 
-    return NextResponse.json({ document: doc, driveUpload, readyPackagePath, automation, drive }, { status: 201 });
+    const autoIntake = await runAiIntakeCheckAndCreateTasks({
+      companyId: user.companyId,
+      caseId: params.id,
+      actorUserId: user.id,
+      actorName: user.name,
+      maxTasks: Number(process.env.AI_INTAKE_AUTO_TASKS_MAX || 8),
+      auditAction: "case.ai.intake_check.auto_from_document"
+    }).catch(() => null);
+
+    return NextResponse.json({ document: doc, driveUpload, readyPackagePath, automation, drive, autoIntakeCheck: autoIntake }, { status: 201 });
   }
 
   const body = await request.json().catch(() => ({}));
@@ -390,5 +412,14 @@ export async function POST(
     }
   }
 
-  return NextResponse.json({ document: doc, readyPackagePath, automation, drive }, { status: 201 });
+  const autoIntake = await runAiIntakeCheckAndCreateTasks({
+    companyId: user.companyId,
+    caseId: params.id,
+    actorUserId: user.id,
+    actorName: user.name,
+    maxTasks: Number(process.env.AI_INTAKE_AUTO_TASKS_MAX || 8),
+    auditAction: "case.ai.intake_check.auto_from_document"
+  }).catch(() => null);
+
+  return NextResponse.json({ document: doc, readyPackagePath, automation, drive, autoIntakeCheck: autoIntake }, { status: 201 });
 }
