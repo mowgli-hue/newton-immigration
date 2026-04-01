@@ -189,6 +189,14 @@ type PgwpDraft = {
   representativeLetterDraft: string;
 };
 
+type IntakeCheckSummary = {
+  questionnaireComplete: boolean;
+  missingIntakeItems: Array<{ key: string; label: string }>;
+  missingRequiredDocs: string[];
+  riskFlags: string[];
+  recommendedTaskTitles: string[];
+};
+
 type RequiredDocItem = {
   key: string;
   label: string;
@@ -492,6 +500,8 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [clientMessageStatus, setClientMessageStatus] = useState("");
   const [aiDraft, setAiDraft] = useState<PgwpDraft | null>(null);
   const [aiDraftStatus, setAiDraftStatus] = useState("");
+  const [intakeCheckStatus, setIntakeCheckStatus] = useState("");
+  const [intakeCheckSummary, setIntakeCheckSummary] = useState<IntakeCheckSummary | null>(null);
   const [readyPackageStatus, setReadyPackageStatus] = useState("");
   const [readyPackagePath, setReadyPackagePath] = useState("");
   const [immRunStatus, setImmRunStatus] = useState("");
@@ -2790,6 +2800,31 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     setAiDraftStatus("AI draft generated.");
   }
 
+  async function runAiIntakeCheck(createTasks = true) {
+    if (!selectedCase) return;
+    setIntakeCheckStatus("Running AI intake check...");
+    const res = await apiFetch(`/cases/${selectedCase.id}/intake-check`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ createTasks, maxTasks: 10 })
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setIntakeCheckStatus(String(payload.error || "Could not run AI intake check."));
+      return;
+    }
+    setIntakeCheckSummary((payload.check || null) as IntakeCheckSummary | null);
+    const createdTasks = Number(payload.createdTasks || 0);
+    if (createTasks) {
+      setIntakeCheckStatus(
+        `AI intake check complete. ${createdTasks} new missing-item task(s) created.`
+      );
+      await refreshTasks(selectedCase.id);
+    } else {
+      setIntakeCheckStatus("AI intake check complete.");
+    }
+  }
+
   async function generateReadyPackageForCase() {
     if (!selectedCase) return;
     setReadyPackageStatus("Generating ready package...");
@@ -4740,6 +4775,44 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                               <a href={selectedCase.docsUploadLink} target="_blank" className="rounded border border-slate-300 px-3 py-2 text-xs font-semibold text-blue-700 underline">
                                 Open Documents Folder
                               </a>
+                            ) : null}
+                          </div>
+                          <div className="mt-3 rounded border border-slate-200 bg-slate-50 p-2">
+                            <p className="font-semibold text-slate-700">AI Intake Checker</p>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              <button
+                                onClick={() => void runAiIntakeCheck(true)}
+                                className="rounded bg-slate-900 px-3 py-2 text-xs font-semibold text-white"
+                              >
+                                Run Check + Create Missing Tasks
+                              </button>
+                              <button
+                                onClick={() => void runAiIntakeCheck(false)}
+                                className="rounded border border-slate-300 px-3 py-2 text-xs font-semibold"
+                              >
+                                Run Check Only
+                              </button>
+                            </div>
+                            {intakeCheckStatus ? (
+                              <p className="mt-2 text-xs text-slate-700">{intakeCheckStatus}</p>
+                            ) : null}
+                            {intakeCheckSummary ? (
+                              <div className="mt-2 grid gap-2 md:grid-cols-3 text-xs">
+                                <div className="rounded border border-slate-200 bg-white p-2">
+                                  <p className="text-slate-500">Questionnaire</p>
+                                  <p className="font-semibold">
+                                    {intakeCheckSummary.questionnaireComplete ? "Complete" : "Incomplete"}
+                                  </p>
+                                </div>
+                                <div className="rounded border border-slate-200 bg-white p-2">
+                                  <p className="text-slate-500">Missing Intake</p>
+                                  <p className="font-semibold">{intakeCheckSummary.missingIntakeItems.length}</p>
+                                </div>
+                                <div className="rounded border border-slate-200 bg-white p-2">
+                                  <p className="text-slate-500">Missing Required Docs</p>
+                                  <p className="font-semibold">{intakeCheckSummary.missingRequiredDocs.length}</p>
+                                </div>
+                              </div>
                             ) : null}
                           </div>
                           {selectedCase.updatedAt ? (
