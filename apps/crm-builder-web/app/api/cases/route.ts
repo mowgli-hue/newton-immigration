@@ -69,6 +69,8 @@ export async function POST(request: NextRequest) {
   const familyMembers = body?.familyMembers !== undefined ? boundedText(body.familyMembers, 600) : undefined;
   const familyTotalCharges =
     body?.familyTotalCharges !== undefined ? Number(body.familyTotalCharges) : undefined;
+  const assignedTo =
+    body?.assignedTo !== undefined ? boundedText(body.assignedTo, 120) || undefined : undefined;
   const irccFeePayer =
     irccFeePayerRaw === "sir_card" || irccFeePayerRaw === "client_card"
       ? (irccFeePayerRaw as "sir_card" | "client_card")
@@ -120,7 +122,8 @@ export async function POST(request: NextRequest) {
     irccFees,
     irccFeePayer,
     familyMembers,
-    familyTotalCharges
+    familyTotalCharges,
+    assignedTo
   });
   await addAuditLog({
     companyId: user.companyId,

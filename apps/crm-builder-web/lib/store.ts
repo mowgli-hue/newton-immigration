@@ -774,6 +774,7 @@ export async function createCase(input: {
   formType: string;
   leadPhone?: string;
   leadEmail?: string;
+  assignedTo?: string;
   additionalNotes?: string;
   sourceLeadKey?: string;
   isUrgent?: boolean;
@@ -864,7 +865,7 @@ export async function createCase(input: {
     leadEmail: input.leadEmail?.trim() || undefined,
     sourceLeadKey: input.sourceLeadKey?.trim() || undefined,
     formType: input.formType,
-    assignedTo: "Unassigned",
+    assignedTo: String(input.assignedTo || "Unassigned").trim() || "Unassigned",
     processingStatus: "docs_pending",
     processingStatusOther: undefined,
     isUrgent: Boolean(input.isUrgent),
@@ -908,6 +909,16 @@ export async function createCase(input: {
     },
     invoices: []
   };
+  if (client) {
+    const clientIdx = store.clients.findIndex((c) => c.id === client?.id);
+    if (clientIdx !== -1 && item.assignedTo && item.assignedTo !== "Unassigned") {
+      store.clients[clientIdx] = {
+        ...store.clients[clientIdx],
+        assignedTo: item.assignedTo,
+        updatedAt: new Date().toISOString()
+      };
+    }
+  }
   store.cases = [item, ...store.cases];
   await writeStore(store);
   return item;

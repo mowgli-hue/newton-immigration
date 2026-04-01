@@ -482,6 +482,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [commFamilyTotalCharges, setCommFamilyTotalCharges] = useState("");
   const [commAdditionalNotes, setCommAdditionalNotes] = useState("");
   const [commCreateStatus, setCommCreateStatus] = useState("");
+  const [commAssignedTo, setCommAssignedTo] = useState("Unassigned");
   const [commUrgent, setCommUrgent] = useState(false);
   const [commUrgentDays, setCommUrgentDays] = useState("5");
   const [commPermitExpiryDate, setCommPermitExpiryDate] = useState("");
@@ -1051,12 +1052,58 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     return ordered;
   }, [teamUsers, roleScopedCases]);
 
+  const effectiveCommFormType = useMemo(
+    () => (commFormType === "Other" ? commFormTypeOther.trim() : commFormType.trim()),
+    [commFormType, commFormTypeOther]
+  );
+
+  const assigneeWorkloadRows = useMemo(() => {
+    const now = Date.now();
+    const activeAssignees = processingAssigneeOptions.filter((name) => name && name !== "Unassigned");
+    return activeAssignees.map((name) => {
+      const lower = name.toLowerCase();
+      const owned = roleScopedCases.filter(
+        (c) => String(c.assignedTo || "").trim().toLowerCase() === lower
+      );
+      const openCases = owned.filter((c) => String(c.processingStatus || "docs_pending") !== "submitted");
+      const urgentCount = openCases.filter((c) => Boolean((c as CaseItem & { isUrgent?: boolean }).isUrgent)).length;
+      const dueSoonCount = openCases.filter((c) => {
+        const deadline = c.deadlineDate ? new Date(c.deadlineDate).getTime() : NaN;
+        return Number.isFinite(deadline) && deadline >= now && deadline - now <= 3 * 24 * 60 * 60 * 1000;
+      }).length;
+      const sameTypeCount = openCases.filter(
+        (c) => String(c.formType || "").trim().toLowerCase() === String(effectiveCommFormType || "").toLowerCase()
+      ).length;
+      const score = openCases.length + urgentCount * 2 + dueSoonCount - Math.min(3, sameTypeCount) * 0.5;
+      return {
+        name,
+        openCases: openCases.length,
+        urgentCount,
+        dueSoonCount,
+        sameTypeCount,
+        score
+      };
+    });
+  }, [processingAssigneeOptions, roleScopedCases, effectiveCommFormType]);
+
+  const suggestedAssignee = useMemo(() => {
+    if (!assigneeWorkloadRows.length) return "Unassigned";
+    const sorted = [...assigneeWorkloadRows].sort((a, b) => a.score - b.score || a.name.localeCompare(b.name));
+    return sorted[0]?.name || "Unassigned";
+  }, [assigneeWorkloadRows]);
+
   useEffect(() => {
     if (!visibleTabs.length) return;
     if (!visibleTabs.some((t) => t.id === screen)) {
       setScreen(visibleTabs[0].id);
     }
   }, [screen, visibleTabs]);
+
+  useEffect(() => {
+    if (!commAssignedTo || commAssignedTo === "Unassigned") {
+      setCommAssignedTo(suggestedAssignee || "Unassigned");
+    }
+  }, [suggestedAssignee]);
 
   async function loadCaseDetail(caseId: string) {
     const [msgRes, docRes, reqRes, outRes] = await Promise.all([
@@ -1356,6 +1403,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
             ? normalizedAdditionalApplicants.join(", ")
             : undefined,
         familyTotalCharges,
+        assignedTo: commAssignedTo && commAssignedTo !== "Unassigned" ? commAssignedTo : undefined,
         additionalNotes: commAdditionalNotes.trim() || undefined,
         isUrgent: commUrgent,
         dueInDays: commUrgent ? Number(commUrgentDays || 0) : undefined,
@@ -1413,10 +1461,10 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       }
     }
     if (driveLinked) {
-      setCommCreateStatus(`Case created: ${created.id}. Drive folder linked.${inviteOutcome}`);
+      setCommCreateStatus(`Case created: ${created.id}.${created.assignedTo && created.assignedTo !== "Unassigned" ? ` Assigned to ${created.assignedTo}.` : ""} Drive folder linked.${inviteOutcome}`);
     } else {
       setCommCreateStatus(
-        `Case created: ${created.id}. Drive link pending (${driveReason || "not configured"}).${inviteOutcome} Please check Company Branding Drive root.`
+        `Case created: ${created.id}.${created.assignedTo && created.assignedTo !== "Unassigned" ? ` Assigned to ${created.assignedTo}.` : ""} Drive link pending (${driveReason || "not configured"}).${inviteOutcome} Please check Company Branding Drive root.`
       );
     }
     setCommClientName("");
@@ -1430,6 +1478,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     setCommFamilyTotalCharges("");
     setCommAdditionalNotes("");
     setCommFormTypeOther("");
+    setCommAssignedTo("Unassigned");
     setCommUrgent(false);
     setCommUrgentDays("5");
     setCommPermitExpiryDate("");
@@ -5440,7 +5489,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                 <article className="rounded-lg border-2 border-slate-300 p-3">
                   <p className="text-sm font-semibold">Create Case</p>
                   <p className="mt-1 text-xs text-slate-500">Create a new client case before generating invite/payment link.</p>
-                  <div className="mt-2 grid gap-2 md:grid-cols-7">
+                  <div className="mt-2 grid gap-2 md:grid-cols-8">
                     <input
                       value={commClientName}
                       onChange={(e) => setCommClientName(e.target.value)}
@@ -5478,6 +5527,20 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                       placeholder="Email address"
                       className="rounded border border-slate-300 px-2 py-2 text-xs"
                     />
+                    <select
+                      value={commAssignedTo}
+                      onChange={(e) => setCommAssignedTo(e.target.value)}
+                      className="rounded border border-slate-300 px-2 py-2 text-xs"
+                    >
+                      <option value="Unassigned">Assigned to (optional)</option>
+                      {processingAssigneeOptions
+                        .filter((a) => a && a !== "Unassigned")
+                        .map((a) => (
+                          <option key={`comm-assign-${a}`} value={a}>
+                            {a}
+                          </option>
+                        ))}
+                    </select>
                     <input
                       type="date"
                       value={commPermitExpiryDate}
@@ -5511,6 +5574,39 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                       <option value="sir_card">IRCC fees by Sir card</option>
                       <option value="client_card">IRCC fees by Client card</option>
                     </select>
+                  </div>
+                  <div className="mt-2 rounded border border-slate-200 bg-slate-50 p-2">
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      <p className="font-semibold text-slate-700">
+                        Auto-assign suggestion:
+                        <span className="ml-1 rounded border border-slate-300 bg-white px-2 py-0.5">
+                          {suggestedAssignee || "Unassigned"}
+                        </span>
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setCommAssignedTo(suggestedAssignee || "Unassigned")}
+                        className="rounded border border-slate-300 bg-white px-2 py-1 font-semibold"
+                      >
+                        Apply Suggestion
+                      </button>
+                    </div>
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Suggestion is based on open workload, urgent cases, near deadlines, and current application type mix.
+                    </p>
+                    <div className="mt-2 max-h-24 overflow-auto">
+                      {assigneeWorkloadRows.slice(0, 6).map((row) => (
+                        <div key={`wl-${row.name}`} className="flex items-center justify-between border-b border-slate-200 py-1 text-[11px]">
+                          <span className="font-semibold">{row.name}</span>
+                          <span className="text-slate-600">
+                            score {row.score.toFixed(1)} • open {row.openCases} • urgent {row.urgentCount} • due soon {row.dueSoonCount}
+                          </span>
+                        </div>
+                      ))}
+                      {assigneeWorkloadRows.length === 0 ? (
+                        <p className="text-[11px] text-slate-500">No active assignees found yet.</p>
+                      ) : null}
+                    </div>
                   </div>
                   <textarea
                     value={commAdditionalNotes}
