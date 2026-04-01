@@ -285,6 +285,37 @@ const PROCESSING_STATUS_OPTIONS: Array<{ value: "docs_pending" | "under_review" 
   { value: "other", label: "Other" }
 ];
 
+function prettyStatus(value: string) {
+  return String(value || "")
+    .replace(/_/g, " ")
+    .trim();
+}
+
+function caseStatusChipClass(status: string) {
+  const s = String(status || "lead").toLowerCase();
+  if (s === "submitted") return "border-emerald-300 bg-emerald-50 text-emerald-800";
+  if (s === "under_review") return "border-amber-300 bg-amber-50 text-amber-800";
+  if (s === "ready") return "border-blue-300 bg-blue-50 text-blue-800";
+  if (s === "active") return "border-sky-300 bg-sky-50 text-sky-800";
+  return "border-slate-300 bg-slate-50 text-slate-700";
+}
+
+function processingStatusChipClass(status: string) {
+  const s = String(status || "docs_pending").toLowerCase();
+  if (s === "submitted") return "border-emerald-300 bg-emerald-50 text-emerald-800";
+  if (s === "under_review") return "border-amber-300 bg-amber-50 text-amber-800";
+  if (s === "other") return "border-violet-300 bg-violet-50 text-violet-800";
+  return "border-orange-300 bg-orange-50 text-orange-800";
+}
+
+function aiStatusChipClass(status: string) {
+  const s = String(status || "idle").toLowerCase();
+  if (s === "completed") return "border-emerald-300 bg-emerald-50 text-emerald-800";
+  if (s === "drafting") return "border-blue-300 bg-blue-50 text-blue-800";
+  if (s === "collecting_docs" || s === "waiting_client") return "border-amber-300 bg-amber-50 text-amber-800";
+  return "border-slate-300 bg-slate-50 text-slate-700";
+}
+
 type InternalExtractionIntake = {
   passportNumber?: string;
   passportIssueDate?: string;
@@ -526,6 +557,8 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [inviteUrl, setInviteUrl] = useState("");
   const [inviteStatus, setInviteStatus] = useState("");
   const [inviteShareStatus, setInviteShareStatus] = useState("");
+  const [clientUpdateText, setClientUpdateText] = useState("");
+  const [clientUpdateStatus, setClientUpdateStatus] = useState("");
   const [paymentLinkStatus, setPaymentLinkStatus] = useState("");
   const [leadSheetCsvUrl, setLeadSheetCsvUrl] = useState(
     process.env.NEXT_PUBLIC_LEADS_SHEET_CSV_URL || ""
@@ -1106,12 +1139,15 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
 
   useEffect(() => {
     setInviteStatus("");
+    setClientUpdateStatus("");
     if (!selectedCase || sessionUser?.userType !== "staff") {
       setInviteUrl("");
+      setClientUpdateText("");
       return;
     }
     setInviteEmail(String(selectedCase.leadEmail || ""));
     setInvitePhone(String(selectedCase.leadPhone || ""));
+    setClientUpdateText("");
     void loadLatestInviteForCase(selectedCase.id);
   }, [selectedCase?.id, sessionUser?.userType]);
 
@@ -2224,6 +2260,128 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       }
     } catch {
       setInviteShareStatus("Could not open sharing app.");
+      await logOutboundCommunication({
+        channel,
+        status: "failed",
+        target: channel === "email" ? email : phone,
+        message
+      });
+    }
+  }
+
+  function insertDefaultClientUpdateMessage() {
+    if (!selectedCase) return;
+    if (!inviteUrl) {
+      setClientUpdateStatus("Create invite link first, then insert default message.");
+      return;
+    }
+    setClientUpdateText(buildInviteMessage(selectedCase, inviteUrl));
+    setClientUpdateStatus("Default update message inserted.");
+  }
+
+  async function sendClientUpdate(channel: "copy" | "email" | "whatsapp" | "sms") {
+    const caseItem = selectedCase;
+    if (!caseItem) return;
+    const message = String(clientUpdateText || "").trim();
+    if (!message) {
+      setClientUpdateStatus("Write a message first (or click Insert Default Message).");
+      return;
+    }
+    const email = inviteEmail.trim() || String(caseItem.leadEmail || "").trim();
+    const phone = invitePhone.trim() || String(caseItem.leadPhone || "").trim();
+
+    try {
+      if (channel === "copy") {
+        await navigator.clipboard.writeText(message);
+        setClientUpdateStatus("Message copied.");
+        await logOutboundCommunication({
+          channel: "copy",
+          status: "sent",
+          target: undefined,
+          message
+        });
+        return;
+      }
+
+      if (channel === "email") {
+        if (!email) {
+          setClientUpdateStatus("Client email is missing.");
+          return;
+        }
+        const dispatchStatus = await tryServerDispatch("email", email, message);
+        if (dispatchStatus === "sent") {
+          setClientUpdateStatus("Email sent from server.");
+          return;
+        }
+        const subject = encodeURIComponent(`Newton Immigration Update - ${caseItem.id}`);
+        const body = encodeURIComponent(message);
+        window.open(`mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`, "_blank");
+        setClientUpdateStatus(
+          dispatchStatus === "provider_missing"
+            ? "Email provider not configured. Email app opened."
+            : "Email app opened."
+        );
+        await logOutboundCommunication({
+          channel: "email",
+          status: "opened_app",
+          target: email,
+          message
+        });
+        return;
+      }
+
+      if (channel === "whatsapp") {
+        const waPhone = normalizePhoneForWa(phone);
+        if (!waPhone) {
+          setClientUpdateStatus("Client phone is missing.");
+          return;
+        }
+        const dispatchStatus = await tryServerDispatch("whatsapp", waPhone, message);
+        if (dispatchStatus === "sent") {
+          setClientUpdateStatus("WhatsApp sent from server.");
+          return;
+        }
+        const text = encodeURIComponent(message);
+        window.open(`https://wa.me/${waPhone}?text=${text}`, "_blank");
+        setClientUpdateStatus(
+          dispatchStatus === "provider_missing"
+            ? "WhatsApp provider not configured. WhatsApp app opened."
+            : "WhatsApp app opened."
+        );
+        await logOutboundCommunication({
+          channel: "whatsapp",
+          status: "opened_app",
+          target: waPhone,
+          message
+        });
+        return;
+      }
+
+      const smsPhone = phone.replace(/[^\d+]/g, "");
+      if (!smsPhone) {
+        setClientUpdateStatus("Client phone is missing.");
+        return;
+      }
+      const dispatchStatus = await tryServerDispatch("sms", smsPhone, message);
+      if (dispatchStatus === "sent") {
+        setClientUpdateStatus("SMS sent from server.");
+        return;
+      }
+      const body = encodeURIComponent(message);
+      window.open(`sms:${smsPhone}?body=${body}`, "_blank");
+      setClientUpdateStatus(
+        dispatchStatus === "provider_missing"
+          ? "SMS provider not configured. SMS app opened."
+          : "SMS app opened."
+      );
+      await logOutboundCommunication({
+        channel: "sms",
+        status: "opened_app",
+        target: smsPhone,
+        message
+      });
+    } catch {
+      setClientUpdateStatus("Could not send message.");
       await logOutboundCommunication({
         channel,
         status: "failed",
@@ -4533,6 +4691,19 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                           <div>
                             <p className="text-[11px] text-slate-500">Name</p>
                             <p className="font-semibold">{c.client}</p>
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              <span className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${caseStatusChipClass(c.caseStatus || "lead")}`}>
+                                {prettyStatus(c.caseStatus || "lead")}
+                              </span>
+                              <span className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${processingStatusChipClass(c.processingStatus || "docs_pending")}`}>
+                                {c.processingStatus === "other"
+                                  ? prettyStatus(c.processingStatusOther || "other")
+                                  : prettyStatus(c.processingStatus || "docs_pending")}
+                              </span>
+                              <span className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${aiStatusChipClass(c.aiStatus || "idle")}`}>
+                                AI: {prettyStatus(c.aiStatus || "idle")}
+                              </span>
+                            </div>
                           </div>
                           <div>
                             <p className="text-[11px] text-slate-500">Type</p>
@@ -4540,7 +4711,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                           </div>
                           <div>
                             <p className="text-[11px] text-slate-500">AI Status</p>
-                            <p className="font-semibold">{c.aiStatus || "idle"}</p>
+                            <p className="font-semibold">{prettyStatus(c.aiStatus || "idle")}</p>
                           </div>
                           <div>
                             <p className="text-[11px] text-slate-500">Assigned To</p>
@@ -4629,13 +4800,70 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
               {selectedCase ? (
                 <>
                   <div className="mt-3 rounded-lg border-2 border-slate-300 p-3">
-                    <p className="text-sm font-semibold">Case Detail</p>
+                    <div className="sticky top-2 z-10 -mx-1 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold">
+                            Case Detail - {selectedCase.id} - {selectedCase.client}
+                          </p>
+                          <p className="text-xs text-slate-500">{selectedCase.formType}</p>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          <span className={`rounded border px-2 py-1 text-[10px] font-semibold ${caseStatusChipClass(selectedCase.caseStatus || "lead")}`}>
+                            {prettyStatus(selectedCase.caseStatus || "lead")}
+                          </span>
+                          <span className={`rounded border px-2 py-1 text-[10px] font-semibold ${processingStatusChipClass(selectedCase.processingStatus || "docs_pending")}`}>
+                            {selectedCase.processingStatus === "other"
+                              ? prettyStatus(selectedCase.processingStatusOther || "other")
+                              : prettyStatus(selectedCase.processingStatus || "docs_pending")}
+                          </span>
+                          <span className={`rounded border px-2 py-1 text-[10px] font-semibold ${aiStatusChipClass(selectedCase.aiStatus || "idle")}`}>
+                            AI: {prettyStatus(selectedCase.aiStatus || "idle")}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
                     <div className="mt-2 flex flex-wrap gap-2">
                       <button onClick={() => setCaseDetailTab("overview")} className={`rounded border px-3 py-1 text-xs font-semibold ${caseDetailTab === "overview" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300"}`}>Overview</button>
                       <button onClick={() => setCaseDetailTab("profile")} className={`rounded border px-3 py-1 text-xs font-semibold ${caseDetailTab === "profile" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300"}`}>Client Profile</button>
                       <button onClick={() => setCaseDetailTab("documents")} className={`rounded border px-3 py-1 text-xs font-semibold ${caseDetailTab === "documents" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300"}`}>Documents</button>
                       <button onClick={() => setCaseDetailTab("tasks")} className={`rounded border px-3 py-1 text-xs font-semibold ${caseDetailTab === "tasks" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300"}`}>Tasks</button>
                       <button onClick={() => setCaseDetailTab("communication")} className={`rounded border px-3 py-1 text-xs font-semibold ${caseDetailTab === "communication" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300"}`}>Communication</button>
+                    </div>
+                    <div className="mt-2 rounded border border-slate-200 bg-slate-50 p-2 text-xs">
+                      <p className="font-semibold text-slate-700">Quick Actions</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <button
+                          onClick={() => void runCaseNextAction(selectedCase)}
+                          className="rounded bg-slate-900 px-3 py-2 font-semibold text-white"
+                        >
+                          {getCaseNextAction(selectedCase).label}
+                        </button>
+                        <button
+                          onClick={() => setCaseDetailTab("communication")}
+                          className="rounded border border-slate-300 px-3 py-2 font-semibold"
+                        >
+                          Send Client Update
+                        </button>
+                        <button
+                          onClick={() => setCaseDetailTab("documents")}
+                          className="rounded border border-slate-300 px-3 py-2 font-semibold"
+                        >
+                          Request Documents
+                        </button>
+                        <button
+                          onClick={() => setCaseDetailTab("tasks")}
+                          className="rounded border border-slate-300 px-3 py-2 font-semibold"
+                        >
+                          Add Task
+                        </button>
+                        <button
+                          onClick={() => void runAiIntakeCheck(true)}
+                          className="rounded border border-slate-300 px-3 py-2 font-semibold"
+                        >
+                          AI Intake Check
+                        </button>
+                      </div>
                     </div>
 
                     {caseDetailTab === "profile" ? (
@@ -4772,11 +5000,11 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                       <div className="mt-3 grid gap-2 md:grid-cols-4 text-xs">
                         <div className="rounded border border-slate-200 p-2">
                           <p className="text-slate-500">Case Status</p>
-                          <p className="font-semibold">{selectedCase.caseStatus || "lead"}</p>
+                          <p className="font-semibold">{prettyStatus(selectedCase.caseStatus || "lead")}</p>
                         </div>
                         <div className="rounded border border-slate-200 p-2">
                           <p className="text-slate-500">AI Status</p>
-                          <p className="font-semibold">{selectedCase.aiStatus || "idle"}</p>
+                          <p className="font-semibold">{prettyStatus(selectedCase.aiStatus || "idle")}</p>
                         </div>
                         <div className="rounded border border-slate-200 p-2">
                           <p className="text-slate-500">Assigned To</p>
@@ -4786,8 +5014,8 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                           <p className="text-slate-500">Processing Status</p>
                           <p className="font-semibold">
                             {selectedCase.processingStatus === "other"
-                              ? selectedCase.processingStatusOther || "other"
-                              : (selectedCase.processingStatus || "docs_pending").replace("_", " ")}
+                              ? prettyStatus(selectedCase.processingStatusOther || "other")
+                              : prettyStatus(selectedCase.processingStatus || "docs_pending")}
                           </p>
                         </div>
                         <div className="rounded border border-slate-200 p-2">
@@ -4832,21 +5060,9 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                             ) : null}
                           </div>
                           {inviteStatus ? <p className="mt-1 text-xs text-slate-700">{inviteStatus}</p> : null}
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            <button onClick={() => void shareInvite("copy")} className="rounded border border-slate-300 px-2 py-1 text-xs font-semibold">
-                              Copy Message
-                            </button>
-                            <button onClick={() => void shareInvite("email")} className="rounded border border-slate-300 px-2 py-1 text-xs font-semibold">
-                              Send Email
-                            </button>
-                            <button onClick={() => void shareInvite("whatsapp")} className="rounded border border-slate-300 px-2 py-1 text-xs font-semibold">
-                              Send WhatsApp
-                            </button>
-                            <button onClick={() => void shareInvite("sms")} className="rounded border border-slate-300 px-2 py-1 text-xs font-semibold">
-                              Send SMS
-                            </button>
-                          </div>
-                          {inviteShareStatus ? <p className="mt-1 text-xs text-slate-700">{inviteShareStatus}</p> : null}
+                          <p className="mt-2 text-xs text-slate-500">
+                            Link sharing is in Case Detail → Communication (single send panel).
+                          </p>
                           <p className="mt-2 text-slate-500">Processing Links</p>
                           <div className="mt-1 flex flex-wrap gap-2">
                             {selectedCase.questionnaireLink ? (
@@ -4962,6 +5178,71 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
 
                     {caseDetailTab === "communication" ? (
                       <div className="mt-3">
+                        <div className="mb-3 rounded border border-slate-200 bg-slate-50 p-2 text-xs">
+                          <p className="font-semibold">Send Client Update</p>
+                          <p className="mt-1 text-slate-600">One message panel for WhatsApp, email, SMS, or copy.</p>
+                          <div className="mt-2 grid gap-2 md:grid-cols-2">
+                            <input
+                              value={inviteEmail}
+                              onChange={(e) => setInviteEmail(e.target.value)}
+                              placeholder="Client email"
+                              className="rounded border border-slate-300 px-2 py-2"
+                            />
+                            <input
+                              value={invitePhone}
+                              onChange={(e) => setInvitePhone(e.target.value)}
+                              placeholder="Client phone"
+                              className="rounded border border-slate-300 px-2 py-2"
+                            />
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <button
+                              onClick={() => void createClientInvite()}
+                              className="rounded border border-slate-300 px-3 py-2 font-semibold"
+                            >
+                              Create/Refresh Invite Link
+                            </button>
+                            {inviteUrl ? (
+                              <a
+                                href={inviteUrl}
+                                target="_blank"
+                                className="rounded border border-slate-300 px-3 py-2 font-semibold text-blue-700 underline"
+                              >
+                                Open Client Link
+                              </a>
+                            ) : null}
+                            <button
+                              onClick={insertDefaultClientUpdateMessage}
+                              className="rounded border border-slate-300 px-3 py-2 font-semibold"
+                            >
+                              Insert Default Message
+                            </button>
+                          </div>
+                          <textarea
+                            value={clientUpdateText}
+                            onChange={(e) => setClientUpdateText(e.target.value)}
+                            rows={4}
+                            className="mt-2 w-full rounded border border-slate-300 px-2 py-2"
+                            placeholder="Write update message for client..."
+                          />
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <button onClick={() => void sendClientUpdate("whatsapp")} className="rounded border border-slate-300 px-2 py-1 font-semibold">
+                              Send WhatsApp
+                            </button>
+                            <button onClick={() => void sendClientUpdate("email")} className="rounded border border-slate-300 px-2 py-1 font-semibold">
+                              Send Email
+                            </button>
+                            <button onClick={() => void sendClientUpdate("sms")} className="rounded border border-slate-300 px-2 py-1 font-semibold">
+                              Send SMS
+                            </button>
+                            <button onClick={() => void sendClientUpdate("copy")} className="rounded border border-slate-300 px-2 py-1 font-semibold">
+                              Copy Message
+                            </button>
+                          </div>
+                          {inviteStatus ? <p className="mt-1 text-slate-700">{inviteStatus}</p> : null}
+                          {clientUpdateStatus ? <p className="mt-1 text-slate-700">{clientUpdateStatus}</p> : null}
+                          {inviteShareStatus ? <p className="mt-1 text-slate-700">{inviteShareStatus}</p> : null}
+                        </div>
                         <div className="mb-3 rounded border border-slate-200 p-2 text-xs">
                           <p className="font-semibold">Sent Link History</p>
                           <div className="mt-2 max-h-40 space-y-2 overflow-auto">
