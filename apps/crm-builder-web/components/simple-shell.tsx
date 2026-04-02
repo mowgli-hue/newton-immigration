@@ -872,19 +872,23 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     if (!resultApplicationNumber.trim() && !resultCaseNumberInput.trim()) return "";
     return resultLinkedCase ? "new" : "old";
   }, [resultLinkedCase, resultApplicationNumber, resultCaseNumberInput]);
-  const todayIsoDate = useMemo(() => new Date().toISOString().slice(0, 10), []);
-  const isTeamUploadedResult = (item: LegacyResultItem) =>
-    String(item.createdByUserId || "").startsWith("USR-");
+  const toLocalDateKey = (value?: string) => {
+    if (!value) return "";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return "";
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+  const todayIsoDate = useMemo(() => toLocalDateKey(new Date().toISOString()), []);
   const todaysResults = useMemo(
     () =>
-      legacyResults.filter(
-        (r) =>
-          (r.entryType || "result") === "result" &&
-          String(r.createdAt || "").slice(0, 10) === todayIsoDate &&
-          isTeamUploadedResult(r) &&
-          !r.informedToClient
-      ),
-    [legacyResults, todayIsoDate]
+      legacyResults
+        .filter((r) => (r.entryType || "result") === "result" && !r.informedToClient)
+        .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
+        .slice(0, 200),
+    [legacyResults]
   );
   const normalizeAppNumber = (value: string) =>
     String(value || "")
@@ -986,16 +990,28 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const todaysSubmissions = useMemo(
     () =>
       legacyResults
-        .filter(
-          (r) =>
-            (r.entryType || "result") === "submission" &&
-            String(r.createdAt || "").slice(0, 10) === todayIsoDate &&
-            isTeamUploadedResult(r) &&
-            !r.informedToClient
-        )
+        .filter((r) => (r.entryType || "result") === "submission" && !r.informedToClient)
         .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
-        .slice(0, 50),
-    [legacyResults, todayIsoDate]
+        .slice(0, 200),
+    [legacyResults]
+  );
+
+  const recentResults = useMemo(
+    () =>
+      legacyResults
+        .filter((r) => (r.entryType || "result") === "result")
+        .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
+        .slice(0, 25),
+    [legacyResults]
+  );
+
+  const recentSubmissions = useMemo(
+    () =>
+      legacyResults
+        .filter((r) => (r.entryType || "result") === "submission")
+        .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
+        .slice(0, 25),
+    [legacyResults]
   );
 
   const submissionSuggestedContact = useMemo(() => {
@@ -6052,8 +6068,8 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
               </div>
 
               <div className="mt-3 rounded border-2 border-amber-300 bg-amber-50 p-3 text-xs">
-                <p className="font-semibold text-amber-900">Today&apos;s Pending Results ({todaysResults.length})</p>
-                <p className="mt-1 text-amber-900">Only today uploads. Send WhatsApp, then mark informed.</p>
+                <p className="font-semibold text-amber-900">Pending Results ({todaysResults.length})</p>
+                <p className="mt-1 text-amber-900">Newest pending uploads first. Send WhatsApp, then mark informed.</p>
                 <div className="mt-2 max-h-56 space-y-2 overflow-auto rounded border border-amber-200 bg-white p-2">
                   {todaysResults.map((item) => (
                     <article key={item.id} className="rounded border border-slate-200 p-2">
@@ -6091,7 +6107,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                       </div>
                     </article>
                   ))}
-                  {todaysResults.length === 0 ? <p className="text-slate-500">No results uploaded today.</p> : null}
+                  {todaysResults.length === 0 ? <p className="text-slate-500">No pending results.</p> : null}
                 </div>
               </div>
             </section>
@@ -6215,10 +6231,8 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
               </div>
               {submissionStatus ? <p className="mt-2 text-xs text-slate-700">{submissionStatus}</p> : null}
               <div className="mt-4 rounded border-2 border-amber-300 bg-amber-50 p-3 text-xs">
-                <p className="font-semibold text-amber-900">Today&apos;s Submissions ({todaysSubmissions.length})</p>
-                <p className="mt-1 text-amber-900">
-                  Submissions uploaded today. Mark informed after sending to client.
-                </p>
+                <p className="font-semibold text-amber-900">Pending Submissions ({todaysSubmissions.length})</p>
+                <p className="mt-1 text-amber-900">Newest pending uploads first. Mark informed after sending to client.</p>
                 <div className="mt-2 max-h-56 space-y-2 overflow-auto rounded border border-amber-200 bg-white p-2">
                   {todaysSubmissions.map((item) => (
                     <article key={item.id} className="rounded border border-slate-200 p-2">
@@ -6258,7 +6272,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                       </div>
                     </article>
                   ))}
-                  {todaysSubmissions.length === 0 ? <p className="text-slate-500">No submissions marked today.</p> : null}
+                  {todaysSubmissions.length === 0 ? <p className="text-slate-500">No pending submissions.</p> : null}
                 </div>
               </div>
             </section>
