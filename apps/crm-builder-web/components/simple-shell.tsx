@@ -6110,6 +6110,34 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                   {todaysResults.length === 0 ? <p className="text-slate-500">No pending results.</p> : null}
                 </div>
               </div>
+              <div className="mt-3 rounded border border-slate-300 bg-slate-50 p-3 text-xs">
+                <p className="font-semibold text-slate-900">All Recent Result Uploads ({recentResults.length})</p>
+                <p className="mt-1 text-slate-600">Permanent history view (informed + not informed). Nothing disappears from this list.</p>
+                <div className="mt-2 max-h-56 space-y-2 overflow-auto rounded border border-slate-200 bg-white p-2">
+                  {recentResults.map((item) => (
+                    <article key={`recent-result-${item.id}`} className="rounded border border-slate-200 p-2">
+                      <p className="font-semibold">{item.clientName || "Legacy Client"}</p>
+                      <p className="text-slate-500">Application No: {item.applicationNumber || "-"}</p>
+                      <p className="text-slate-500">Phone: {item.phone || "N/A"}</p>
+                      <p className="text-slate-500">{item.resultDate || "-"} • {item.outcome || "-"}</p>
+                      {item.fileLink ? (
+                        <a
+                          href={`/api/results/legacy/${encodeURIComponent(item.id)}/download`}
+                          className="text-blue-700 underline"
+                        >
+                          Download uploaded result
+                        </a>
+                      ) : null}
+                      <p className={`mt-1 font-semibold ${item.informedToClient ? "text-emerald-700" : "text-amber-700"}`}>
+                        {item.informedToClient
+                          ? `Informed${item.informedAt ? ` on ${new Date(item.informedAt).toLocaleString()}` : ""}`
+                          : "Not informed yet"}
+                      </p>
+                    </article>
+                  ))}
+                  {recentResults.length === 0 ? <p className="text-slate-500">No result history yet.</p> : null}
+                </div>
+              </div>
             </section>
           ) : null}
 
@@ -6273,6 +6301,36 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                     </article>
                   ))}
                   {todaysSubmissions.length === 0 ? <p className="text-slate-500">No pending submissions.</p> : null}
+                </div>
+              </div>
+              <div className="mt-3 rounded border border-slate-300 bg-slate-50 p-3 text-xs">
+                <p className="font-semibold text-slate-900">All Recent Submission Uploads ({recentSubmissions.length})</p>
+                <p className="mt-1 text-slate-600">Permanent history view (informed + not informed). Nothing disappears from this list.</p>
+                <div className="mt-2 max-h-56 space-y-2 overflow-auto rounded border border-slate-200 bg-white p-2">
+                  {recentSubmissions.map((item) => (
+                    <article key={`recent-submission-${item.id}`} className="rounded border border-slate-200 p-2">
+                      <p className="font-semibold">{item.clientName || "Client"}</p>
+                      <p className="text-slate-500">Application No: {item.applicationNumber || "-"}</p>
+                      <p className="text-slate-500">Phone: {item.phone || "N/A"}</p>
+                      <p className="text-slate-500">
+                        Submitted: {item.createdAt ? new Date(item.createdAt).toLocaleString() : "-"}
+                      </p>
+                      {item.fileLink ? (
+                        <a
+                          href={`/api/results/legacy/${encodeURIComponent(item.id)}/download`}
+                          className="text-blue-700 underline"
+                        >
+                          Download uploaded submission
+                        </a>
+                      ) : null}
+                      <p className={`mt-1 font-semibold ${item.informedToClient ? "text-emerald-700" : "text-amber-700"}`}>
+                        {item.informedToClient
+                          ? `Informed${item.informedAt ? ` on ${new Date(item.informedAt).toLocaleString()}` : ""}`
+                          : "Not informed yet"}
+                      </p>
+                    </article>
+                  ))}
+                  {recentSubmissions.length === 0 ? <p className="text-slate-500">No submission history yet.</p> : null}
                 </div>
               </div>
             </section>
