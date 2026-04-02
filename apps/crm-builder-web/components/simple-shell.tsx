@@ -910,6 +910,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
         .slice(0, 200),
     [legacyResults]
   );
+  const pendingResultsQueue = useMemo(() => todaysResults.slice(0, 25), [todaysResults]);
   const normalizeAppNumber = (value: string) =>
     String(value || "")
       .toLowerCase()
@@ -1015,6 +1016,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
         .slice(0, 200),
     [legacyResults]
   );
+  const pendingSubmissionsQueue = useMemo(() => todaysSubmissions.slice(0, 25), [todaysSubmissions]);
 
   const recentResults = useMemo(
     () =>
@@ -6090,9 +6092,9 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
 
               <div className="mt-3 rounded border-2 border-amber-300 bg-amber-50 p-3 text-xs">
                 <p className="font-semibold text-amber-900">Pending Results ({todaysResults.length})</p>
-                <p className="mt-1 text-amber-900">Newest pending uploads first. Send WhatsApp, then mark informed.</p>
+                <p className="mt-1 text-amber-900">Showing latest 25 pending items. Full result history stays below.</p>
                 <div className="mt-2 max-h-56 space-y-2 overflow-auto rounded border border-amber-200 bg-white p-2">
-                  {todaysResults.map((item) => (
+                  {pendingResultsQueue.map((item) => (
                     <article key={item.id} className="rounded border border-slate-200 p-2">
                       <p className="font-semibold">{item.clientName || "Legacy Client"}</p>
                       <p className="text-slate-500">Application No: {item.applicationNumber}</p>
@@ -6128,7 +6130,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                       </div>
                     </article>
                   ))}
-                  {todaysResults.length === 0 ? <p className="text-slate-500">No pending results.</p> : null}
+                  {pendingResultsQueue.length === 0 ? <p className="text-slate-500">No pending results.</p> : null}
                 </div>
               </div>
               <div className="mt-3 rounded border border-slate-300 bg-slate-50 p-3 text-xs">
@@ -6281,9 +6283,9 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
               {submissionStatus ? <p className="mt-2 text-xs text-slate-700">{submissionStatus}</p> : null}
               <div className="mt-4 rounded border-2 border-amber-300 bg-amber-50 p-3 text-xs">
                 <p className="font-semibold text-amber-900">Pending Submissions ({todaysSubmissions.length})</p>
-                <p className="mt-1 text-amber-900">Newest pending uploads first. Mark informed after sending to client.</p>
+                <p className="mt-1 text-amber-900">Showing latest 25 pending items. Full submission history stays below.</p>
                 <div className="mt-2 max-h-56 space-y-2 overflow-auto rounded border border-amber-200 bg-white p-2">
-                  {todaysSubmissions.map((item) => (
+                  {pendingSubmissionsQueue.map((item) => (
                     <article key={item.id} className="rounded border border-slate-200 p-2">
                       <p className="font-semibold">{item.clientName || "Client"}</p>
                       <p className="text-slate-500">Application No: {item.applicationNumber || "-"}</p>
@@ -6321,7 +6323,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                       </div>
                     </article>
                   ))}
-                  {todaysSubmissions.length === 0 ? <p className="text-slate-500">No pending submissions.</p> : null}
+                  {pendingSubmissionsQueue.length === 0 ? <p className="text-slate-500">No pending submissions.</p> : null}
                 </div>
               </div>
               <div className="mt-3 rounded border border-slate-300 bg-slate-50 p-3 text-xs">
