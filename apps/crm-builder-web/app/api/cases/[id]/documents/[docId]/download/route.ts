@@ -57,7 +57,14 @@ export async function GET(
     try {
       const upstream = await fetch(signed, { cache: "no-store" });
       if (!upstream.ok) {
-        return NextResponse.redirect(signed, { status: 302 });
+        return NextResponse.json(
+          {
+            error: "Stored file is missing from object storage",
+            storageKey: key,
+            status: upstream.status
+          },
+          { status: 404 }
+        );
       }
       const buffer = Buffer.from(await upstream.arrayBuffer());
       const upstreamType =
@@ -72,7 +79,7 @@ export async function GET(
         }
       });
     } catch {
-      return NextResponse.redirect(signed, { status: 302 });
+      return NextResponse.json({ error: "Could not read file from object storage" }, { status: 502 });
     }
   }
 
@@ -98,7 +105,10 @@ export async function GET(
     try {
       const upstream = await fetch(link, { cache: "no-store" });
       if (!upstream.ok) {
-        return NextResponse.redirect(link, { status: 302 });
+        return NextResponse.json(
+          { error: "Remote file is unavailable", status: upstream.status },
+          { status: 404 }
+        );
       }
       const buffer = Buffer.from(await upstream.arrayBuffer());
       const upstreamType =
@@ -113,7 +123,7 @@ export async function GET(
         }
       });
     } catch {
-      return NextResponse.redirect(link, { status: 302 });
+      return NextResponse.json({ error: "Could not read remote file" }, { status: 502 });
     }
   }
 

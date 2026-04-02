@@ -1920,8 +1920,9 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       `Application number: ${item.applicationNumber}`,
       `Result status: ${item.outcome.replace(/_/g, " ")}`
     ];
-    if (item.fileLink) {
-      lines.push("", `Result document: ${item.fileLink}`);
+    if (item.fileLink && typeof window !== "undefined") {
+      const stableDownloadUrl = `${window.location.origin}/api/results/legacy/${encodeURIComponent(item.id)}/download`;
+      lines.push("", `Result document: ${stableDownloadUrl}`);
     }
     lines.push("", "Newton Immigration Team");
     return lines.join("\n");
