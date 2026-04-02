@@ -5284,6 +5284,12 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                             >
                               Create / Refresh Client Link
                             </button>
+                            <button
+                              onClick={() => void shareInvite("whatsapp")}
+                              className="rounded border border-slate-300 px-3 py-2 text-xs font-semibold"
+                            >
+                              Send to WhatsApp
+                            </button>
                             {inviteUrl ? (
                               <a href={inviteUrl} target="_blank" className="rounded border border-slate-300 px-3 py-2 text-xs font-semibold text-blue-700 underline">
                                 Open Client Link
