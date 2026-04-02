@@ -940,16 +940,23 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       ) || null
     );
   }, [legacyResults, submissionApplicationNumber]);
-
-  useEffect(() => {
-    if (!selectedLegacyByAppNo) return;
-    setLegacyResultClientName((prev) =>
-      prev.trim() ? prev : String(selectedLegacyByAppNo.clientName || "").trim()
-    );
-    setLegacyResultPhone((prev) =>
-      prev.trim() ? prev : String(selectedLegacyByAppNo.phone || "").trim()
-    );
-  }, [selectedLegacyByAppNo]);
+  const resultSuggestedContact = useMemo(() => {
+    if (resultLinkedCase) {
+      return {
+        source: "case" as const,
+        clientName: String(resultLinkedCase.client || "").trim(),
+        phone: String(resultLinkedCase.leadPhone || "").trim()
+      };
+    }
+    if (selectedLegacyByAppNo) {
+      return {
+        source: "history" as const,
+        clientName: String(selectedLegacyByAppNo.clientName || "").trim(),
+        phone: String(selectedLegacyByAppNo.phone || "").trim()
+      };
+    }
+    return null;
+  }, [resultLinkedCase, selectedLegacyByAppNo]);
   const submissionCaseOptions = useMemo(() => {
     const query = submissionSearch.trim().toLowerCase();
     return visibleCases
@@ -991,15 +998,24 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     [legacyResults, todayIsoDate]
   );
 
-  useEffect(() => {
-    if (!submissionLegacyByAppNo) return;
-    setSubmissionClientName((prev) =>
-      prev.trim() ? prev : String(submissionLegacyByAppNo.clientName || "").trim()
-    );
-    setSubmissionPhone((prev) =>
-      prev.trim() ? prev : String(submissionLegacyByAppNo.phone || "").trim()
-    );
-  }, [submissionLegacyByAppNo]);
+  const submissionSuggestedContact = useMemo(() => {
+    const sourceCase = selectedSubmissionCase || submissionAutoMatchedCase;
+    if (sourceCase) {
+      return {
+        source: "case" as const,
+        clientName: String(sourceCase.client || "").trim(),
+        phone: String(sourceCase.leadPhone || "").trim()
+      };
+    }
+    if (submissionLegacyByAppNo) {
+      return {
+        source: "history" as const,
+        clientName: String(submissionLegacyByAppNo.clientName || "").trim(),
+        phone: String(submissionLegacyByAppNo.phone || "").trim()
+      };
+    }
+    return null;
+  }, [selectedSubmissionCase, submissionAutoMatchedCase, submissionLegacyByAppNo]);
 
   const communicationSearchList = useMemo(() => {
     const query = commSearch.trim().toLowerCase();
@@ -1787,13 +1803,25 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       setLegacyResultStatus("Application number is required.");
       return;
     }
-    const client = legacyResultClientName.trim() || "Legacy Client";
+    const phone =
+      legacyResultPhone.trim() ||
+      resultSuggestedContact?.phone ||
+      "";
+    if (!phone) {
+      setLegacyResultStatus("Phone number is required. Use matched phone or enter manually.");
+      return;
+    }
+    if (!legacyResultFile) {
+      setLegacyResultStatus("Result PDF is required.");
+      return;
+    }
+    const client = legacyResultClientName.trim() || resultSuggestedContact?.clientName || "Legacy Client";
     setLegacyResultStatus("Saving legacy result...");
     const form = new FormData();
     form.append("applicationNumber", appNo);
     form.append("resultDate", legacyResultDate || todayIsoDate);
     form.append("clientName", client);
-    form.append("phone", legacyResultPhone.trim());
+    form.append("phone", phone);
     form.append("outcome", legacyResultOutcome);
     form.append("notes", legacyResultNotes.trim());
     if (legacyResultFile) form.append("file", legacyResultFile);
@@ -1815,6 +1843,18 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       item.autoCategory === "new"
         ? `Saved and linked to ${item.matchedCaseId || "case"} automatically.`
         : `Saved old-client result for ${item.clientName}.`
+    );
+  }
+
+  function applyResultSuggestedContact() {
+    if (!resultSuggestedContact) {
+      setLegacyResultStatus("No matched contact found. Enter client name and phone manually.");
+      return;
+    }
+    setLegacyResultClientName(resultSuggestedContact.clientName || "");
+    setLegacyResultPhone(resultSuggestedContact.phone || "");
+    setLegacyResultStatus(
+      `Loaded ${resultSuggestedContact.source === "case" ? "case" : "history"} contact details.`
     );
   }
 
@@ -1903,6 +1943,14 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
       setSubmissionStatus("Upload submission document before marking submitted.");
       return;
     }
+    const resolvedPhone =
+      String(submissionPhone || "").trim() ||
+      submissionSuggestedContact?.phone ||
+      "";
+    if (!resolvedPhone) {
+      setSubmissionStatus("Phone number is required. Use matched phone or enter manually.");
+      return;
+    }
     const submissionFileName = String(submissionUploadFile.name || "").toLowerCase();
     const submissionFileType = String(submissionUploadFile.type || "").toLowerCase();
     if (submissionFileType !== "application/pdf" && !submissionFileName.endsWith(".pdf")) {
@@ -1974,10 +2022,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     );
     submissionForm.append(
       "phone",
-      String(submissionPhone || "").trim() ||
-        targetCase?.leadPhone ||
-        submissionLegacyByAppNo?.phone ||
-        ""
+      resolvedPhone
     );
     if (targetCase?.id) {
       submissionForm.append("selectedCaseId", targetCase.id);
@@ -1999,10 +2044,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
             submissionLegacyByAppNo?.clientName ||
             "Client",
           phone:
-            String(submissionPhone || "").trim() ||
-            targetCase?.leadPhone ||
-            submissionLegacyByAppNo?.phone ||
-            "",
+            resolvedPhone,
           selectedCaseId: targetCase?.id || undefined,
           fileName: storedFileName,
           fileLink: storedFileLink
@@ -2043,6 +2085,18 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     setSubmissionSearch("");
     setSubmissionCaseId("");
     setSubmissionUploadFile(null);
+  }
+
+  function applySubmissionSuggestedContact() {
+    if (!submissionSuggestedContact) {
+      setSubmissionStatus("No matched contact found. Enter client name and phone manually.");
+      return;
+    }
+    setSubmissionClientName(submissionSuggestedContact.clientName || "");
+    setSubmissionPhone(submissionSuggestedContact.phone || "");
+    setSubmissionStatus(
+      `Loaded ${submissionSuggestedContact.source === "case" ? "case" : "history"} contact details.`
+    );
   }
 
   async function uploadSubmissionDocument() {
@@ -5873,11 +5927,17 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
           {screen === "results" ? (
             <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
               <h3 className="text-base font-semibold">Results</h3>
-              <p className="mt-1 text-xs text-slate-500">
-                Daily result upload by application number. System auto-links NEW cases and tracks who is informed.
-              </p>
+              <p className="mt-1 text-xs text-slate-500">Simple flow: enter app number, confirm phone, upload PDF, save.</p>
               <div className="mt-3 rounded border border-slate-200 p-3 text-xs">
-                <p className="font-semibold">Daily Result Upload</p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-semibold">Daily Result Upload</p>
+                  <button
+                    onClick={() => void syncLeadsFromSheet()}
+                    className="rounded border border-slate-300 px-2 py-1 text-[11px] font-semibold"
+                  >
+                    Refresh Client Sheet
+                  </button>
+                </div>
                 <div className="mt-2 grid gap-2 md:grid-cols-3">
                   <input
                     value={resultApplicationNumber}
@@ -5900,7 +5960,27 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                     <option value="approved">Approved</option>
                     <option value="refused">Refused</option>
                     <option value="request_letter">Request Letter</option>
-                  </select>
+                    </select>
+                </div>
+                <div className="mt-2 grid gap-2 md:grid-cols-3">
+                  <input
+                    value={legacyResultClientName}
+                    onChange={(e) => setLegacyResultClientName(e.target.value)}
+                    className="rounded border border-slate-300 px-2 py-2"
+                    placeholder="Client name (optional)"
+                  />
+                  <input
+                    value={legacyResultPhone}
+                    onChange={(e) => setLegacyResultPhone(e.target.value)}
+                    className="rounded border border-slate-300 px-2 py-2"
+                    placeholder="Phone number (required)"
+                  />
+                  <input
+                    type="file"
+                    accept=".pdf,application/pdf"
+                    onChange={(e) => setLegacyResultFile(e.target.files?.[0] || null)}
+                    className="rounded border border-slate-300 px-2 py-2"
+                  />
                 </div>
                 {matchingLegacyCandidates.length > 0 ? (
                   <div className="mt-2 rounded border border-slate-200 bg-slate-50 p-2">
@@ -5920,27 +6000,22 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                     </div>
                   </div>
                 ) : null}
-                <div className="mt-2 grid gap-2 md:grid-cols-3">
-                  <input
-                    value={legacyResultClientName}
-                    onChange={(e) => setLegacyResultClientName(e.target.value)}
-                    className="rounded border border-slate-300 px-2 py-2"
-                    placeholder="Client name (optional)"
-                  />
-                  <input
-                    value={legacyResultPhone}
-                    onChange={(e) => setLegacyResultPhone(e.target.value)}
-                    className="rounded border border-slate-300 px-2 py-2"
-                    placeholder="Phone (optional)"
-                  />
-                  <input
-                    type="file"
-                    accept=".pdf,application/pdf"
-                    onChange={(e) => setLegacyResultFile(e.target.files?.[0] || null)}
-                    className="rounded border border-slate-300 px-2 py-2"
-                  />
-                </div>
-                <p className="mt-1 text-[11px] text-slate-500">Result file upload supports PDF only.</p>
+                {resultSuggestedContact ? (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 rounded border border-emerald-200 bg-emerald-50 p-2 text-[11px] text-emerald-900">
+                    <span>
+                      Suggested from {resultSuggestedContact.source}: {resultSuggestedContact.clientName || "Client"}{" "}
+                      {resultSuggestedContact.phone ? `• ${resultSuggestedContact.phone}` : ""}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={applyResultSuggestedContact}
+                      className="rounded border border-emerald-300 bg-white px-2 py-1 font-semibold"
+                    >
+                      Use Matched Details
+                    </button>
+                  </div>
+                ) : null}
+                <p className="mt-1 text-[11px] text-slate-500">Phone number and PDF are required before upload.</p>
                 <textarea
                   value={legacyResultNotes}
                   onChange={(e) => setLegacyResultNotes(e.target.value)}
@@ -5972,12 +6047,13 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                 >
                   Upload Daily Result
                 </button>
+                {leadSyncStatus ? <p className="mt-2 text-[11px] text-slate-600">{leadSyncStatus}</p> : null}
                 {legacyResultStatus ? <p className="mt-2 text-slate-700">{legacyResultStatus}</p> : null}
               </div>
 
               <div className="mt-3 rounded border-2 border-amber-300 bg-amber-50 p-3 text-xs">
                 <p className="font-semibold text-amber-900">Today&apos;s Pending Results ({todaysResults.length})</p>
-                <p className="mt-1 text-amber-900">All not-informed results uploaded today appear here (NEW + OLD).</p>
+                <p className="mt-1 text-amber-900">Only today uploads. Send WhatsApp, then mark informed.</p>
                 <div className="mt-2 max-h-56 space-y-2 overflow-auto rounded border border-amber-200 bg-white p-2">
                   {todaysResults.map((item) => (
                     <article key={item.id} className="rounded border border-slate-200 p-2">
@@ -6024,11 +6100,17 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
           {screen === "submission" ? (
             <section className="rounded-2xl border-2 border-slate-300 bg-white p-4">
               <h3 className="text-base font-semibold">Submission</h3>
-              <p className="mt-1 text-xs text-slate-500">
-                Submission flow like Results: app number + document required. Case selection is optional.
-              </p>
+              <p className="mt-1 text-xs text-slate-500">Simple flow: app number, phone, PDF, then submit.</p>
               <div className="mt-2 rounded border border-slate-200 p-3 text-xs">
-                <p className="font-semibold">Daily Submission Upload</p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-semibold">Daily Submission Upload</p>
+                  <button
+                    onClick={() => void syncLeadsFromSheet()}
+                    className="rounded border border-slate-300 px-2 py-1 text-[11px] font-semibold"
+                  >
+                    Refresh Client Sheet
+                  </button>
+                </div>
                 <div className="mt-2 grid gap-2 md:grid-cols-3">
                   <input
                     value={submissionApplicationNumber}
@@ -6066,7 +6148,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                     value={submissionPhone}
                     onChange={(e) => setSubmissionPhone(e.target.value)}
                     className="rounded border border-slate-300 px-2 py-2"
-                    placeholder="Phone (optional)"
+                    placeholder="Phone number (required)"
                   />
                 </div>
                 <div className="mt-2 grid gap-2 md:grid-cols-3">
@@ -6099,7 +6181,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                     Upload + Mark Submitted
                   </button>
                 </div>
-                <p className="mt-2 text-slate-500">Files are stored in Drive under: Submitted / Submission.</p>
+                <p className="mt-2 text-slate-500">Files are stored in Drive under: Submitted / Submission. PDF required.</p>
                 {submissionAutoMatchedCase ? (
                   <div className="mt-2 rounded border border-emerald-300 bg-emerald-50 p-2 text-emerald-900">
                     Auto-matched case: {submissionAutoMatchedCase.id} - {submissionAutoMatchedCase.client}
@@ -6113,6 +6195,22 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                     {" • "}Use these details or continue with manual submit.
                   </div>
                 ) : null}
+                {submissionSuggestedContact ? (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 rounded border border-emerald-200 bg-emerald-50 p-2 text-[11px] text-emerald-900">
+                    <span>
+                      Suggested from {submissionSuggestedContact.source}: {submissionSuggestedContact.clientName || "Client"}{" "}
+                      {submissionSuggestedContact.phone ? `• ${submissionSuggestedContact.phone}` : ""}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={applySubmissionSuggestedContact}
+                      className="rounded border border-emerald-300 bg-white px-2 py-1 font-semibold"
+                    >
+                      Use Matched Details
+                    </button>
+                  </div>
+                ) : null}
+                {leadSyncStatus ? <p className="mt-2 text-[11px] text-slate-600">{leadSyncStatus}</p> : null}
                 {submissionUploadStatus ? <p className="mt-2 text-slate-700">{submissionUploadStatus}</p> : null}
               </div>
               {submissionStatus ? <p className="mt-2 text-xs text-slate-700">{submissionStatus}</p> : null}
