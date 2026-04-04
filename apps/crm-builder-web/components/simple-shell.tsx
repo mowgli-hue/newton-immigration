@@ -1026,6 +1026,14 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
         .slice(0, 25),
     [legacyResults]
   );
+  const resultFolderNotInformed = useMemo(
+    () => recentResults.filter((r) => !r.informedToClient),
+    [recentResults]
+  );
+  const resultFolderInformed = useMemo(
+    () => recentResults.filter((r) => r.informedToClient),
+    [recentResults]
+  );
 
   const recentSubmissions = useMemo(
     () =>
@@ -1034,6 +1042,14 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
         .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
         .slice(0, 25),
     [legacyResults]
+  );
+  const submissionFolderNotInformed = useMemo(
+    () => recentSubmissions.filter((r) => !r.informedToClient),
+    [recentSubmissions]
+  );
+  const submissionFolderInformed = useMemo(
+    () => recentSubmissions.filter((r) => r.informedToClient),
+    [recentSubmissions]
   );
 
   const submissionSuggestedContact = useMemo(() => {
@@ -6096,76 +6112,75 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                 {legacyResultStatus ? <p className="mt-2 text-slate-700">{legacyResultStatus}</p> : null}
               </div>
 
-              <div className="mt-3 rounded border-2 border-amber-300 bg-amber-50 p-3 text-xs">
-                <p className="font-semibold text-amber-900">Pending Results ({todaysResults.length})</p>
-                <p className="mt-1 text-amber-900">Showing latest 25 pending items. Full result history stays below.</p>
-                <div className="mt-2 max-h-56 space-y-2 overflow-auto rounded border border-amber-200 bg-white p-2">
-                  {pendingResultsQueue.map((item) => (
-                    <article key={item.id} className="rounded border border-slate-200 p-2">
-                      <p className="font-semibold">{item.clientName || "Legacy Client"}</p>
-                      <p className="text-slate-500">Application No: {item.applicationNumber}</p>
-                      <p className="text-slate-500">Phone: {item.phone || "N/A"}</p>
-                      <p className="text-slate-500">{item.resultDate} • {item.outcome}</p>
-                      {item.fileLink ? (
-                        <a
-                          href={`/api/results/legacy/${encodeURIComponent(item.id)}/download`}
-                          className="text-blue-700 underline"
-                        >
-                          Download uploaded result
-                        </a>
-                      ) : null}
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <button
-                          onClick={() => void sendLegacyResultOnWhatsApp(item)}
-                          className="rounded border border-slate-300 px-2 py-1 font-semibold"
-                        >
-                          Send on WhatsApp
-                        </button>
-                        {item.informedToClient ? (
-                          <p className="text-emerald-700">
-                            Sent to client {item.informedAt ? `on ${new Date(item.informedAt).toLocaleString()}` : ""}.
-                          </p>
-                        ) : (
+              <div className="mt-3 space-y-3 text-xs">
+                <details open className="rounded border-2 border-amber-300 bg-amber-50 p-3">
+                  <summary className="cursor-pointer font-semibold text-amber-900">
+                    Results / Not Informed ({resultFolderNotInformed.length})
+                  </summary>
+                  <p className="mt-1 text-amber-900">Recent uploaded results waiting to be sent or marked informed.</p>
+                  <div className="mt-2 max-h-56 space-y-2 overflow-auto rounded border border-amber-200 bg-white p-2">
+                    {resultFolderNotInformed.map((item) => (
+                      <article key={item.id} className="rounded border border-slate-200 p-2">
+                        <p className="font-semibold">{item.clientName || "Legacy Client"}</p>
+                        <p className="text-slate-500">Application No: {item.applicationNumber || "-"}</p>
+                        <p className="text-slate-500">Phone: {item.phone || "N/A"}</p>
+                        <p className="text-slate-500">{item.resultDate || "-"} • {item.outcome || "-"}</p>
+                        {item.fileLink ? (
+                          <a
+                            href={`/api/results/legacy/${encodeURIComponent(item.id)}/download`}
+                            className="text-blue-700 underline"
+                          >
+                            Download PDF
+                          </a>
+                        ) : null}
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <button
+                            onClick={() => void sendLegacyResultOnWhatsApp(item)}
+                            className="rounded border border-slate-300 px-2 py-1 font-semibold"
+                          >
+                            Send on WhatsApp
+                          </button>
                           <button
                             onClick={() => void markResultInformed(item.id)}
                             className="rounded border border-slate-300 px-2 py-1 font-semibold"
                           >
                             Mark Informed
                           </button>
-                        )}
-                      </div>
-                    </article>
-                  ))}
-                  {pendingResultsQueue.length === 0 ? <p className="text-slate-500">No pending results.</p> : null}
-                </div>
-              </div>
-              <div className="mt-3 rounded border border-slate-300 bg-slate-50 p-3 text-xs">
-                <p className="font-semibold text-slate-900">All Recent Result Uploads ({recentResults.length})</p>
-                <p className="mt-1 text-slate-600">Permanent history view (informed + not informed). Nothing disappears from this list.</p>
-                <div className="mt-2 max-h-56 space-y-2 overflow-auto rounded border border-slate-200 bg-white p-2">
-                  {recentResults.map((item) => (
-                    <article key={`recent-result-${item.id}`} className="rounded border border-slate-200 p-2">
-                      <p className="font-semibold">{item.clientName || "Legacy Client"}</p>
-                      <p className="text-slate-500">Application No: {item.applicationNumber || "-"}</p>
-                      <p className="text-slate-500">Phone: {item.phone || "N/A"}</p>
-                      <p className="text-slate-500">{item.resultDate || "-"} • {item.outcome || "-"}</p>
-                      {item.fileLink ? (
-                        <a
-                          href={`/api/results/legacy/${encodeURIComponent(item.id)}/download`}
-                          className="text-blue-700 underline"
-                        >
-                          Download uploaded result
-                        </a>
-                      ) : null}
-                      <p className={`mt-1 font-semibold ${item.informedToClient ? "text-emerald-700" : "text-amber-700"}`}>
-                        {item.informedToClient
-                          ? `Informed${item.informedAt ? ` on ${new Date(item.informedAt).toLocaleString()}` : ""}`
-                          : "Not informed yet"}
-                      </p>
-                    </article>
-                  ))}
-                  {recentResults.length === 0 ? <p className="text-slate-500">No result history yet.</p> : null}
-                </div>
+                        </div>
+                      </article>
+                    ))}
+                    {resultFolderNotInformed.length === 0 ? <p className="text-slate-500">No not-informed results.</p> : null}
+                  </div>
+                </details>
+
+                <details className="rounded border border-slate-300 bg-slate-50 p-3">
+                  <summary className="cursor-pointer font-semibold text-slate-900">
+                    Results / Informed ({resultFolderInformed.length})
+                  </summary>
+                  <p className="mt-1 text-slate-600">Recent results already marked informed. PDF stays available here.</p>
+                  <div className="mt-2 max-h-56 space-y-2 overflow-auto rounded border border-slate-200 bg-white p-2">
+                    {resultFolderInformed.map((item) => (
+                      <article key={`recent-result-${item.id}`} className="rounded border border-slate-200 p-2">
+                        <p className="font-semibold">{item.clientName || "Legacy Client"}</p>
+                        <p className="text-slate-500">Application No: {item.applicationNumber || "-"}</p>
+                        <p className="text-slate-500">Phone: {item.phone || "N/A"}</p>
+                        <p className="text-slate-500">{item.resultDate || "-"} • {item.outcome || "-"}</p>
+                        {item.fileLink ? (
+                          <a
+                            href={`/api/results/legacy/${encodeURIComponent(item.id)}/download`}
+                            className="text-blue-700 underline"
+                          >
+                            Download PDF
+                          </a>
+                        ) : null}
+                        <p className="mt-1 font-semibold text-emerald-700">
+                          Informed{item.informedAt ? ` on ${new Date(item.informedAt).toLocaleString()}` : ""}
+                        </p>
+                      </article>
+                    ))}
+                    {resultFolderInformed.length === 0 ? <p className="text-slate-500">No informed results.</p> : null}
+                  </div>
+                </details>
               </div>
             </section>
           ) : null}
@@ -6287,80 +6302,79 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
                 {submissionUploadStatus ? <p className="mt-2 text-slate-700">{submissionUploadStatus}</p> : null}
               </div>
               {submissionStatus ? <p className="mt-2 text-xs text-slate-700">{submissionStatus}</p> : null}
-              <div className="mt-4 rounded border-2 border-amber-300 bg-amber-50 p-3 text-xs">
-                <p className="font-semibold text-amber-900">Pending Submissions ({todaysSubmissions.length})</p>
-                <p className="mt-1 text-amber-900">Showing latest 25 pending items. Full submission history stays below.</p>
-                <div className="mt-2 max-h-56 space-y-2 overflow-auto rounded border border-amber-200 bg-white p-2">
-                  {pendingSubmissionsQueue.map((item) => (
-                    <article key={item.id} className="rounded border border-slate-200 p-2">
-                      <p className="font-semibold">{item.clientName || "Client"}</p>
-                      <p className="text-slate-500">Application No: {item.applicationNumber || "-"}</p>
-                      <p className="text-slate-500">Phone: {item.phone || "N/A"}</p>
-                      <p className="text-slate-500">
-                        Submitted: {item.createdAt ? new Date(item.createdAt).toLocaleString() : "-"}
-                      </p>
-                      {item.fileLink ? (
-                        <a
-                          href={`/api/results/legacy/${encodeURIComponent(item.id)}/download`}
-                          className="text-blue-700 underline"
-                        >
-                          Download uploaded submission
-                        </a>
-                      ) : null}
-                      <div className="mt-2">
-                        <button
-                          onClick={() => void sendSubmissionOnWhatsApp(item)}
-                          className="rounded border border-slate-300 px-2 py-1 font-semibold"
-                        >
-                          Send on WhatsApp
-                        </button>
-                        {item.informedToClient ? (
-                          <p className="mt-1 text-emerald-700">
-                            Informed {item.informedAt ? `on ${new Date(item.informedAt).toLocaleString()}` : ""}.
-                          </p>
-                        ) : (
+              <div className="mt-4 space-y-3 text-xs">
+                <details open className="rounded border-2 border-amber-300 bg-amber-50 p-3">
+                  <summary className="cursor-pointer font-semibold text-amber-900">
+                    Submission / Not Informed ({submissionFolderNotInformed.length})
+                  </summary>
+                  <p className="mt-1 text-amber-900">Recent uploaded submissions waiting to be sent or marked informed.</p>
+                  <div className="mt-2 max-h-56 space-y-2 overflow-auto rounded border border-amber-200 bg-white p-2">
+                    {submissionFolderNotInformed.map((item) => (
+                      <article key={item.id} className="rounded border border-slate-200 p-2">
+                        <p className="font-semibold">{item.clientName || "Client"}</p>
+                        <p className="text-slate-500">Application No: {item.applicationNumber || "-"}</p>
+                        <p className="text-slate-500">Phone: {item.phone || "N/A"}</p>
+                        <p className="text-slate-500">
+                          Submitted: {item.createdAt ? new Date(item.createdAt).toLocaleString() : "-"}
+                        </p>
+                        {item.fileLink ? (
+                          <a
+                            href={`/api/results/legacy/${encodeURIComponent(item.id)}/download`}
+                            className="text-blue-700 underline"
+                          >
+                            Download PDF
+                          </a>
+                        ) : null}
+                        <div className="mt-2">
+                          <button
+                            onClick={() => void sendSubmissionOnWhatsApp(item)}
+                            className="rounded border border-slate-300 px-2 py-1 font-semibold"
+                          >
+                            Send on WhatsApp
+                          </button>
                           <button
                             onClick={() => void setLegacyResultInformedState(item, "informed")}
                             className="ml-2 rounded border border-slate-300 px-2 py-1 font-semibold"
                           >
                             Mark Informed
                           </button>
-                        )}
-                      </div>
-                    </article>
-                  ))}
-                  {pendingSubmissionsQueue.length === 0 ? <p className="text-slate-500">No pending submissions.</p> : null}
-                </div>
-              </div>
-              <div className="mt-3 rounded border border-slate-300 bg-slate-50 p-3 text-xs">
-                <p className="font-semibold text-slate-900">All Recent Submission Uploads ({recentSubmissions.length})</p>
-                <p className="mt-1 text-slate-600">Permanent history view (informed + not informed). Nothing disappears from this list.</p>
-                <div className="mt-2 max-h-56 space-y-2 overflow-auto rounded border border-slate-200 bg-white p-2">
-                  {recentSubmissions.map((item) => (
-                    <article key={`recent-submission-${item.id}`} className="rounded border border-slate-200 p-2">
-                      <p className="font-semibold">{item.clientName || "Client"}</p>
-                      <p className="text-slate-500">Application No: {item.applicationNumber || "-"}</p>
-                      <p className="text-slate-500">Phone: {item.phone || "N/A"}</p>
-                      <p className="text-slate-500">
-                        Submitted: {item.createdAt ? new Date(item.createdAt).toLocaleString() : "-"}
-                      </p>
-                      {item.fileLink ? (
-                        <a
-                          href={`/api/results/legacy/${encodeURIComponent(item.id)}/download`}
-                          className="text-blue-700 underline"
-                        >
-                          Download uploaded submission
-                        </a>
-                      ) : null}
-                      <p className={`mt-1 font-semibold ${item.informedToClient ? "text-emerald-700" : "text-amber-700"}`}>
-                        {item.informedToClient
-                          ? `Informed${item.informedAt ? ` on ${new Date(item.informedAt).toLocaleString()}` : ""}`
-                          : "Not informed yet"}
-                      </p>
-                    </article>
-                  ))}
-                  {recentSubmissions.length === 0 ? <p className="text-slate-500">No submission history yet.</p> : null}
-                </div>
+                        </div>
+                      </article>
+                    ))}
+                    {submissionFolderNotInformed.length === 0 ? <p className="text-slate-500">No not-informed submissions.</p> : null}
+                  </div>
+                </details>
+
+                <details className="rounded border border-slate-300 bg-slate-50 p-3">
+                  <summary className="cursor-pointer font-semibold text-slate-900">
+                    Submission / Informed ({submissionFolderInformed.length})
+                  </summary>
+                  <p className="mt-1 text-slate-600">Recent submissions already informed. PDF stays available here.</p>
+                  <div className="mt-2 max-h-56 space-y-2 overflow-auto rounded border border-slate-200 bg-white p-2">
+                    {submissionFolderInformed.map((item) => (
+                      <article key={`recent-submission-${item.id}`} className="rounded border border-slate-200 p-2">
+                        <p className="font-semibold">{item.clientName || "Client"}</p>
+                        <p className="text-slate-500">Application No: {item.applicationNumber || "-"}</p>
+                        <p className="text-slate-500">Phone: {item.phone || "N/A"}</p>
+                        <p className="text-slate-500">
+                          Submitted: {item.createdAt ? new Date(item.createdAt).toLocaleString() : "-"}
+                        </p>
+                        {item.fileLink ? (
+                          <a
+                            href={`/api/results/legacy/${encodeURIComponent(item.id)}/download`}
+                            className="text-blue-700 underline"
+                          >
+                            Download PDF
+                          </a>
+                        ) : null}
+                        <p className="mt-1 font-semibold text-emerald-700">
+                          Informed{item.informedAt ? ` on ${new Date(item.informedAt).toLocaleString()}` : ""}
+                        </p>
+                      </article>
+                    ))}
+                    {submissionFolderInformed.length === 0 ? <p className="text-slate-500">No informed submissions.</p> : null}
+                  </div>
+                </details>
               </div>
             </section>
           ) : null}
