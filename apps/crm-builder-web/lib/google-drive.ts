@@ -362,7 +362,7 @@ export async function syncCaseToUnderReviewSheet(caseItem: {
   applicationNumber?: string;
 }): Promise<void> {
   try {
-    const token = await getGoogleAccessToken(["https://www.googleapis.com/auth/spreadsheets"]);
+    const token = await getSheetsAccessToken();
 
     // First read all rows to find if this client already exists
     const readRes = await fetch(
