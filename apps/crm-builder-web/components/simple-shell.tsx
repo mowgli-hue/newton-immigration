@@ -1229,16 +1229,13 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   }, [teamUsers, sessionUser?.name, selectedCase?.assignedTo]);
   const processingAssigneeOptions = useMemo(() => {
     const names = new Set<string>(["Unassigned"]);
-    // Only show actual Processing/ProcessingLead team members
+    // Show all active team members
     teamUsers
       .filter((u) => u.active !== false)
       .forEach((u) => {
-        const role = String(u.role || "").toLowerCase();
         const name = String(u.name || "").trim();
         if (!name) return;
-        if (role.includes("processing")) {
-          names.add(name);
-        }
+        names.add(name);
       });
     const ordered = Array.from(names).filter(Boolean).sort((a, b) => {
       if (a === "Unassigned") return -1;
@@ -4420,7 +4417,7 @@ We will notify you as soon as we receive a decision. This usually takes a few we
                             <button onClick={() => setScreen("settings")} className="text-xs text-slate-500 hover:text-slate-800">View all →</button>
                           </div>
                           <div className="grid gap-2 md:grid-cols-2">
-                            {teamUsers.filter(u => u.active !== false && ["Processing","ProcessingLead","Admin"].includes(u.role)).map((member) => {
+                            {teamUsers.filter(u => u.active !== false).map((member) => {
                               const firstName = member.name.split(" ")[0].toLowerCase();
                               const name = member.name;
                               const personCases = visibleCases.filter((c) => c.assignedTo && c.assignedTo.toLowerCase().includes(firstName));
