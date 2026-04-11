@@ -12,6 +12,8 @@ import {
 } from "@/lib/store";
 import { buildCaseFolderNameWithApp, createCaseDriveStructure, extractDriveFolderId } from "@/lib/google-drive";
 import { boundedText, isReasonablePhone, isValidEmail, normalizeEmail, normalizePhone } from "@/lib/validation";
+import { startIntakeSession } from "@/lib/whatsapp-ai-intake";
+import { isWhatsAppConfigured } from "@/lib/whatsapp";
 
 export async function GET(request: NextRequest) {
   const user = await getCurrentUserFromRequest(request);
@@ -180,6 +182,17 @@ export async function POST(request: NextRequest) {
     } else {
       drive = { linked: false, reason: "drive_root_invalid" };
     }
+  }
+
+  // Trigger WhatsApp AI intake if phone number provided and WhatsApp is configured
+  if (created.leadPhone && isWhatsAppConfigured()) {
+    void startIntakeSession({
+      caseId: created.id,
+      companyId: user.companyId,
+      clientName: created.client,
+      phone: created.leadPhone,
+      formType: created.formType
+    }).catch((err) => console.error("WhatsApp intake start error:", err));
   }
 
   return NextResponse.json({ case: created, drive }, { status: 201 });

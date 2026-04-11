@@ -268,3 +268,179 @@ export async function uploadFileToDriveFolder(input: {
     webViewLink: data.webViewLink || `https://drive.google.com/file/d/${data.id}/view`
   };
 }
+
+
+// ── Google Sheets Integration ──────────────────────────────────────
+// Spreadsheet ID for Newton submitted applications sheet
+const SUBMITTED_SHEET_ID = "1S3jXBineGtsfaMErKYdfZdclYlceLUNDI7QsgTrBweQ";
+
+async function getSheetsAccessToken(): Promise<string> {
+  const { email, privateKey } = getServiceAccount();
+  const iat = Math.floor(Date.now() / 1000);
+  const exp = iat + 3600;
+  const header = { alg: "RS256", typ: "JWT" };
+  const payload = {
+    iss: email,
+    scope: "https://www.googleapis.com/auth/spreadsheets",
+    aud: "https://oauth2.googleapis.com/token",
+    iat,
+    exp
+  };
+  const unsigned = `${base64Url(JSON.stringify(header))}.${base64Url(JSON.stringify(payload))}`;
+  const signer = createSign("RSA-SHA256");
+  signer.update(unsigned);
+  signer.end();
+  const signature = signer.sign(privateKey);
+  const assertion = `${unsigned}.${base64Url(signature)}`;
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth2:grant/jwt-bearer",
+      assertion,
+    }).toString(),
+  });
+  const data = await res.json() as { access_token?: string; error?: string };
+  if (!data.access_token) throw new Error(`Sheets token error: ${data.error || "unknown"}`);
+  return data.access_token;
+}
+
+export async function appendToSubmittedSheet(row: {
+  name: string;
+  appType: string;
+  phone: string;
+  appNumber: string;
+  submissionDate: string;
+}): Promise<void> {
+  try {
+    const token = await getSheetsAccessToken();
+    // Append a new row: Name | Application Type | Contact Number | Application Number | Submission Date
+    const values = [[
+      row.name,
+      row.appType,
+      row.phone,
+      row.appNumber,
+      row.submissionDate,
+      "", // Submission Shared
+      "", // WP Extension
+      "", // Request Letter
+      "", // Result Shared
+    ]];
+    const res = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${SUBMITTED_SHEET_ID}/values/Sheet1!A:I:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ values }),
+      }
+    );
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      console.error("Sheets append error:", err);
+    } else {
+      console.log(`✅ Appended ${row.name} / ${row.appNumber} to submitted sheet`);
+    }
+  } catch (e) {
+    console.error("appendToSubmittedSheet failed:", (e as Error).message);
+  }
+}
+
+// ── Under Review Sheet Sync ──────────────────────────────────────────────────
+const UNDER_REVIEW_SHEET_ID = "1CcuWebtyrSmpINzh2ZxvxZUdZ_zC-ojh6fKmTYBuZb4";
+
+export async function syncCaseToUnderReviewSheet(caseItem: {
+  client: string;
+  formType: string;
+  assignedTo?: string;
+  reviewedBy?: string;
+  processingStatus?: string;
+  reviewStatus?: string;
+  reviewNotes?: string;
+  applicationNumber?: string;
+}): Promise<void> {
+  try {
+    const token = await getGoogleAccessToken(["https://www.googleapis.com/auth/spreadsheets"]);
+
+    // First read all rows to find if this client already exists
+    const readRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${UNDER_REVIEW_SHEET_ID}/values/Sheet1!A:J`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    const readData = await readRes.json() as { values?: string[][] };
+    const rows = readData.values || [];
+
+    // Find existing row by client name (column B = index 1)
+    const clientName = String(caseItem.client || "").trim().toLowerCase();
+    let rowIndex = -1;
+    for (let i = 1; i < rows.length; i++) {
+      const rowName = String(rows[i]?.[1] || "").trim().toLowerCase();
+      if (rowName && clientName.includes(rowName) || rowName.includes(clientName)) {
+        rowIndex = i;
+        break;
+      }
+    }
+
+    // Determine submission status
+    const status = caseItem.processingStatus === "submitted"
+      ? (caseItem.applicationNumber ? `Submitted - ${caseItem.applicationNumber}` : "Submitted")
+      : caseItem.reviewStatus === "changes_needed" ? "Changes Needed"
+      : caseItem.reviewStatus === "changes_done" ? "Ready to Submit"
+      : caseItem.processingStatus === "under_review" ? "Under Review"
+      : caseItem.processingStatus === "docs_pending" ? "Docs Pending"
+      : caseItem.processingStatus || "";
+
+    if (rowIndex > 0) {
+      // Update existing row
+      const rowNum = rowIndex + 1;
+      const updateRes = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${UNDER_REVIEW_SHEET_ID}/values/Sheet1!D${rowNum}:H${rowNum}?valueInputOption=USER_ENTERED`,
+        {
+          method: "PUT",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            values: [[
+              caseItem.assignedTo || "",
+              caseItem.reviewedBy || "",
+              status,
+              caseItem.reviewNotes || "",
+              ""
+            ]]
+          })
+        }
+      );
+      if (!updateRes.ok) {
+        const err = await updateRes.json();
+        console.error("Sheet update failed:", err);
+      }
+    } else {
+      // Append new row
+      const nextRow = rows.length + 1;
+      await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${UNDER_REVIEW_SHEET_ID}/values/Sheet1!A:J:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            values: [[
+              nextRow - 1,
+              caseItem.client,
+              caseItem.formType,
+              caseItem.assignedTo || "",
+              caseItem.reviewedBy || "",
+              status,
+              caseItem.reviewNotes || "",
+              "", "", ""
+            ]]
+          })
+        }
+      );
+    }
+
+    console.log(`✅ Sheet synced: ${caseItem.client} → ${status}`);
+  } catch (e) {
+    console.error("syncCaseToUnderReviewSheet error:", (e as Error).message);
+  }
+}

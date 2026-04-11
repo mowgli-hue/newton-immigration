@@ -30,10 +30,24 @@ const QUESTION_FLOWS: Record<ChecklistKey, QuestionFlow> = {
   pgwp: {
     requiredFields: DEFAULT_REQUIRED_FIELDS,
     prompts: [
-      "Any recent entry to Canada? (date + reason)",
-      "Any gaps, breaks, or part-time semesters during studies? (explain)",
-      "Previous colleges attended in Canada (if any)",
-      "Any academic probation or transfer history? (explain)"
+      "Have you used any other name? (Yes/No — if Yes, provide full other name)",
+      "What is your current marital status? (Single / Married / Common-Law / Divorced / Widowed / Separated)",
+      "If Married or Common-Law: provide partner's full name and date of marriage (YYYY-MM-DD). Reply NA if not applicable.",
+      "Any previous marriage or common-law partnership? (Yes/No — if Yes: partner's name, date of birth, start and end date of relationship YYYY-MM-DD)",
+      "Current mailing address including postal code (Apt/Unit, Street Number, Street Name, City, Province, Postal Code)",
+      "Residential address if different from mailing address. Reply SAME if same.",
+      "Telephone number",
+      "Date and place you first entered Canada (YYYY-MM-DD, city/airport e.g. 2019-09-01, Toronto Pearson)",
+      "Purpose of your original visit to Canada (Study / Work / Visit)",
+      "Any recent entry to Canada? (Yes/No — if Yes: provide date YYYY-MM-DD and reason)",
+      "Have you ever been refused a visa or permit, denied entry, or ordered to leave Canada or any other country? (Yes/No — if Yes: provide details)",
+      "Do you have any medical history? (Yes/No — if Yes: provide details)",
+      "Do you have any criminal history? (Yes/No — if Yes: provide details)",
+      "Employment details — list all jobs most recent first. For each: From (YYYY-MM), To (YYYY-MM), Job Title, Employer Name, City. Reply NONE if no employment.",
+      "Education after 12th grade (if any). For each: From (YYYY-MM), To (YYYY-MM), Field of Study, Name of Institute, City. Reply NONE if none.",
+      "What is your native language?",
+      "Have you taken an English language proficiency test? (Yes/No — if Yes: test name, score, and date)",
+      "Do you plan to work in the medical field in Canada in the future? (Yes/No — if Yes: please provide your medical exam/test details)"
     ]
   },
   trv_inside: {
@@ -78,11 +92,24 @@ const QUESTION_FLOWS: Record<ChecklistKey, QuestionFlow> = {
   work_permit: {
     requiredFields: DEFAULT_REQUIRED_FIELDS,
     prompts: [
-      "Date and place you first entered Canada",
-      "Purpose of original visit to Canada",
-      "Any recent entry to Canada? (date + reason)",
-      "Employment details from most recent (from/to/title/employer/city)",
-      "Education after 12th (from/to/field/institute/city)"
+      "Have you used any other name? (Yes/No — if Yes, provide full other name)",
+      "What is your current marital status? (Single / Married / Common-Law / Divorced / Widowed / Separated)",
+      "If Married or Common-Law: provide partner's full name and date of marriage (YYYY-MM-DD). Reply NA if not applicable.",
+      "Any previous marriage or common-law partnership? (Yes/No — if Yes: partner's name, date of birth, start and end date of relationship YYYY-MM-DD)",
+      "Current mailing address including postal code (Apt/Unit, Street Number, Street Name, City, Province, Postal Code)",
+      "Residential address if different from mailing address. Reply SAME if same.",
+      "Telephone number",
+      "Date and place you first entered Canada (YYYY-MM-DD, city/airport)",
+      "Purpose of your original visit to Canada (Study / Work / Visit)",
+      "Any recent entry to Canada? (Yes/No — if Yes: provide date YYYY-MM-DD and reason)",
+      "Have you ever been refused a visa or permit, denied entry, or ordered to leave Canada or any other country? (Yes/No — if Yes: provide details)",
+      "Do you have any medical history? (Yes/No — if Yes: provide details)",
+      "Do you have any criminal history? (Yes/No — if Yes: provide details)",
+      "Employment details — list all jobs most recent first. For each: From (YYYY-MM), To (YYYY-MM), Job Title, Employer Name, City. Reply NONE if no employment.",
+      "Education after 12th grade (if any). For each: From (YYYY-MM), To (YYYY-MM), Field of Study, Name of Institute, City. Reply NONE if none.",
+      "What is your native language?",
+      "Have you taken an English language proficiency test? (Yes/No — if Yes: test name, score, and date)",
+      "Do you plan to work in the medical field in Canada in the future? (Yes/No — if Yes: please provide your medical exam/test details)"
     ]
   },
   study_permit: {

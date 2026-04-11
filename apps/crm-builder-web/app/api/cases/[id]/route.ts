@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
 import { stageOrder } from "@/lib/data";
 import { canStaffAccessCase } from "@/lib/rbac";
-import { buildCaseFolderNameWithApp, createCaseDriveStructure, extractDriveFolderId } from "@/lib/google-drive";
+import { buildCaseFolderNameWithApp, createCaseDriveStructure, extractDriveFolderId, syncCaseToUnderReviewSheet } from "@/lib/google-drive";
 import { addAuditLog, getCase, resolveCaseDriveRootLink, updateCaseLinks, updateCaseProcessing, updateCaseStage } from "@/lib/store";
 import { boundedText } from "@/lib/validation";
 
@@ -59,6 +59,9 @@ export async function PATCH(
   const decisionDate =
     body?.decisionDate !== undefined ? String(body.decisionDate) : undefined;
   const remarks = body?.remarks !== undefined ? boundedText(body.remarks, 1000) : undefined;
+  const reviewedBy = body?.reviewedBy !== undefined ? String(body.reviewedBy) : undefined;
+  const reviewNotes = body?.reviewNotes !== undefined ? boundedText(body.reviewNotes, 2000) : undefined;
+  const reviewStatus = body?.reviewStatus !== undefined ? String(body.reviewStatus) : undefined;
 
   if (
     assignedTo !== undefined ||
@@ -70,7 +73,10 @@ export async function PATCH(
     submissionDocumentUploadedAt !== undefined ||
     finalOutcome !== undefined ||
     decisionDate !== undefined ||
-    remarks !== undefined
+    remarks !== undefined ||
+    reviewedBy !== undefined ||
+    reviewNotes !== undefined ||
+    reviewStatus !== undefined
   ) {
     if (processingStatus === "submitted") {
       const safeAppNo = String(applicationNumber || currentCase.applicationNumber || "").trim();
@@ -99,8 +105,11 @@ export async function PATCH(
       submissionDocumentUploadedAt,
       finalOutcome,
       decisionDate,
-      remarks
-    });
+      remarks,
+      reviewedBy,
+      reviewNotes,
+      reviewStatus
+    } as any);
     if (!updated) {
       return NextResponse.json({ error: "Case not found" }, { status: 404 });
     }
@@ -116,6 +125,17 @@ export async function PATCH(
         processingStatus: String(updated.processingStatus || "")
       }
     });
+    // Sync to Under Review sheet (non-fatal)
+    syncCaseToUnderReviewSheet({
+      client: updated.client,
+      formType: updated.formType,
+      assignedTo: updated.assignedTo,
+      reviewedBy: (updated as any).reviewedBy,
+      processingStatus: updated.processingStatus,
+      reviewStatus: (updated as any).reviewStatus,
+      reviewNotes: (updated as any).reviewNotes,
+      applicationNumber: (updated as any).applicationNumber,
+    }).catch(e => console.error("Sheet sync error:", e.message));
     let driveReroute: { updated: boolean; reason?: string; error?: string } = { updated: false };
     if (assignedTo !== undefined) {
       try {

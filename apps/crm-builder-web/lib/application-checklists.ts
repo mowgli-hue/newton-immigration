@@ -40,7 +40,13 @@ export function resolveApplicationChecklistKey(formType: string):
     ft.includes("work permit") ||
     ft.includes("lmia") ||
     ft.includes("sowp") ||
-    ft.includes("open work permit")
+    ft.includes("bowp") ||
+    ft.includes("vowp") ||
+    ft.includes("open work permit") ||
+    ft.includes("bridging") ||
+    ft.includes("vulnerable") ||
+    ft.includes("restoration") ||
+    ft.includes("restore")
   )
     return "work_permit";
   if (ft.includes("study permit")) return "study_permit";
