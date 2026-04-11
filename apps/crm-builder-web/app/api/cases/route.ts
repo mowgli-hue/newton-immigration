@@ -184,16 +184,5 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Trigger WhatsApp AI intake if phone number provided and WhatsApp is configured
-  if (created.leadPhone && isWhatsAppConfigured()) {
-    void startIntakeSession({
-      caseId: created.id,
-      companyId: user.companyId,
-      clientName: created.client,
-      phone: created.leadPhone,
-      formType: created.formType
-    }).catch((err) => console.error("WhatsApp intake start error:", err));
-  }
-
   return NextResponse.json({ case: created, drive }, { status: 201 });
 }
