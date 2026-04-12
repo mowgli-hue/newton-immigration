@@ -6,7 +6,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   try {
     const { getCurrentUserFromRequest } = await import("@/lib/auth");
     const { getCase, updateCaseProcessing } = await import("@/lib/store");
-    const { sendWhatsAppText } = await import("@/lib/whatsapp");
+    const { sendWhatsAppText, sendWhatsAppTemplate } = await import("@/lib/whatsapp");
 
     let companyId = "newton";
     try {
@@ -38,19 +38,22 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     // Build numbered question list
     const questionList = questions.map((q, i) => `*${i + 1}.* ${q}`).join("\n\n");
 
-    // Message 1: Greeting
-    const greetingMsg = [
-      `ਸਤ ਸ੍ਰੀ ਅਕਾਲ ${firstName} ਜੀ! 🙏`,
-      `Hi ${firstName}! Welcome to *Newton Immigration*.`,
-      ``,
-      `Thank you for choosing us for your *${caseItem.formType}* application. We are excited to work with you and will make this process as smooth as possible.`,
-      ``,
-      `Our team will be guiding you through every step. Please feel free to reach out anytime if you have questions.`,
-      ``,
-      `— Newton Immigration Team 🍁`,
-    ].join("\n");
-
-    await sendWhatsAppText(phone, greetingMsg);
+    // Message 1: Greeting via approved template
+    const templateResult = await sendWhatsAppTemplate({
+      to: phone,
+      templateName: "newton_immigration_intake",
+      languageCode: "en",
+      components: [{
+        type: "body",
+        parameters: [
+          { type: "text", text: firstName },
+          { type: "text", text: caseItem.formType }
+        ]
+      }]
+    });
+    if (!templateResult.success) {
+      await sendWhatsAppText(phone, `Hi ${firstName}! Welcome to Newton Immigration. Thank you for choosing us for your ${caseItem.formType} application. Our team will guide you through every step.`);
+    }
     await new Promise(resolve => setTimeout(resolve, 2000));
 
     // Message 2: Questions checklist

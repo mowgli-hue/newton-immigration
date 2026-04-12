@@ -23,6 +23,48 @@ export function normalizeWhatsAppPhone(phone: string): string {
   return digits;
 }
 
+export async function sendWhatsAppTemplate(params: {
+  to: string;
+  templateName: string;
+  languageCode: string;
+  components: Array<{
+    type: string;
+    parameters: Array<{ type: string; text?: string }>;
+  }>;
+}): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  const phoneId = getPhoneNumberId();
+  const token = getAccessToken();
+  if (!phoneId || !token) return { success: false, error: "WhatsApp not configured" };
+
+  const phone = normalizeWhatsAppPhone(params.to);
+  if (!phone || phone.length < 10) return { success: false, error: "Invalid phone number" };
+
+  try {
+    const res = await fetch(`${WHATSAPP_API_URL}/${phoneId}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: phone,
+        type: "template",
+        template: {
+          name: params.templateName,
+          language: { code: params.languageCode },
+          components: params.components
+        }
+      })
+    });
+    const data = await res.json() as { messages?: { id: string }[]; error?: { message: string } };
+    console.log(`📬 WA Template response: status=${res.status} | ${JSON.stringify(data).slice(0,150)}`);
+    if (!res.ok) return { success: false, error: data?.error?.message || "API error" };
+    return { success: true, messageId: data?.messages?.[0]?.id };
+  } catch (err) {
+    console.error("WA template send error:", err);
+    return { success: false, error: String(err) };
+  }
+}
+
 export async function sendWhatsAppText(to: string, message: string): Promise<{ success: boolean; messageId?: string; error?: string }> {
   const phoneId = getPhoneNumberId();
   const token = getAccessToken();

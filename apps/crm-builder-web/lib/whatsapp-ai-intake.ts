@@ -3,7 +3,7 @@
 
 import { getQuestionFlowForFormType } from "@/lib/application-question-flows";
 import { resolveApplicationChecklistKey } from "@/lib/application-checklists";
-import { sendWhatsAppText, sendDocumentChecklist } from "@/lib/whatsapp";
+import { sendWhatsAppText, sendWhatsAppTemplate, sendDocumentChecklist } from "@/lib/whatsapp";
 import { getCase, updateCaseProcessing, addMessage } from "@/lib/store";
 
 export type IntakeSession = {
