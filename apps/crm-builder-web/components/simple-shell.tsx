@@ -184,7 +184,7 @@ type DocRequestItem = {
   fulfilledBy?: string;
   documentId?: string;
 };
-type CaseDetailTab = "overview" | "profile" | "documents" | "tasks" | "communication";
+type CaseDetailTab = "overview" | "profile" | "documents" | "tasks" | "communication" | "notes";
 type CaseBoardView = "home" | "new_cases" | "assigned_cases" | "under_review_cases" | "urgent_cases" | "all_cases";
 
 type PgwpDraft = {
@@ -4324,10 +4324,9 @@ We will notify you as soon as we receive a decision. This usually takes a few we
                                       {c.leadPhone && (
                                         <button onClick={async e => {
                                           e.stopPropagation();
-                                          const msg = prompt("Message to " + c.client + ":");
-                                          if (!msg) return;
-                                          const res = await apiFetch("/inbox/send", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ phone:String(c.leadPhone||"").replace(/\D/g,""), message:msg, caseId:c.id }) }).catch(()=>null);
-                                          setCaseActionStatus(res?.ok ? "✅ Sent to " + c.client : "❌ Failed"); setTimeout(()=>setCaseActionStatus(""),3000);
+                                          // Open inbox for this client
+                                          setInboxThread(String(c.leadPhone||"").replace(/\D/g,""));
+                                          setScreen("inbox");
                                         }} className="rounded-lg bg-emerald-500 px-2 py-1 text-[10px] font-bold text-white hover:bg-emerald-600">💬</button>
                                       )}
                                       <span className="text-xs font-semibold text-amber-700">Open →</span>
@@ -4472,10 +4471,9 @@ We will notify you as soon as we receive a decision. This usually takes a few we
                                       {c.leadPhone && (
                                         <button onClick={async e => {
                                           e.stopPropagation();
-                                          const msg = prompt("Message to " + c.client + ":");
-                                          if (!msg) return;
-                                          const res = await apiFetch("/inbox/send", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ phone:String(c.leadPhone||"").replace(/\D/g,""), message:msg, caseId:c.id }) }).catch(()=>null);
-                                          setCaseActionStatus(res?.ok ? "✅ Sent to " + c.client : "❌ Failed"); setTimeout(()=>setCaseActionStatus(""),3000);
+                                          // Open inbox for this client
+                                          setInboxThread(String(c.leadPhone||"").replace(/\D/g,""));
+                                          setScreen("inbox");
                                         }} className="rounded-lg bg-emerald-500 px-2 py-1 text-[10px] font-bold text-white hover:bg-emerald-600">💬</button>
                                       )}
                                       <span className="text-xs font-semibold text-red-700">Open →</span>
@@ -5366,9 +5364,8 @@ We will notify you as soon as we receive a decision. This usually takes a few we
                               onChange={async (e) => {
                                 const newStatus = e.target.value as "docs_pending"|"under_review"|"submitted"|"other";
                                 if (newStatus === "under_review") {
-                                  // Ask who is reviewing
-                                  const reviewer = prompt("Who is reviewing this case?\n\nSelect reviewer name:", sessionUser?.name || "");
-                                  if (!reviewer) return;
+                                  // Auto-assign reviewer as logged-in user — no prompt needed
+                                  const reviewer = sessionUser?.name || "Reviewer";
                                   await updateCaseProcessing(selectedCase.id, { 
                                     processingStatus: newStatus,
                                     reviewedBy: reviewer,
@@ -5398,15 +5395,8 @@ We will notify you as soon as we receive a decision. This usually takes a few we
                             </select>
                             {selectedCase.leadPhone && (
                               <button onClick={() => {
-                                const msg = prompt("Send WhatsApp message to " + selectedCase.client + ":");
-                                if (!msg) return;
-                                apiFetch("/inbox/send", {
-                                  method: "POST", headers: {"Content-Type":"application/json"},
-                                  body: JSON.stringify({ phone: String(selectedCase.leadPhone||"").replace(/\D/g,""), message: msg, caseId: selectedCase.id })
-                                }).then(r => {
-                                  setCaseActionStatus(r.ok ? "✅ Message sent to " + selectedCase.client : "❌ Failed to send");
-                                  setTimeout(() => setCaseActionStatus(""), 3000);
-                                }).catch(() => setCaseActionStatus("❌ Failed"));
+                                setInboxThread(String(selectedCase.leadPhone||"").replace(/\D/g,""));
+                                setScreen("inbox");
                               }} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">
                                 💬 Message
                               </button>
@@ -5489,6 +5479,7 @@ We will notify you as soon as we receive a decision. This usually takes a few we
                           {id:"documents",icon:"📎", label:"Docs"},
                           {id:"tasks",    icon:"✅", label:"Tasks"},
                           {id:"communication",icon:"💬",label:"Chat"},
+                          {id:"notes",    icon:"📝", label:"Notes"},
                         ] as const).map(tab => (
                           <button key={tab.id} onClick={() => setCaseDetailTab(tab.id)}
                             className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold border-b-2 transition-colors ${
@@ -5502,6 +5493,9 @@ We will notify you as soon as we receive a decision. This usually takes a few we
                             )}
                             {tab.id === "documents" && documents.filter(d=>d.caseId===selectedCase.id).length > 0 && (
                               <span className="rounded-full bg-blue-100 px-1.5 text-[9px] font-bold text-blue-700">{documents.filter(d=>d.caseId===selectedCase.id).length}</span>
+                            )}
+                            {tab.id === "notes" && (caseNotes[selectedCase.id]||[]).length > 0 && (
+                              <span className="rounded-full bg-amber-100 px-1.5 text-[9px] font-bold text-amber-700">{(caseNotes[selectedCase.id]||[]).length}</span>
                             )}
                           </button>
                         ))}
@@ -8027,6 +8021,56 @@ We will notify you as soon as we receive a decision. This usually takes a few we
               </div>
             </div>
           ) : null}
+
+                    {caseDetailTab === "notes" ? (
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <textarea
+                            id="case-note-input"
+                            placeholder="Add an internal note about this case..."
+                            rows={3}
+                            className="w-full rounded-xl border-2 border-slate-200 bg-slate-50 px-4 py-3 text-sm focus:border-emerald-400 focus:outline-none resize-none"
+                          />
+                          <button onClick={async () => {
+                            const el = document.getElementById("case-note-input") as HTMLTextAreaElement;
+                            const text = el?.value?.trim();
+                            if (!text) return;
+                            const res = await apiFetch(`/cases/${selectedCase.id}/notes`, {
+                              method: "POST",
+                              headers: {"Content-Type": "application/json"},
+                              body: JSON.stringify({ text, addedBy: sessionUser?.name })
+                            }).catch(() => null);
+                            if (res?.ok) {
+                              el.value = "";
+                              const d = await apiFetch(`/cases/${selectedCase.id}/notes`).then(r => r?.json()).catch(() => ({}));
+                              if (d?.notes) setCaseNotes(prev => ({...prev, [selectedCase.id]: d.notes}));
+                              setCaseActionStatus("✅ Note added");
+                              setTimeout(() => setCaseActionStatus(""), 3000);
+                            } else {
+                              setCaseActionStatus("❌ Failed to add note");
+                              setTimeout(() => setCaseActionStatus(""), 3000);
+                            }
+                          }} className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white hover:bg-slate-700">
+                            + Add Note
+                          </button>
+                        </div>
+                        <div className="space-y-2">
+                          {(caseNotes[selectedCase.id] || []).length === 0 ? (
+                            <p className="text-xs text-slate-400 text-center py-4">No notes yet — add the first one above</p>
+                          ) : (
+                            [...(caseNotes[selectedCase.id] || [])].reverse().map(note => (
+                              <div key={note.id} className="rounded-xl border border-slate-200 bg-white p-3">
+                                <div className="flex items-center justify-between mb-1">
+                                  <p className="text-xs font-bold text-slate-700">{note.added_by || "Staff"}</p>
+                                  <p className="text-[10px] text-slate-400">{note.created_at ? new Date(note.created_at).toLocaleString([], {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : ""}</p>
+                                </div>
+                                <p className="text-sm text-slate-800 whitespace-pre-wrap">{note.text}</p>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    ) : null}
 
           </div>
         </main>
