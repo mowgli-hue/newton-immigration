@@ -19,29 +19,37 @@ export default function UnderReviewPanel({
 }: URPanelProps) {
   const [notesValue, setNotesValue] = useState("");
   const [appNum, setAppNum] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   if (!caseId) return null;
   const urCase = cases.find(c => c.id === caseId);
   if (!urCase) return null;
 
   const reviewedBy = (urCase as any).reviewedBy || "";
-  const reviewStatus = (urCase as any).reviewStatus;
+  const reviewStatus = (urCase as any).reviewStatus || "";
   const reviewNotes = (urCase as any).reviewNotes || "";
   const myName = sessionUser?.name || "Reviewer";
+  const myRole = sessionUser?.role || "";
+  const isReviewer = myRole === "Reviewer" || myRole === "Admin" || myRole === "ProcessingLead";
+  const isAssignedStaff = urCase.assignedTo && urCase.assignedTo === myName;
 
-  // Step: if no reviewer yet → auto-start with logged-in user's name
-  // If reviewer set → go straight to step 2, 3, or 4
+  // Determine step based on case state
+  // Step 1: No reviewer claimed yet → reviewer claims it
+  // Step 2: Reviewer claimed → reviewer writes notes/changes OR marks ready
+  // Step 3: Changes needed → assigned staff sees notes and marks done
+  // Step 4: Changes done → reviewer confirms and submits
   const step = !reviewedBy ? 1
     : reviewStatus === "changes_needed" ? 3
     : reviewStatus === "changes_done" ? 4
     : 2;
 
-  // Auto-start: if panel opens and no reviewer yet, immediately claim it
-  // We do this by treating step 1 as just a confirmation button showing YOUR name
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-0" onClick={onClose}>
-      <div className="w-full max-w-md rounded-t-2xl sm:rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+  const stepLabels = ["Claim", "Review", "Fix", "Submit"];
 
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 px-4 pb-0" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-t-2xl sm:rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
         <div className="bg-amber-600 px-4 py-3 flex items-center justify-between">
           <div>
             <p className="text-sm font-bold text-white">👁 Under Review — {urCase.client}</p>
@@ -51,137 +59,218 @@ export default function UnderReviewPanel({
         </div>
 
         {/* Step indicator */}
-        <div className="flex border-b border-slate-100 bg-slate-50">
-          {[{n:1,l:"Start"},{n:2,l:"Review"},{n:3,l:"Changes"},{n:4,l:"Submit"}].map(s => (
-            <div key={s.n} className={`flex-1 py-2 text-center text-[10px] font-bold transition-colors ${step === s.n ? "text-amber-700 border-b-2 border-amber-500 bg-white" : step > s.n ? "text-emerald-600" : "text-slate-400"}`}>
-              {step > s.n ? "✓ " : ""}{s.l}
-            </div>
-          ))}
+        <div className="flex border-b border-slate-100">
+          {stepLabels.map((l, i) => {
+            const n = i + 1;
+            const isActive = step === n;
+            const isDone = step > n;
+            return (
+              <div key={n} className={`flex-1 py-2.5 text-center text-[10px] font-bold border-b-2 transition-colors ${isActive ? "text-amber-700 border-amber-500 bg-amber-50" : isDone ? "text-emerald-600 border-emerald-400 bg-emerald-50" : "text-slate-400 border-transparent bg-white"}`}>
+                {isDone ? "✓ " : ""}{l}
+              </div>
+            );
+          })}
         </div>
 
-        <div className="p-4 space-y-3 max-h-[65vh] overflow-auto">
+        <div className="p-4 space-y-3 max-h-[70vh] overflow-auto">
 
-          {/* Step 1: Auto-assign reviewer as logged-in user */}
+          {/* STEP 1: Reviewer claims the case */}
           {step === 1 && (
             <div className="space-y-3">
-              <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 text-center">
+              <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 text-center">
+                <p className="text-xs text-slate-500 mb-1">This case is under review</p>
+                <p className="text-sm font-bold text-amber-800 mb-3">{urCase.client} · {urCase.formType}</p>
                 <p className="text-xs text-slate-500 mb-1">You are reviewing as</p>
-                <p className="text-lg font-bold text-amber-800">{myName}</p>
+                <p className="text-2xl font-black text-amber-700">{myName}</p>
               </div>
-              <button onClick={async () => {
-                onUpdate(urCase.id, { reviewedBy: myName, reviewStatus: "reviewing" });
-                setCaseActionStatus("✅ You are now reviewing " + urCase.client);
-                setTimeout(() => setCaseActionStatus(""), 3000);
-              }} className="w-full rounded-xl bg-amber-600 py-2.5 text-sm font-bold text-white hover:bg-amber-700">
-                👁 Start Reviewing
-              </button>
+              {isReviewer ? (
+                <button onClick={async () => {
+                  onUpdate(urCase.id, { reviewedBy: myName, reviewStatus: "reviewing" });
+                  await onAddNote(urCase.id, `👁 Case taken for review by ${myName}`, myName);
+                  setCaseActionStatus("✅ You are now reviewing " + urCase.client);
+                  setTimeout(() => setCaseActionStatus(""), 3000);
+                }} className="w-full rounded-xl bg-amber-600 py-3 text-sm font-bold text-white hover:bg-amber-700">
+                  👁 Claim & Start Reviewing
+                </button>
+              ) : (
+                <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 text-center">
+                  <p className="text-xs text-slate-500">Waiting for a reviewer to claim this case</p>
+                </div>
+              )}
             </div>
           )}
 
-          {/* Step 2: Write changes */}
+          {/* STEP 2: Reviewer reviews — writes notes or marks ready */}
           {step === 2 && (
             <div className="space-y-3">
-              <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2">
-                <p className="text-xs font-bold text-amber-800">Reviewing as: {reviewedBy}</p>
-                <p className="text-[11px] text-amber-600 mt-0.5">Will notify <strong>{urCase.assignedTo || "assigned staff"}</strong> when you send changes</p>
+              <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold text-amber-800">👁 Reviewer: {reviewedBy}</p>
+                  <p className="text-[11px] text-amber-600 mt-0.5">Assigned staff: {urCase.assignedTo || "Unassigned"}</p>
+                </div>
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">Reviewing</span>
               </div>
-              <p className="text-sm font-bold text-slate-700">What needs to be changed?</p>
+
+              {/* Show previous notes if any */}
+              {reviewNotes ? (
+                <div className="rounded-xl bg-slate-50 border border-slate-200 p-3">
+                  <p className="text-xs font-bold text-slate-600 mb-1">Previous notes:</p>
+                  <p className="text-xs text-slate-700 whitespace-pre-wrap">{reviewNotes}</p>
+                </div>
+              ) : null}
+
+              <p className="text-sm font-semibold text-slate-700">What needs to be changed?</p>
               <textarea
                 value={notesValue}
                 onChange={e => setNotesValue(e.target.value)}
                 placeholder="e.g. Passport copy is unclear, need employment letter page 2, fix date of birth field..."
-                rows={5}
+                rows={4}
                 className="w-full rounded-xl border-2 border-slate-200 bg-slate-50 px-3 py-2.5 text-sm focus:border-amber-400 focus:outline-none resize-none" />
-              <button onClick={async () => {
-                const notes = notesValue.trim();
-                if (!notes) { setCaseActionStatus("❌ Write what needs to be changed first"); return; }
-                onUpdate(urCase.id, { reviewNotes: notes, reviewStatus: "changes_needed" });
-                await onAddNote(urCase.id,
-                  "⚠️ CHANGES NEEDED (by " + reviewedBy + "):\n" + notes,
-                  reviewedBy
-                );
-                if (urCase.assignedTo && urCase.assignedTo !== "Unassigned") {
-                  await onNotify(
-                    urCase.assignedTo,
-                    "⚠️ " + urCase.client + " (" + urCase.id + ") — Changes needed by " + reviewedBy + ": " + notes.slice(0, 100),
-                    urCase.id
-                  );
-                }
-                onClose();
-                setCaseActionStatus("⚠️ Changes sent to " + (urCase.assignedTo || "staff"));
-                setTimeout(() => setCaseActionStatus(""), 5000);
-              }} className="w-full rounded-xl bg-red-500 py-2.5 text-sm font-bold text-white hover:bg-red-600">
-                ⚠️ Send Changes to {urCase.assignedTo || "Assigned Staff"}
-              </button>
-              <button onClick={() => {
-                onUpdate(urCase.id, { reviewStatus: "changes_done" });
-                onClose();
-                setCaseActionStatus("✅ Marked ready to submit");
-                setTimeout(() => setCaseActionStatus(""), 3000);
-              }} className="w-full rounded-xl border-2 border-emerald-200 bg-emerald-50 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-100">
-                ✅ No Changes Needed — Ready to Submit
-              </button>
+
+              {/* Only reviewer can write changes */}
+              {(reviewedBy === myName || isReviewer) && (
+                <>
+                  <button onClick={async () => {
+                    const notes = notesValue.trim();
+                    if (!notes) { setCaseActionStatus("❌ Write what needs to be changed first"); setTimeout(() => setCaseActionStatus(""), 3000); return; }
+                    onUpdate(urCase.id, { reviewNotes: notes, reviewStatus: "changes_needed" });
+                    await onAddNote(urCase.id,
+                      `⚠️ CHANGES NEEDED (by ${reviewedBy}):\n${notes}`,
+                      reviewedBy
+                    );
+                    if (urCase.assignedTo && urCase.assignedTo !== "Unassigned") {
+                      await onNotify(
+                        urCase.assignedTo,
+                        `⚠️ ${urCase.client} (${urCase.id}) — Changes needed by ${reviewedBy}: ${notes.slice(0, 120)}`,
+                        urCase.id
+                      );
+                    }
+                    setNotesValue("");
+                    onClose();
+                    setCaseActionStatus(`⚠️ Changes sent to ${urCase.assignedTo || "staff"}`);
+                    setTimeout(() => setCaseActionStatus(""), 5000);
+                  }} className="w-full rounded-xl bg-red-500 py-2.5 text-sm font-bold text-white hover:bg-red-600">
+                    ⚠️ Send Changes to {urCase.assignedTo || "Assigned Staff"}
+                  </button>
+
+                  <button onClick={async () => {
+                    onUpdate(urCase.id, { reviewStatus: "changes_done", reviewNotes: notesValue.trim() || reviewNotes });
+                    await onAddNote(urCase.id, `✅ Case approved by ${reviewedBy} — ready to submit`, reviewedBy);
+                    onClose();
+                    setCaseActionStatus("✅ Marked ready to submit");
+                    setTimeout(() => setCaseActionStatus(""), 3000);
+                  }} className="w-full rounded-xl border-2 border-emerald-300 bg-emerald-50 py-2.5 text-sm font-bold text-emerald-700 hover:bg-emerald-100">
+                    ✅ Looks Good — Ready to Submit
+                  </button>
+                </>
+              )}
             </div>
           )}
 
-          {/* Step 3: Staff sees changes and marks done */}
+          {/* STEP 3: Staff sees changes needed and marks done */}
           {step === 3 && (
             <div className="space-y-3">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900">Reviewer: {reviewedBy}</span>
+                <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900">👁 Reviewer: {reviewedBy}</span>
                 <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700">⚠️ Changes Needed</span>
               </div>
+
               <div className="rounded-xl bg-red-50 border-2 border-red-200 p-3">
-                <p className="text-xs font-bold text-red-700 mb-2">Changes required:</p>
+                <p className="text-xs font-bold text-red-700 mb-2">Required changes:</p>
                 <p className="text-sm text-slate-800 whitespace-pre-wrap">{reviewNotes}</p>
               </div>
-              <button onClick={async () => {
-                onUpdate(urCase.id, { reviewStatus: "changes_done" });
-                await onAddNote(urCase.id,
-                  "✅ Changes done by " + myName + " — ready for re-review.",
-                  myName
-                );
-                if (reviewedBy) {
-                  await onNotify(
-                    reviewedBy,
-                    "✅ " + urCase.client + " (" + urCase.id + ") — Changes done by " + myName + ". Ready to submit.",
-                    urCase.id
+
+              {/* Staff marks changes done */}
+              {(isAssignedStaff || myRole === "Admin") && (
+                <button onClick={async () => {
+                  onUpdate(urCase.id, { reviewStatus: "changes_done" });
+                  await onAddNote(urCase.id,
+                    `✅ Changes completed by ${myName} — ready for re-review`,
+                    myName
                   );
-                }
-                onClose();
-                setCaseActionStatus("✅ Changes done — " + reviewedBy + " notified");
-                setTimeout(() => setCaseActionStatus(""), 4000);
-              }} className="w-full rounded-xl bg-emerald-600 py-2.5 text-sm font-bold text-white hover:bg-emerald-700">
-                ✅ Changes Done — Notify Reviewer
-              </button>
-              <button onClick={() => { onUpdate(urCase.id, { reviewStatus: "reviewing" }); onClose(); }}
-                className="w-full rounded-xl border border-slate-200 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50">
-                ✏️ Reviewer wants to update notes
-              </button>
+                  if (reviewedBy) {
+                    await onNotify(
+                      reviewedBy,
+                      `✅ ${urCase.client} (${urCase.id}) — Changes done by ${myName}. Please review and submit.`,
+                      urCase.id
+                    );
+                  }
+                  onClose();
+                  setCaseActionStatus(`✅ Changes done — ${reviewedBy} notified`);
+                  setTimeout(() => setCaseActionStatus(""), 4000);
+                }} className="w-full rounded-xl bg-emerald-600 py-2.5 text-sm font-bold text-white hover:bg-emerald-700">
+                  ✅ Changes Done — Notify Reviewer
+                </button>
+              )}
+
+              {/* Reviewer can also update notes from this screen */}
+              {(reviewedBy === myName || isReviewer) && (
+                <>
+                  <p className="text-xs font-semibold text-slate-600">Update notes (reviewer):</p>
+                  <textarea
+                    value={notesValue}
+                    onChange={e => setNotesValue(e.target.value)}
+                    placeholder="Update or add more details..."
+                    rows={3}
+                    className="w-full rounded-xl border-2 border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none resize-none" />
+                  <button onClick={async () => {
+                    const notes = notesValue.trim();
+                    if (!notes) return;
+                    onUpdate(urCase.id, { reviewNotes: notes });
+                    await onAddNote(urCase.id, `📝 Notes updated by ${myName}:\n${notes}`, myName);
+                    setNotesValue("");
+                    onClose();
+                    setCaseActionStatus("✅ Notes updated");
+                    setTimeout(() => setCaseActionStatus(""), 3000);
+                  }} className="w-full rounded-xl border border-amber-300 bg-amber-50 py-2 text-xs font-bold text-amber-700 hover:bg-amber-100">
+                    📝 Update Notes
+                  </button>
+                </>
+              )}
             </div>
           )}
 
-          {/* Step 4: Submit */}
+          {/* STEP 4: Reviewer submits */}
           {step === 4 && (
             <div className="space-y-3">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900">Reviewer: {reviewedBy}</span>
-                <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">✅ Changes Done</span>
+                <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900">👁 Reviewer: {reviewedBy}</span>
+                <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">✅ Ready to Submit</span>
               </div>
-              <p className="text-sm font-bold text-slate-700">Enter application number to submit</p>
-              <input
-                value={appNum || (urCase as any).applicationNumber || ""}
-                onChange={e => setAppNum(e.target.value)}
-                placeholder="App number e.g. W311024778"
-                className="w-full rounded-xl border-2 border-slate-200 px-3 py-2.5 text-sm focus:border-emerald-400 focus:outline-none" />
-              <button onClick={async () => {
-                const num = (appNum || (urCase as any).applicationNumber || "").trim().toUpperCase();
-                if (!num) { setCaseActionStatus("❌ Enter application number"); return; }
-                await onSubmit(urCase.id, num);
-                onClose();
-              }} className="w-full rounded-xl bg-emerald-600 py-2.5 text-sm font-bold text-white hover:bg-emerald-700">
-                🚀 Submit Application
-              </button>
+
+              {reviewNotes ? (
+                <div className="rounded-xl bg-slate-50 border border-slate-200 p-3">
+                  <p className="text-xs font-bold text-slate-600 mb-1">Review notes:</p>
+                  <p className="text-xs text-slate-700 whitespace-pre-wrap">{reviewNotes}</p>
+                </div>
+              ) : null}
+
+              {/* Only reviewer can submit */}
+              {(reviewedBy === myName || isReviewer) ? (
+                <>
+                  <p className="text-sm font-semibold text-slate-700">Enter application number to submit:</p>
+                  <input
+                    value={appNum || (urCase as any).applicationNumber || ""}
+                    onChange={e => setAppNum(e.target.value)}
+                    placeholder="e.g. W311024778"
+                    className="w-full rounded-xl border-2 border-slate-200 px-3 py-2.5 text-sm font-mono focus:border-emerald-400 focus:outline-none" />
+                  <button onClick={async () => {
+                    const num = (appNum || (urCase as any).applicationNumber || "").trim().toUpperCase();
+                    if (!num) { setCaseActionStatus("❌ Enter application number"); return; }
+                    setSubmitting(true);
+                    await onSubmit(urCase.id, num);
+                    setSubmitting(false);
+                    onClose();
+                  }} disabled={submitting} className="w-full rounded-xl bg-emerald-600 py-3 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50">
+                    {submitting ? "Submitting..." : "🚀 Submit Application"}
+                  </button>
+                </>
+              ) : (
+                <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 text-center">
+                  <p className="text-xs text-slate-500">Waiting for {reviewedBy} to submit</p>
+                </div>
+              )}
+
               <button onClick={() => { onUpdate(urCase.id, { reviewStatus: "changes_needed" }); onClose(); }}
                 className="w-full rounded-xl border border-slate-200 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50">
                 ← More Changes Needed

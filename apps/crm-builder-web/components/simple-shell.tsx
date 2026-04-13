@@ -534,6 +534,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [caseActionStatus, setCaseActionStatus] = useState("");
   const [showURPanel, setShowURPanel] = useState<string|null>(null);
   const [inboxThread, setInboxThread] = useState<string|null>(null);
+  const [caseNotes, setCaseNotes] = useState<Record<string, Array<{id:string;text:string;added_by:string;created_at:string}>>>({});
   const [diagnosticsStatus, setDiagnosticsStatus] = useState("");
   const [diagnosticsReport, setDiagnosticsReport] = useState<DiagnosticsReport | null>(null);
   const [caseSearch, setCaseSearch] = useState("");
@@ -6257,8 +6258,13 @@ We will notify you as soon as we receive a decision. This usually takes a few we
                     </div>
                   )}
                 </div>
-                <select value={selectedCase?.id ?? ""} onChange={(e) => setSelectedCaseId(e.target.value)}
-                  className="w-full rounded-xl border-2 border-slate-100 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-800 focus:border-emerald-400 focus:bg-white focus:outline-none">
+                <select value={selectedCase?.id ?? ""} onChange={async (e) => {
+                  setSelectedCaseId(e.target.value);
+                  if (e.target.value && !caseNotes[e.target.value]) {
+                    const r = await apiFetch(`/cases/${e.target.value}/notes`).catch(()=>null);
+                    if (r?.ok) { const d = await r.json().catch(()=>({})); if (d.notes) setCaseNotes(prev => ({...prev, [e.target.value]: d.notes})); }
+                  }
+                }} className="w-full rounded-xl border-2 border-slate-100 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-800 focus:border-emerald-400 focus:bg-white focus:outline-none">
                   <option value="">— Select a case —</option>
                   {visibleCases.map((c) => <option key={c.id} value={c.id}>{c.client} · {c.formType} · {c.id}</option>)}
                 </select>
@@ -8057,10 +8063,16 @@ We will notify you as soon as we receive a decision. This usually takes a few we
           setTimeout(() => setCaseActionStatus(""), 4000);
         }}
         onAddNote={async (caseId, text, author) => {
-          await apiFetch(`/cases/${caseId}/notes`, {
+          const res = await apiFetch(`/cases/${caseId}/notes`, {
             method: "POST", headers: {"Content-Type":"application/json"},
             body: JSON.stringify({ text, addedBy: author })
           }).catch(()=>null);
+          // Reload notes for this case
+          const notesRes = await apiFetch(`/cases/${caseId}/notes`).catch(()=>null);
+          if (notesRes?.ok) {
+            const d = await notesRes.json().catch(()=>({}));
+            if (d.notes) setCaseNotes(prev => ({...prev, [caseId]: d.notes}));
+          }
         }}
         setCaseActionStatus={setCaseActionStatus}
       />
