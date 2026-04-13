@@ -26,7 +26,7 @@ import { CaseItem, Role } from "@/lib/data";
 import { apiFetch } from "@/lib/api-client";
 import { Company } from "@/lib/models";
 import { getChecklistForFormType, resolveApplicationChecklistKey } from "@/lib/application-checklists";
-import { isQuestionnaireComplete } from "@/lib/application-question-flows";
+import { isQuestionnaireComplete, getQuestionPromptsForFormType } from "@/lib/application-question-flows";
 import { canCreateCase, canManageUsers, canAssignCases, canChangeStatus, canStaffAccessCase, tabsForRole, type AppScreen } from "@/lib/rbac";
 import { IMPORT_CASES_DATA } from "@/lib/import-data";
 
@@ -7665,6 +7665,7 @@ We will notify you as soon as we receive a decision. This usually takes a few we
                 const sortedMsgs = [...msgs].sort((a,b)=>new Date(a.created_at).getTime()-new Date(b.created_at).getTime());
                 const isUnknown = !matchedCase;
                 return (
+                  <div className="flex-1 flex min-w-0 overflow-hidden">
                   <div className="flex-1 flex flex-col min-w-0">
                     {/* Chat header */}
                     <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-white shrink-0">
@@ -7735,6 +7736,102 @@ We will notify you as soon as we receive a decision. This usually takes a few we
                         else { setCaseActionStatus("❌ Failed to send"); setTimeout(()=>setCaseActionStatus(""),3000); }
                       }} className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 shrink-0">Send</button>
                     </div>
+                  </div>
+
+                  {/* RIGHT: Smart Suggestions Panel */}
+                  <div className="hidden lg:flex flex-col w-64 shrink-0 border-l border-slate-100 bg-slate-50 overflow-y-auto">
+                    <div className="px-4 py-3 border-b border-slate-100">
+                      <p className="text-xs font-bold text-slate-700 uppercase tracking-wide">🤖 Quick Send</p>
+                      {matchedCase && <p className="text-[11px] text-slate-400 mt-0.5">{matchedCase.formType} · {clientName}</p>}
+                    </div>
+
+                    <div className="p-3 space-y-2">
+
+                      {/* Send Checklist */}
+                      {matchedCase && (() => {
+                        const checklist = getChecklistForFormType(matchedCase.formType);
+                        if (!checklist.length) return null;
+                        const checklistMsg = [
+                          `📋 *Document Checklist for ${matchedCase.formType}*`,
+                          ``,
+                          `Please provide the following documents:`,
+                          ``,
+                          ...checklist.map((item, i) => `${i+1}. ${item}`),
+                          ``,
+                          `Please send clear photos or scans. Thank you! 🙏`,
+                        ].join("\n");
+                        return (
+                          <button onClick={async () => {
+                            const res = await apiFetch("/inbox/send",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({phone:phone.replace(/\D/g,""),message:checklistMsg,caseId:matchedCase.id})}).catch(()=>null);
+                            if (res?.ok) { setInboxMessages(prev=>[{id:`tmp-${Date.now()}`,phone,message:checklistMsg,direction:"outbound",matched_case_id:matchedCase.id,matched_case_name:clientName,is_read:true,created_at:new Date().toISOString()},...prev]); setCaseActionStatus("✅ Checklist sent!"); setTimeout(()=>setCaseActionStatus(""),3000); }
+                          }} className="w-full rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-left hover:bg-blue-100 transition-colors">
+                            <p className="text-xs font-bold text-blue-800">📋 Send Document Checklist</p>
+                            <p className="text-[10px] text-blue-600 mt-0.5">{checklist.length} documents required</p>
+                          </button>
+                        );
+                      })()}
+
+                      {/* Send Questions */}
+                      {matchedCase && (() => {
+                        const questions = getQuestionPromptsForFormType(matchedCase.formType);
+                        if (!questions.length) return null;
+                        const questionList = questions.map((q, i) => `*${i+1}.* ${q}`).join("\n\n");
+                        const questionsMsg = [
+                          `📝 *Intake Questions for ${matchedCase.formType}*`,
+                          ``,
+                          `Please reply with all answers numbered in ONE message:`,
+                          ``,
+                          `━━━━━━━━━━━━━━━`,
+                          questionList,
+                          `━━━━━━━━━━━━━━━`,
+                          ``,
+                          `Take your time. Reply with all answers together. 🙏`,
+                        ].join("\n");
+                        return (
+                          <button onClick={async () => {
+                            const res = await apiFetch("/inbox/send",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({phone:phone.replace(/\D/g,""),message:questionsMsg,caseId:matchedCase.id})}).catch(()=>null);
+                            if (res?.ok) { setInboxMessages(prev=>[{id:`tmp-${Date.now()}`,phone,message:questionsMsg,direction:"outbound",matched_case_id:matchedCase.id,matched_case_name:clientName,is_read:true,created_at:new Date().toISOString()},...prev]); setCaseActionStatus("✅ Questions sent!"); setTimeout(()=>setCaseActionStatus(""),3000); }
+                          }} className="w-full rounded-xl border border-purple-200 bg-purple-50 px-3 py-2.5 text-left hover:bg-purple-100 transition-colors">
+                            <p className="text-xs font-bold text-purple-800">📝 Send Intake Questions</p>
+                            <p className="text-[10px] text-purple-600 mt-0.5">{questions.length} questions</p>
+                          </button>
+                        );
+                      })()}
+
+                      {/* Send Greeting */}
+                      <button onClick={async () => {
+                        const greetMsg = `ਸਤ ਸ੍ਰੀ ਅਕਾਲ ${clientName.split(" ")[0]} ਜੀ! 🙏\nHi *${clientName.split(" ")[0]}*! Welcome to *Newton Immigration*. Thank you for choosing us. Our team will guide you through every step. Please feel free to reach out anytime!\n\n— Newton Immigration Team 🍁`;
+                        const res = await apiFetch("/inbox/send",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({phone:phone.replace(/\D/g,""),message:greetMsg,caseId:matchedCase?.id||null})}).catch(()=>null);
+                        if (res?.ok) { setInboxMessages(prev=>[{id:`tmp-${Date.now()}`,phone,message:greetMsg,direction:"outbound",matched_case_id:matchedCase?.id||null,matched_case_name:clientName,is_read:true,created_at:new Date().toISOString()},...prev]); setCaseActionStatus("✅ Greeting sent!"); setTimeout(()=>setCaseActionStatus(""),3000); }
+                      }} className="w-full rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-left hover:bg-emerald-100 transition-colors">
+                        <p className="text-xs font-bold text-emerald-800">👋 Send Greeting</p>
+                        <p className="text-[10px] text-emerald-600 mt-0.5">Welcome message in English + Punjabi</p>
+                      </button>
+
+                      {/* Send Reminder */}
+                      <button onClick={async () => {
+                        const reminderMsg = `Hi *${clientName.split(" ")[0]}*! 👋 This is a gentle reminder from Newton Immigration. We are still waiting for your documents/answers. Please send them at your earliest convenience so we can move forward with your application. Thank you! 🙏`;
+                        const res = await apiFetch("/inbox/send",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({phone:phone.replace(/\D/g,""),message:reminderMsg,caseId:matchedCase?.id||null})}).catch(()=>null);
+                        if (res?.ok) { setInboxMessages(prev=>[{id:`tmp-${Date.now()}`,phone,message:reminderMsg,direction:"outbound",matched_case_id:matchedCase?.id||null,matched_case_name:clientName,is_read:true,created_at:new Date().toISOString()},...prev]); setCaseActionStatus("✅ Reminder sent!"); setTimeout(()=>setCaseActionStatus(""),3000); }
+                      }} className="w-full rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-left hover:bg-amber-100 transition-colors">
+                        <p className="text-xs font-bold text-amber-800">⏰ Send Reminder</p>
+                        <p className="text-[10px] text-amber-600 mt-0.5">Gentle follow-up message</p>
+                      </button>
+
+                      {/* Appointment */}
+                      <button onClick={async () => {
+                        const apptMsg = `Hi *${clientName.split(" ")[0]}*! Your application is ready for review. Please call us at your earliest convenience to schedule a consultation.\n\n📞 Newton Immigration\n🕐 Mon-Fri 9AM-5PM\n\nThank you! 🙏`;
+                        const res = await apiFetch("/inbox/send",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({phone:phone.replace(/\D/g,""),message:apptMsg,caseId:matchedCase?.id||null})}).catch(()=>null);
+                        if (res?.ok) { setInboxMessages(prev=>[{id:`tmp-${Date.now()}`,phone,message:apptMsg,direction:"outbound",matched_case_id:matchedCase?.id||null,matched_case_name:clientName,is_read:true,created_at:new Date().toISOString()},...prev]); setCaseActionStatus("✅ Message sent!"); setTimeout(()=>setCaseActionStatus(""),3000); }
+                      }} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left hover:bg-slate-50 transition-colors">
+                        <p className="text-xs font-bold text-slate-700">📞 Schedule Call</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">Invite client to call</p>
+                      </button>
+
+                      {caseActionStatus && <p className="text-xs font-bold text-emerald-700 text-center py-1">{caseActionStatus}</p>}
+
+                    </div>
+                  </div>
                   </div>
                 );
               })() : (
