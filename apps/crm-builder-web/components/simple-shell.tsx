@@ -484,6 +484,10 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [inboxMessages, setInboxMessages] = useState<Array<{id:string;phone:string;message:string;direction:string;matched_case_id:string|null;matched_case_name:string|null;is_read:boolean;created_at:string}>>([]);
   const [inboxLoaded, setInboxLoaded] = useState(false);
   const [inboxShowArchived, setInboxShowArchived] = useState(false);
+  const [aiResult, setAiResult] = useState<{caseId:string;text:string;action:string}|null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [inboxAiSuggestion, setInboxAiSuggestion] = useState<Record<string,string>>({});
+  const [inboxAiLoading, setInboxAiLoading] = useState<Record<string,boolean>>({});
   const [inboxReply, setInboxReply] = useState<Record<string,string>>({});
   const [inboxStatus, setInboxStatus] = useState("");
   const [showNotifications, setShowNotifications] = useState(false);
@@ -5460,6 +5464,24 @@ We will notify you as soon as we receive a decision. This usually takes a few we
                             className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100">
                             🤖 AI Check
                           </button>
+                          <button onClick={async () => {
+                            setAiLoading(true);
+                            const res = await apiFetch(`/cases/${selectedCase.id}/ai-smart`, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"summary"})}).catch(()=>null);
+                            const d = await res?.json().catch(()=>({}));
+                            setAiResult({caseId:selectedCase.id, text:d?.text||"Failed to generate summary", action:"summary"});
+                            setAiLoading(false);
+                          }} disabled={aiLoading} className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700 hover:bg-violet-100 disabled:opacity-50">
+                            {aiLoading ? "..." : "📋 Summary"}
+                          </button>
+                          <button onClick={async () => {
+                            setAiLoading(true);
+                            const res = await apiFetch(`/cases/${selectedCase.id}/ai-smart`, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"draft_notes"})}).catch(()=>null);
+                            const d = await res?.json().catch(()=>({}));
+                            setAiResult({caseId:selectedCase.id, text:d?.text||"Failed", action:"draft_notes"});
+                            setAiLoading(false);
+                          }} disabled={aiLoading} className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100 disabled:opacity-50">
+                            {aiLoading ? "..." : "✍️ Draft Notes"}
+                          </button>
                           <button onClick={() => void runAutofill()} disabled={autofillRunning}
                             className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50">
                             {autofillRunning ? "Filling…" : "✨ Autofill"}
@@ -7821,6 +7843,37 @@ We will notify you as soon as we receive a decision. This usually takes a few we
                         <p className="text-[10px] text-emerald-600 mt-0.5">Welcome message in English + Punjabi</p>
                       </button>
 
+                      {/* AI Smart Reply */}
+                      <button onClick={async () => {
+                        const lastMsg = inboxMessages.filter(m=>m.phone===phone && m.direction==="inbound").sort((a,b)=>new Date(b.created_at).getTime()-new Date(a.created_at).getTime())[0];
+                        if (!lastMsg) { setCaseActionStatus("No client message to reply to"); setTimeout(()=>setCaseActionStatus(""),3000); return; }
+                        setInboxAiLoading(prev=>({...prev,[phone]:true}));
+                        const res = await apiFetch("/ai-reply", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({phone:phone.replace(/\D/g,""),message:lastMsg.message,caseId:matchedCase?.id||null,action:"suggest"})}).catch(()=>null);
+                        const d = await res?.json().catch(()=>({}));
+                        if (d?.text) setInboxAiSuggestion(prev=>({...prev,[phone]:d.text}));
+                        setInboxAiLoading(prev=>({...prev,[phone]:false}));
+                      }} className="w-full rounded-xl border border-violet-200 bg-violet-50 px-3 py-2.5 text-left hover:bg-violet-100 transition-colors">
+                        <p className="text-xs font-bold text-violet-800">{inboxAiLoading[phone] ? "🤖 Generating..." : "🤖 AI Smart Reply"}</p>
+                        <p className="text-[10px] text-violet-600 mt-0.5">Generate reply from last client message</p>
+                      </button>
+
+                      {/* Show AI suggestion if available */}
+                      {inboxAiSuggestion[phone] && (
+                        <div className="rounded-xl border-2 border-violet-200 bg-violet-50 p-2.5 space-y-2">
+                          <p className="text-[10px] font-bold text-violet-700">AI Suggestion:</p>
+                          <p className="text-xs text-slate-700 whitespace-pre-wrap">{inboxAiSuggestion[phone]}</p>
+                          <div className="flex gap-1.5">
+                            <button onClick={async () => {
+                              const msg = inboxAiSuggestion[phone];
+                              const res = await apiFetch("/inbox/send",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({phone:phone.replace(/\D/g,""),message:msg,caseId:matchedCase?.id||null})}).catch(()=>null);
+                              if (res?.ok) { setInboxMessages(prev=>[{id:`tmp-${Date.now()}`,phone,message:msg,direction:"outbound",matched_case_id:matchedCase?.id||null,matched_case_name:clientName,is_read:true,created_at:new Date().toISOString()},...prev]); setInboxAiSuggestion(prev=>({...prev,[phone]:""})); setCaseActionStatus("✅ AI reply sent!"); setTimeout(()=>setCaseActionStatus(""),3000); }
+                            }} className="flex-1 rounded-lg bg-violet-600 py-1.5 text-[10px] font-bold text-white hover:bg-violet-700">Send</button>
+                            <button onClick={() => { setInboxReply(prev=>({...prev,[phone]:inboxAiSuggestion[phone]})); setInboxAiSuggestion(prev=>({...prev,[phone]:""})); }} className="flex-1 rounded-lg border border-violet-300 py-1.5 text-[10px] font-bold text-violet-700 hover:bg-violet-100">Edit first</button>
+                            <button onClick={() => setInboxAiSuggestion(prev=>({...prev,[phone]:""}))} className="rounded-lg border border-slate-200 px-2 py-1.5 text-[10px] text-slate-400 hover:bg-slate-50">✕</button>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Send Reminder */}
                       <button onClick={async () => {
                         const reminderMsg = `Hi *${clientName.split(" ")[0]}*! 👋 This is a gentle reminder from Newton Immigration. We are still waiting for your documents/answers. Please send them at your earliest convenience so we can move forward with your application. Thank you! 🙏`;
@@ -8075,6 +8128,37 @@ We will notify you as soon as we receive a decision. This usually takes a few we
           </div>
         </main>
       </div>
+
+      {/* AI Result Modal */}
+      {aiResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" onClick={() => setAiResult(null)}>
+          <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="bg-violet-600 px-4 py-3 flex items-center justify-between">
+              <p className="text-sm font-bold text-white">
+                {aiResult.action === "summary" ? "🤖 AI Case Summary" : aiResult.action === "intake_check" ? "🔍 AI Intake Check" : "🤖 AI Result"}
+              </p>
+              <button onClick={() => setAiResult(null)} className="text-violet-100 hover:text-white text-xl">✕</button>
+            </div>
+            <div className="p-5">
+              <p className="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">{aiResult.text}</p>
+            </div>
+            <div className="px-5 pb-4 flex gap-2">
+              <button onClick={async () => {
+                const caseItem = cases.find(c => c.id === aiResult.caseId);
+                if (!caseItem) return;
+                const res = await apiFetch(`/cases/${aiResult.caseId}/notes`, {
+                  method:"POST", headers:{"Content-Type":"application/json"},
+                  body:JSON.stringify({text:`🤖 AI ${aiResult.action === "summary" ? "Summary" : "Check"}:
+${aiResult.text}`, addedBy:"AI"})
+                }).catch(()=>null);
+                if (res?.ok) { setCaseActionStatus("✅ Saved to notes"); setTimeout(()=>setCaseActionStatus(""),3000); }
+                setAiResult(null);
+              }} className="rounded-xl bg-violet-600 px-4 py-2 text-xs font-bold text-white hover:bg-violet-700">💾 Save to Notes</button>
+              <button onClick={() => setAiResult(null)} className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <UnderReviewPanel
         caseId={showURPanel}
