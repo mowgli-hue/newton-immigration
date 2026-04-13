@@ -1,11 +1,11 @@
 {
   "name": "@jungle/crm-builder-web",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "scripts": {
     "dev": "next dev -H 0.0.0.0 -p 3006",
     "build": "next build",
-    "start": "sh -c 'next start -H 0.0.0.0 -p \"${PORT:-3006}\"'",
+    "start": "sh -c 'pip install pypdf --break-system-packages -q 2>/dev/null; next start -H 0.0.0.0 -p \"${PORT:-3006}\"'",
     "lint": "next lint",
     "db:migrate:init": "bash ./scripts/db-migrate-init.sh",
     "db:migrate:store": "node ./scripts/migrate-store-to-postgres.mjs",
