@@ -184,5 +184,36 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // Auto: generate AI summary and save as first note
+  try {
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_BASE_URL || "https://junglecrm-builder-web-production-d358.up.railway.app";
+    
+    // Brief delay to let case be fully saved
+    setTimeout(async () => {
+      try {
+        // Auto AI summary note
+        const summaryRes = await fetch(`${appUrl}/api/cases/${created.id}/ai-smart`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "summary" })
+        });
+        if (summaryRes.ok) {
+          const summaryData = await summaryRes.json();
+          if (summaryData.text) {
+            await fetch(`${appUrl}/api/cases/${created.id}/notes`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                text: `🤖 AI Case Summary (auto-generated):
+${summaryData.text}`,
+                addedBy: "AI"
+              })
+            });
+          }
+        }
+      } catch (e) { console.error("Auto AI summary failed:", e); }
+    }, 3000);
+  } catch { /* non-fatal */ }
+
   return NextResponse.json({ case: created, drive }, { status: 201 });
 }

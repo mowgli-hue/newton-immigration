@@ -179,6 +179,26 @@ export async function POST(req: NextRequest) {
           } catch (e) {
             console.error("Team notification error:", (e as Error).message);
           }
+
+          // Auto AI reply for general client messages
+          try {
+            const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_BASE_URL || "https://junglecrm-builder-web-production-d358.up.railway.app";
+            const aiRes = await fetch(`${appUrl}/api/ai-reply`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                phone: from,
+                message: text,
+                caseId: matched.id,
+                action: "send"
+              })
+            });
+            if (aiRes.ok) {
+              console.log(`🤖 AI auto-reply sent to ${matched.client}`);
+            }
+          } catch (e) {
+            console.error("AI auto-reply failed (non-fatal):", e);
+          }
         }
       }
     }
