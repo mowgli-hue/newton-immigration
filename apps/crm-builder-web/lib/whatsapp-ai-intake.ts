@@ -3,7 +3,7 @@
 
 import { getQuestionFlowForFormType } from "@/lib/application-question-flows";
 import { resolveApplicationChecklistKey } from "@/lib/application-checklists";
-import { sendWhatsAppText, sendDocumentChecklist } from "@/lib/whatsapp";
+import { sendWhatsAppText, sendWhatsAppTemplate, sendDocumentChecklist } from "@/lib/whatsapp";
 import { getCase, updateCaseProcessing, addMessage } from "@/lib/store";
 
 export type IntakeSession = {
@@ -15,11 +15,15 @@ export type IntakeSession = {
   questions: string[];
   currentIndex: number;
   answers: Record<string, string>;
-  phase: "intake" | "awaiting_bulk" | "complete";
+  phase: "intake" | "awaiting_template_reply" | "awaiting_bulk" | "complete";
 };
 
 // DB-backed session store — persists across redeploys
 // Sessions stored in case.pgwpIntake.whatsappSession as JSON
+
+export async function getActiveSession(phone: string, companyId?: string) {
+  return getSession(phone, companyId);
+}
 
 export async function getSession(phone: string, companyId?: string): Promise<IntakeSession | undefined> {
   try {
@@ -93,30 +97,67 @@ export async function startIntakeSession(params: {
     phase: "intake"
   };
 
-  // Set phase to awaiting_bulk — client replies with all answers at once
-  session.phase = "awaiting_bulk";
+  // Phase: awaiting_template_reply
+  // Send template first, wait for client reply, THEN send questions
+  session.phase = "awaiting_template_reply";
   await setSession(phone, session);
 
   const firstName = clientName.split(" ")[0];
+
+  // Try template first, fall back to free-form greeting + questions
+  const templateResult = await sendWhatsAppTemplate({
+    to: phone,
+    templateName: "newton_intake",
+    languageCode: "en",
+    components: [{
+      type: "body",
+      parameters: [
+        { type: "text", text: firstName },
+        { type: "text", text: formType }
+      ]
+    }]
+  });
+
+  if (templateResult.success) {
+    console.log(`✅ Template sent to ${phone} — waiting for reply to send questions`);
+    return { success: true };
+  }
+
+  // Template failed — send full greeting + questions as free-form directly
+  console.log(`Template failed, sending free-form greeting + questions to ${phone}`);
+  session.phase = "awaiting_bulk";
+  await setSession(phone, session);
+
   const questionList = questions.map((q: string, i: number) => `*${i + 1}.* ${q}`).join("\n\n");
 
-  const welcomeMsg = [
+  const greetingMsg = [
     `ਸਤ ਸ੍ਰੀ ਅਕਾਲ ${firstName} ਜੀ! 🙏`,
-    `Hi ${firstName}! Welcome to *Newton Immigration*.`,
+    `Hi *${firstName}*! Welcome to *Newton Immigration*.`,
     ``,
-    `We've started your *${formType}* application. Please answer the following questions so we can prepare your file.`,
+    `Thank you for choosing us for your *${formType}* application. Our team will guide you through every step.`,
     ``,
-    `📋 *Please reply with all answers numbered in ONE message.*`,
-    `Example: 1. your answer, 2. your answer, 3. your answer...`,
+    `— Newton Immigration Team 🍁`,
+  ].join("\n");
+
+  await sendWhatsAppText(phone, greetingMsg);
+  await new Promise(resolve => setTimeout(resolve, 1500));
+
+  const checklistMsg = [
+    `📋 *Please answer the following questions for your ${formType} application.*`,
+    ``,
+    `Reply with all answers numbered in *ONE message* like:`,
+    `1. your answer`,
+    `2. your answer`,
     ``,
     `━━━━━━━━━━━━━━━`,
     questionList,
     `━━━━━━━━━━━━━━━`,
     ``,
-    `Reply with all your answers and we will take care of the rest! 🙏`,
+    `Take your time. We will take care of the rest! 🙏`,
   ].join("\n");
 
-  return sendWhatsAppText(phone, welcomeMsg);
+  await sendWhatsAppText(phone, checklistMsg);
+  return { success: true };
 }
 
 // Handle incoming reply from client
@@ -130,6 +171,31 @@ export async function handleIncomingReply(params: {
 
   if (!session) {
     console.log(`No active session for ${phone} — message ignored`);
+    return;
+  }
+
+  // ── Template reply mode — client replied to greeting, now send questions ──
+  if (session.phase === "awaiting_template_reply") {
+    session.phase = "awaiting_bulk";
+    await setSession(phone, session);
+    
+    // Now send the questions (24hr window is open)
+    const questionList = session.questions.map((q: string, i: number) => `*${i + 1}.* ${q}`).join("\n\n");
+    const checklistMsg = [
+      `📋 *To prepare your ${session.formType} application, please answer the following questions.*`,
+      ``,
+      `Reply with all answers numbered in *ONE message* like:`,
+      `1. your answer`,
+      `2. your answer`,
+      `3. your answer...`,
+      ``,
+      `━━━━━━━━━━━━━━━`,
+      questionList,
+      `━━━━━━━━━━━━━━━`,
+      ``,
+      `Take your time and reply with all answers together. We will take care of the rest! 🙏`,
+    ].join("\n");
+    await sendWhatsAppText(session.phone, checklistMsg);
     return;
   }
 
