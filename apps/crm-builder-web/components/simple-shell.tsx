@@ -5364,11 +5364,11 @@ We will notify you as soon as we receive a decision. This usually takes a few we
                               onChange={async (e) => {
                                 const newStatus = e.target.value as "docs_pending"|"under_review"|"submitted"|"other";
                                 if (newStatus === "under_review") {
-                                  // Auto-assign reviewer as logged-in user — no prompt needed
-                                  const reviewer = sessionUser?.name || "Reviewer";
+                                  // Just change status — reviewer will claim it from UR panel
                                   await updateCaseProcessing(selectedCase.id, { 
                                     processingStatus: newStatus,
-                                    reviewedBy: reviewer,
+                                    reviewedBy: "",
+                                    reviewStatus: "",
                                     reviewStartedAt: new Date().toISOString()
                                   });
                                 } else {
