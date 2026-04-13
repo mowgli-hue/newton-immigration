@@ -7751,14 +7751,22 @@ We will notify you as soon as we receive a decision. This usually takes a few we
                       {matchedCase && (() => {
                         const checklist = getChecklistForFormType(matchedCase.formType);
                         if (!checklist.length) return null;
+                        const required = checklist.filter(i => i.required);
+                        const optional = checklist.filter(i => !i.required);
                         const checklistMsg = [
-                          `📋 *Document Checklist for ${matchedCase.formType}*`,
+                          `📋 *Document Checklist — ${matchedCase.formType}*`,
                           ``,
-                          `Please provide the following documents:`,
+                          `*Required Documents:*`,
+                          ...required.map((item, i) => `${i+1}. ${item.label}`),
+                          ...(optional.length ? [
+                            ``,
+                            `*Additional (if applicable):*`,
+                            ...optional.map((item, i) => `• ${item.label}`)
+                          ] : []),
                           ``,
-                          ...checklist.map((item, i) => `${i+1}. ${item}`),
+                          `Please send clear photos or scans of all documents. Thank you! 🙏`,
                           ``,
-                          `Please send clear photos or scans. Thank you! 🙏`,
+                          `— Newton Immigration Team 🍁`,
                         ].join("\n");
                         return (
                           <button onClick={async () => {
@@ -7766,7 +7774,7 @@ We will notify you as soon as we receive a decision. This usually takes a few we
                             if (res?.ok) { setInboxMessages(prev=>[{id:`tmp-${Date.now()}`,phone,message:checklistMsg,direction:"outbound",matched_case_id:matchedCase.id,matched_case_name:clientName,is_read:true,created_at:new Date().toISOString()},...prev]); setCaseActionStatus("✅ Checklist sent!"); setTimeout(()=>setCaseActionStatus(""),3000); }
                           }} className="w-full rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-left hover:bg-blue-100 transition-colors">
                             <p className="text-xs font-bold text-blue-800">📋 Send Document Checklist</p>
-                            <p className="text-[10px] text-blue-600 mt-0.5">{checklist.length} documents required</p>
+                            <p className="text-[10px] text-blue-600 mt-0.5">{checklist.filter((i: any) => i.required).length} required · {checklist.filter((i: any) => !i.required).length} optional</p>
                           </button>
                         );
                       })()}
