@@ -63,13 +63,22 @@ const QUESTION_FLOWS: Record<ChecklistKey, QuestionFlow> = {
   visitor_visa: {
     requiredFields: DEFAULT_REQUIRED_FIELDS,
     prompts: [
-      "List all countries lived in during the past 5 years (if different from citizenship country)",
-      "Any post-secondary studies? Provide school, field, and dates",
-      "Military/police/security service history (if any)",
-      "List employment and activities in the last 10 years",
-      "Travel history in the last 5 years (country, dates, purpose)",
-      "Parents' details (name, DOB, occupation, address)",
-      "Children details (if any)"
+      "Have you used any other name? (Yes/No — if Yes, provide full other name)",
+      "What is your current marital status? (Single / Married / Common-Law / Divorced / Widowed / Separated)",
+      "If Married or Common-Law: provide partner's full name, DOB, citizenship. Reply NA if not applicable.",
+      "Current address in your home country (full address)",
+      "Telephone number",
+      "Purpose of visit to Canada (Tourism / Visiting family/friends / Business / Other — provide details)",
+      "Intended travel dates — arrival (YYYY-MM-DD) and departure (YYYY-MM-DD)",
+      "Address in Canada where you will stay (hotel name or host's full address)",
+      "If visiting someone: their name, relationship, status in Canada, and their address",
+      "Who is funding your trip? (Self / Sponsor — if sponsor: name, relationship, occupation, income)",
+      "Employment details — current employer, job title, how long employed, monthly salary in your currency",
+      "Travel history in last 5 years (country, dates, purpose for each trip). Reply NONE if none.",
+      "Have you ever been refused a visa for Canada or any other country? (Yes/No — if Yes: country, year, reason)",
+      "Do you have any medical history? (Yes/No — if Yes: provide details)",
+      "Do you have any criminal history? (Yes/No — if Yes: provide details)",
+      "What is your native language? Have you taken an English proficiency test? (Yes/No — if Yes: test name, score, date)"
     ]
   },
   visitor_record: {
@@ -115,57 +124,109 @@ const QUESTION_FLOWS: Record<ChecklistKey, QuestionFlow> = {
   study_permit: {
     requiredFields: DEFAULT_REQUIRED_FIELDS,
     prompts: [
-      "Program/institution details and start date",
-      "Funding plan for tuition and living expenses",
-      "Any study gaps/explanations"
+      "Have you used any other name? (Yes/No — if Yes, provide full other name)",
+      "What is your current marital status? (Single / Married / Common-Law / Divorced / Widowed / Separated)",
+      "If Married or Common-Law: provide partner's full name and date of marriage (YYYY-MM-DD). Reply NA if not applicable.",
+      "Any previous marriage or common-law partnership? (Yes/No — if Yes: partner's name, DOB, start and end date YYYY-MM-DD)",
+      "Current mailing address including postal code (Apt/Unit, Street Number, Street Name, City, Province, Postal Code)",
+      "Residential address if different from mailing address. Reply SAME if same.",
+      "Telephone number",
+      "Date and place you first entered Canada (YYYY-MM-DD, city/airport). If applying from outside Canada reply OUTSIDE.",
+      "Name and address of the institution you plan to attend in Canada",
+      "Program of study and expected start date (YYYY-MM-DD) and end date (YYYY-MM-DD)",
+      "Highest education completed (school name, field, country, from/to dates YYYY-MM)",
+      "How are you funding your studies? (Savings / Sponsor / Scholarship / Loan — provide amount available in CAD)",
+      "Who is your financial sponsor? (Name, relationship, occupation, country of residence). Reply SELF if self-funded.",
+      "Have you ever studied in Canada before? (Yes/No — if Yes: institution, program, permit expiry date)",
+      "Have you ever been refused a visa or permit for Canada or any other country? (Yes/No — if Yes: country, year, reason)",
+      "Do you have any medical history? (Yes/No — if Yes: provide details)",
+      "Do you have any criminal history? (Yes/No — if Yes: provide details)",
+      "What is your native language? Have you taken an English proficiency test? (Yes/No — if Yes: test name, score, date)"
     ]
   },
   study_permit_extension: {
     requiredFields: DEFAULT_REQUIRED_FIELDS,
     prompts: [
-      "Current institution and enrollment details",
-      "Reason for extension/college change",
-      "Current permit details and expiry date"
+      "Have you used any other name? (Yes/No — if Yes, provide full other name)",
+      "What is your current marital status? (Single / Married / Common-Law / Divorced / Widowed / Separated)",
+      "Current mailing address including postal code (Apt/Unit, Street Number, Street Name, City, Province, Postal Code)",
+      "Telephone number",
+      "Current study permit number and expiry date (YYYY-MM-DD)",
+      "Current institution name and city",
+      "Current program of study and expected completion date (YYYY-MM-DD)",
+      "Are you changing colleges/institutions? (Yes/No — if Yes: new institution name, program, start date YYYY-MM-DD and reason for change)",
+      "Are you changing your program of study? (Yes/No — if Yes: old program and new program details)",
+      "Reason for extension — are you still enrolled or did you need more time to complete? (provide details)",
+      "Have you maintained full-time enrollment throughout your studies? (Yes/No — if No: explain)",
+      "Have you ever been refused a visa or permit? (Yes/No — if Yes: details)",
+      "Do you have any medical history? (Yes/No — if Yes: provide details)",
+      "Do you have any criminal history? (Yes/No — if Yes: provide details)"
     ]
   },
   super_visa: {
     requiredFields: DEFAULT_REQUIRED_FIELDS,
     prompts: [
-      "Sponsor full name, status in Canada, and address",
-      "Sponsor relationship with applicant",
-      "Insurance coverage details",
-      "Family info (spouse/children/parents)"
+      "Have you used any other name? (Yes/No — if Yes, provide full other name)",
+      "What is your current marital status? (Single / Married / Common-Law / Divorced / Widowed / Separated)",
+      "If Married: provide spouse full name, DOB, and citizenship. Reply NA if not applicable.",
+      "Current address in your home country (full address)",
+      "Telephone number",
+      "Sponsor full name and relationship to you (son/daughter/etc.)",
+      "Sponsor address in Canada (full address including postal code)",
+      "Sponsor immigration status in Canada (Canadian Citizen / Permanent Resident) and document number",
+      "Sponsor occupation, employer name, and annual income in CAD",
+      "Date you plan to enter Canada (YYYY-MM-DD) and expected length of stay",
+      "List your children (name, DOB, relationship, country of residence for each). Reply NONE if no children.",
+      "Do you have medical insurance arranged? (Yes/No — if Yes: insurance company name and coverage amount in CAD)",
+      "Have you ever been refused a visa or permit for Canada or any other country? (Yes/No — if Yes: details)",
+      "Do you have any medical history? (Yes/No — if Yes: provide details)",
+      "Do you have any criminal history? (Yes/No — if Yes: provide details)"
     ]
   },
   express_entry: {
     requiredFields: [
-      "fullName",
-      "phone",
-      "maritalStatus",
-      "address",
-      "nativeLanguage",
-      "englishTestTaken",
-      "employmentHistory",
-      "education",
-      "refusedAnyCountry",
-      "criminalHistory",
-      "medicalHistory"
+      "fullName", "phone", "maritalStatus", "address", "nativeLanguage",
+      "englishTestTaken", "employmentHistory", "education",
+      "refusedAnyCountry", "criminalHistory", "medicalHistory"
     ],
     prompts: [
-      "Primary NOC/job title and years of skilled experience",
-      "Language test details (IELTS/CELPIP/TEF + scores + date)",
-      "Education credentials and ECA details (WES/other)",
-      "Proof of funds amount available (if applicable)",
-      "Any provincial nomination or Canadian job offer details",
-      "Spouse language/education/work details (if applicable)"
+      "Have you used any other name? (Yes/No — if Yes, provide full other name)",
+      "What is your current marital status? (Single / Married / Common-Law / Divorced / Widowed / Separated)",
+      "If Married or Common-Law: spouse full name, DOB, citizenship, education level, occupation. Reply NA if not applicable.",
+      "Current address (full address with postal code or country)",
+      "Telephone number",
+      "Primary job title and NOC code (if known). How many years of skilled work experience in this field?",
+      "List all skilled work experience — for each: From (YYYY-MM), To (YYYY-MM), Job Title, NOC code, Employer, City, Country, Hours/week",
+      "Highest education completed — institution name, field of study, country, from/to dates. Do you have an ECA report? (Yes/No — if Yes: which organization e.g. WES)",
+      "Language test results — test name (IELTS/CELPIP/TEF), scores for Reading/Writing/Listening/Speaking, test date (YYYY-MM-DD)",
+      "Spouse language test results (if applicable) — test name, scores, date. Reply NA if not applicable.",
+      "Do you have a provincial nomination? (Yes/No — if Yes: province and program name)",
+      "Do you have a Canadian job offer? (Yes/No — if Yes: employer name, NOC code, job title, LMIA number if applicable)",
+      "Proof of settlement funds available (amount in CAD)",
+      "Have you ever lived in Canada? (Yes/No — if Yes: permit type, dates, province)",
+      "Have you ever been refused a visa or permit for Canada or any other country? (Yes/No — if Yes: details)",
+      "Do you have any medical history? (Yes/No — if Yes: provide details)",
+      "Do you have any criminal history? (Yes/No — if Yes: provide details)"
     ]
   },
   family_sponsorship: {
     requiredFields: DEFAULT_REQUIRED_FIELDS,
     prompts: [
-      "Sponsor details (status in Canada, occupation, address)",
-      "Relationship history details",
-      "Children/dependants details (if any)"
+      "Have you used any other name? (Yes/No — if Yes, provide full other name)",
+      "What is your current marital status? (Single / Married / Common-Law / Divorced / Widowed / Separated)",
+      "Sponsor full name, date of birth, and relationship to you",
+      "Sponsor address in Canada (full address including postal code)",
+      "Sponsor immigration status in Canada (Canadian Citizen / Permanent Resident) and document number",
+      "Sponsor occupation and employer name",
+      "Date and place of your marriage or relationship start (YYYY-MM-DD, city, country)",
+      "Any previous marriage or common-law partnership? (Yes/No — if Yes: partner name, DOB, dates of relationship YYYY-MM-DD)",
+      "Current address (full address with postal code or country if outside Canada)",
+      "Telephone number",
+      "Children/dependants details — for each: full name, DOB, relationship, citizenship, currently living with you? (Yes/No)",
+      "Have you ever applied for or been refused immigration to Canada or any other country? (Yes/No — if Yes: details)",
+      "Do you have any medical history? (Yes/No — if Yes: provide details)",
+      "Do you have any criminal history? (Yes/No — if Yes: provide details)",
+      "What is your native language? Have you taken an English proficiency test? (Yes/No — if Yes: test name, score, date)"
     ]
   },
   citizenship_prcard: {
