@@ -41,7 +41,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     // Message 1: Greeting via approved template
     const templateResult = await sendWhatsAppTemplate({
       to: phone,
-      templateName: "newton_immigration_intake",
+      templateName: "newton_intake",
       languageCode: "en",
       components: [{
         type: "body",

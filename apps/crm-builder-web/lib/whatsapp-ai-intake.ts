@@ -107,7 +107,7 @@ export async function startIntakeSession(params: {
   // Send approved template — works for ALL numbers including new ones
   const templateResult = await sendWhatsAppTemplate({
     to: phone,
-    templateName: "newton_immigration_intake",
+    templateName: "newton_intake",
     languageCode: "en",
     components: [{
       type: "body",
