@@ -75,6 +75,8 @@ export async function POST(req: NextRequest) {
         )`);
         const msgId = `WA-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
         const displayMsg = msgType === "text" ? text : `[${msgType} received]`;
+        // Auto-unarchive if client messages again after case was archived
+        await pool.query(`UPDATE whatsapp_inbox SET is_archived = FALSE WHERE phone = $1 AND is_archived = TRUE`, [from]).catch(() => {});
         await pool.query(
           `INSERT INTO whatsapp_inbox (id, phone, message, direction, matched_case_id, matched_case_name, is_read) VALUES ($1,$2,$3,'inbound',$4,$5,FALSE)`,
           [msgId, from, displayMsg, matched?.id || null, matched?.client || null]

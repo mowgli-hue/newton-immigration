@@ -483,6 +483,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [teamUsers, setTeamUsers] = useState<TeamUserItem[]>([]);
   const [inboxMessages, setInboxMessages] = useState<Array<{id:string;phone:string;message:string;direction:string;matched_case_id:string|null;matched_case_name:string|null;is_read:boolean;created_at:string}>>([]);
   const [inboxLoaded, setInboxLoaded] = useState(false);
+  const [inboxShowArchived, setInboxShowArchived] = useState(false);
   const [inboxReply, setInboxReply] = useState<Record<string,string>>({});
   const [inboxStatus, setInboxStatus] = useState("");
   const [showNotifications, setShowNotifications] = useState(false);
@@ -7554,6 +7555,10 @@ We will notify you as soon as we receive a decision. This usually takes a few we
               {/* LEFT: Thread list */}
               <div className={`flex flex-col border-r border-slate-100 ${inboxThread ? "hidden md:flex md:w-72 shrink-0" : "w-full md:w-72 shrink-0"}`}>
                 <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50">
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => { setInboxShowArchived(false); setInboxLoaded(false); setInboxThread(null); }} className={`text-xs font-bold px-2 py-1 rounded-lg ${!inboxShowArchived ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-100"}`}>Active</button>
+                    <button onClick={() => { setInboxShowArchived(true); setInboxLoaded(false); setInboxThread(null); }} className={`text-xs font-bold px-2 py-1 rounded-lg ${inboxShowArchived ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-100"}`}>📦 Archived</button>
+                  </div>
                   <div>
                     <p className="text-sm font-bold text-slate-900">💬 Inbox</p>
                     <p className="text-[10px] text-slate-400">{sessionUser?.role === "Processing" ? "Your clients" : "All conversations"}</p>
@@ -7568,7 +7573,7 @@ We will notify you as soon as we receive a decision. This usually takes a few we
                 </div>
 
                 {!inboxLoaded && (() => {
-                  apiFetch("/inbox", { cache: "no-store" }).then(r => r.json()).then(d => { setInboxMessages(d.messages || []); setInboxLoaded(true); }).catch(()=>setInboxLoaded(true));
+                  apiFetch(`/inbox${inboxShowArchived ? "?archived=1" : ""}`, { cache: "no-store" }).then(r => r.json()).then(d => { setInboxMessages(d.messages || []); setInboxLoaded(true); }).catch(()=>setInboxLoaded(true));
                   return <p className="text-xs text-slate-400 py-8 text-center">Loading...</p>;
                 })()}
 

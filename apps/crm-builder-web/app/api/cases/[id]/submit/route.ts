@@ -72,5 +72,30 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     console.error("Sheet sync failed (non-fatal):", (e as Error).message);
   }
 
+  // Auto-archive WhatsApp inbox + send submission confirmation
+  try {
+    const phone = String(caseItem.leadPhone || "").replace(/\D/g, "");
+    if (phone) {
+      await pool.query(
+        `UPDATE whatsapp_inbox SET is_archived = TRUE WHERE phone LIKE $1 OR phone = $2`,
+        [`%${phone.slice(-9)}`, phone]
+      ).catch(() => {});
+      const { sendWhatsAppText } = await import("@/lib/whatsapp");
+      const firstName = String(caseItem.client || "").split(" ")[0];
+      await sendWhatsAppText(phone, [
+        `✅ *Application Submitted!*`,
+        ``,
+        `Hi *${firstName}*! Your *${caseItem.formType}* application has been successfully submitted to IRCC.`,
+        ``,
+        `📋 *Application Number:* ${applicationNumber}`,
+        `📅 *Submitted on:* ${date}`,
+        ``,
+        `You will receive updates from IRCC directly. If you have any questions, feel free to message us anytime!`,
+        ``,
+        `Thank you for choosing Newton Immigration! 🍁`,
+      ].join("\n")).catch(() => {});
+    }
+  } catch { /* non-fatal */ }
+
   return NextResponse.json({ ok: true, case: updated });
 }

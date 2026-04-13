@@ -14,8 +14,10 @@ async function ensureTable() {
       matched_case_id TEXT,
       matched_case_name TEXT,
       is_read BOOLEAN NOT NULL DEFAULT FALSE,
+      is_archived BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
+    );
+    ALTER TABLE whatsapp_inbox ADD COLUMN IF NOT EXISTS is_archived BOOLEAN NOT NULL DEFAULT FALSE
   `);
 }
 
@@ -23,18 +25,52 @@ export async function GET(request: NextRequest) {
   const user = await getCurrentUserFromRequest(request);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   await ensureTable();
+  const url = new URL(request.url);
+  const showArchived = url.searchParams.get("archived") === "1";
+  
+  // Get latest message per phone (thread view)
   const res = await pool.query(
-    `SELECT * FROM whatsapp_inbox ORDER BY created_at DESC LIMIT 200`
+    showArchived
+      ? `SELECT DISTINCT ON (phone) * FROM whatsapp_inbox WHERE is_archived = TRUE ORDER BY phone, created_at DESC LIMIT 100`
+      : `SELECT DISTINCT ON (phone) * FROM whatsapp_inbox WHERE is_archived = FALSE ORDER BY phone, created_at DESC LIMIT 100`
   );
-  return NextResponse.json({ messages: res.rows });
+  
+  // Get all messages for thread detail
+  const allRes = await pool.query(
+    showArchived
+      ? `SELECT * FROM whatsapp_inbox WHERE is_archived = TRUE ORDER BY created_at DESC LIMIT 500`
+      : `SELECT * FROM whatsapp_inbox WHERE is_archived = FALSE ORDER BY created_at DESC LIMIT 500`
+  );
+  return NextResponse.json({ messages: allRes.rows, threads: res.rows });
 }
 
 export async function PATCH(request: NextRequest) {
   const user = await getCurrentUserFromRequest(request);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { id } = await request.json().catch(() => ({}));
-  if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+  const { id, phone, action } = await request.json().catch(() => ({}));
   await ensureTable();
-  await pool.query(`UPDATE whatsapp_inbox SET is_read = TRUE WHERE id = $1`, [id]);
-  return NextResponse.json({ ok: true });
+  
+  if (action === "archive" && phone) {
+    // Archive all messages for this phone
+    await pool.query(`UPDATE whatsapp_inbox SET is_archived = TRUE WHERE phone = $1`, [phone]);
+    return NextResponse.json({ ok: true, action: "archived" });
+  }
+  
+  if (action === "unarchive" && phone) {
+    // Unarchive all messages for this phone
+    await pool.query(`UPDATE whatsapp_inbox SET is_archived = FALSE WHERE phone = $1`, [phone]);
+    return NextResponse.json({ ok: true, action: "unarchived" });
+  }
+  
+  if (action === "read" && phone) {
+    await pool.query(`UPDATE whatsapp_inbox SET is_read = TRUE WHERE phone = $1`, [phone]);
+    return NextResponse.json({ ok: true });
+  }
+  
+  if (id) {
+    await pool.query(`UPDATE whatsapp_inbox SET is_read = TRUE WHERE id = $1`, [id]);
+    return NextResponse.json({ ok: true });
+  }
+  
+  return NextResponse.json({ error: "invalid request" }, { status: 400 });
 }
