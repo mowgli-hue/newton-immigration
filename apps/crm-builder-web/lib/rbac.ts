@@ -12,12 +12,22 @@ export type AppScreen =
   | "chat"
   | "files";
 
+// Each role only sees what they need
 const STAFF_ROLE_TAB_ACCESS: Record<Exclude<Role, "Client">, AppScreen[]> = {
+  // Admin sees everything
   Admin: ["dashboard", "cases", "communications", "results", "submission", "accounting", "tasks", "chat", "files", "settings"],
-  Marketing: ["dashboard", "cases", "communications", "results", "submission", "accounting", "tasks", "chat", "files", "settings"],
-  Processing: ["dashboard", "cases", "communications", "results", "submission", "accounting", "tasks", "chat", "files", "settings"],
-  ProcessingLead: ["dashboard", "cases", "communications", "results", "submission", "accounting", "tasks", "chat", "files", "settings"],
-  Reviewer: ["dashboard", "cases", "communications", "results", "submission", "accounting", "tasks", "chat", "files", "settings"]
+
+  // Marketing creates cases, tracks leads, sees accounting
+  Marketing: ["dashboard", "cases", "communications", "accounting", "tasks", "chat"],
+
+  // Processing works cases assigned to them — no need to create cases or see accounting
+  Processing: ["dashboard", "cases", "submission", "tasks", "chat", "files"],
+
+  // Processing Lead can also see results and reassign
+  ProcessingLead: ["dashboard", "cases", "results", "submission", "tasks", "chat", "files", "settings"],
+
+  // Reviewer just reviews cases
+  Reviewer: ["dashboard", "cases", "tasks", "chat"],
 };
 
 function normalizeRole(role: Role | string): Role {
@@ -46,15 +56,28 @@ export function canManageUsers(role: Role): boolean {
 }
 
 export function canCreateCase(role: Role): boolean {
-  return normalizeRole(role) !== "Client";
+  const r = normalizeRole(role);
+  return r === "Admin" || r === "Marketing";
 }
 
 export function canUseAccounting(role: Role): boolean {
-  return normalizeRole(role) !== "Client";
+  const r = normalizeRole(role);
+  return r === "Admin" || r === "Marketing" || r === "ProcessingLead";
 }
 
 export function canUseCommunications(role: Role): boolean {
-  return normalizeRole(role) !== "Client";
+  const r = normalizeRole(role);
+  return r === "Admin" || r === "Marketing";
+}
+
+export function canAssignCases(role: Role): boolean {
+  const r = normalizeRole(role);
+  return r === "Admin" || r === "ProcessingLead";
+}
+
+export function canChangeStatus(role: Role): boolean {
+  const r = normalizeRole(role);
+  return r === "Admin" || r === "Processing" || r === "ProcessingLead" || r === "Reviewer";
 }
 
 function normalize(value: string): string {
@@ -72,8 +95,22 @@ export function isCaseAssignedToUser(assignedTo: string | undefined, userName: s
   return user.includes(assigned) || assigned.includes(user);
 }
 
+// Processing staff only see their own assigned cases
+// Admin/Marketing/Reviewer see all
 export function canStaffAccessCase(role: Role, userName: string, caseAssignedTo?: string): boolean {
   const normalized = normalizeRole(role);
   if (normalized === "Client") return false;
+
+  // Admin, Marketing, ProcessingLead, Reviewer see all cases
+  if (normalized === "Admin" || normalized === "Marketing" || normalized === "ProcessingLead" || normalized === "Reviewer") {
+    return true;
+  }
+
+  // Processing staff only see their own cases
+  if (normalized === "Processing") {
+    if (!caseAssignedTo || caseAssignedTo === "Unassigned") return false;
+    return isCaseAssignedToUser(caseAssignedTo, userName);
+  }
+
   return true;
 }
