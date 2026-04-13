@@ -2,6 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
+import { SUBMITTED_APPS } from "@/lib/submitted-apps";
 import {
   addDocument,
   addLegacyResult,
@@ -72,7 +73,8 @@ export async function GET(request: NextRequest) {
   if (user.userType !== "staff" && user.role === "Client") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const items = await listLegacyResults(user.companyId);
+  const companyId = user.companyId;
+  const items = await listLegacyResults(companyId);
   const resolved = await Promise.all(
     items.map(async (item) => {
       if (!item.fileLink || !isS3StoredLink(item.fileLink)) return item;
@@ -90,11 +92,24 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const user = await getCurrentUserFromRequest(request);
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (user.userType !== "staff" && user.role === "Client") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // Allow IRCC scanner script via API key
+  const irccApiKey = request.headers.get("x-ircc-api-key");
+  const validApiKey = process.env.IRCC_SCANNER_API_KEY || "newton-ircc-2024";
+  const isScriptUpload = irccApiKey === validApiKey;
+  let user: Awaited<ReturnType<typeof getCurrentUserFromRequest>> = null;
+
+  if (!isScriptUpload) {
+    user = await getCurrentUserFromRequest(request);
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (user.userType !== "staff" && user.role === "Client") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
+
+  // For script uploads, use default company
+  const companyId = user?.companyId || process.env.DEFAULT_COMPANY_ID || "newton";
+  const actorId = user?.id || "ircc-scanner";
+  const actorName = user?.name || "IRCC Scanner";
 
   const contentType = request.headers.get("content-type") || "";
   let clientName = "";
@@ -139,7 +154,7 @@ export async function POST(request: NextRequest) {
       fileName = safe;
       if (isS3StorageEnabled()) {
         const objectKey = buildS3ObjectKey({
-          companyId: user.companyId,
+          companyId: companyId,
           caseId: "legacy-results",
           fileName: safe
         });
@@ -179,8 +194,27 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid outcome" }, { status: 400 });
   }
 
+  // Auto-lookup phone from submitted apps sheet if not provided
+  if (!phone && applicationNumber) {
+    const normApp = applicationNumber.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+    const match = SUBMITTED_APPS.find(a => a.appNum === normApp);
+    if (match) {
+      if (match.phone) phone = match.phone;
+      if (!clientName || clientName === "Legacy Client") clientName = match.name;
+    }
+  }
+  // Also try matching by name
+  if (!phone && clientName && clientName !== "Legacy Client") {
+    const nameLower = clientName.toLowerCase().trim();
+    const nameMatch = SUBMITTED_APPS.find(a =>
+      a.name.toLowerCase().trim() === nameLower ||
+      a.name.toLowerCase().split(" ")[0] === nameLower.split(" ")[0]
+    );
+    if (nameMatch?.phone) phone = nameMatch.phone;
+  }
+
   const item = await addLegacyResult({
-    companyId: user.companyId,
+    companyId: companyId,
     entryType,
     clientName,
     phone,
@@ -191,12 +225,12 @@ export async function POST(request: NextRequest) {
     fileName: fileName || undefined,
     fileLink: fileLink || undefined,
     forceMatchedCaseId: selectedCaseId || undefined,
-    createdByUserId: user.id,
-    createdByName: user.name
+    createdByUserId: actorId,
+    createdByName: actorName
   });
   if (entryType === "result" && item.autoCategory === "new" && item.matchedCaseId && item.fileLink) {
     await addDocument({
-      companyId: user.companyId,
+      companyId: companyId,
       caseId: item.matchedCaseId,
       name: item.fileName || `Result ${item.applicationNumber}`,
       category: "result",
@@ -205,7 +239,7 @@ export async function POST(request: NextRequest) {
     });
     if (uploadedBuffer) {
       try {
-        const caseWithFolders = await ensureCaseDriveFolders(user.companyId, item.matchedCaseId);
+        const caseWithFolders = await ensureCaseDriveFolders(companyId, item.matchedCaseId);
         const submittedFolderId = extractDriveFolderId(
           String(caseWithFolders?.submittedFolderLink || "")
         );
@@ -226,6 +260,26 @@ export async function POST(request: NextRequest) {
       }
     }
   }
+  // Auto-notify client via WhatsApp if matched and has phone
+  if (entryType === "result" && item.matchedCaseId && item.outcome !== "other") {
+    try {
+      const matchedCase = await getCase(companyId, item.matchedCaseId);
+      const clientPhone = matchedCase?.leadPhone || item.phone;
+      if (clientPhone && clientPhone.replace(/\D/g, "").length >= 10) {
+        const { sendWhatsAppText } = await import("@/lib/whatsapp");
+        const clientName = matchedCase?.client || item.clientName || "Client";
+        const firstName = clientName.split(" ")[0];
+        const outcomeMsg =
+          item.outcome === "approved"
+            ? `🎉 Great news ${firstName}! Your ${matchedCase?.formType || "application"} has been *APPROVED* by IRCC. Newton Immigration will contact you shortly with next steps.`
+            : item.outcome === "refused"
+            ? `Hi ${firstName}, we have received a decision on your ${matchedCase?.formType || "application"} from IRCC. Our team will review and contact you shortly to discuss your options.`
+            : `Hi ${firstName}, IRCC has sent a request letter regarding your ${matchedCase?.formType || "application"}. Newton Immigration will review and contact you with what's needed.`;
+        await sendWhatsAppText(clientPhone.replace(/\D/g, ""), outcomeMsg).catch(() => {});
+      }
+    } catch { /* non-fatal */ }
+  }
+
   return NextResponse.json({ item }, { status: 201 });
 }
 
@@ -235,13 +289,14 @@ export async function PATCH(request: NextRequest) {
   if (user.userType !== "staff" && user.role === "Client") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  const companyId = user.companyId;
   const body = await request.json().catch(() => ({}));
   const resultId = String(body.resultId || "").trim();
   if (!resultId) {
     return NextResponse.json({ error: "resultId is required" }, { status: 400 });
   }
   const item = await markLegacyResultInformed({
-    companyId: user.companyId,
+    companyId: companyId,
     resultId,
     informedByName: user.name
   });

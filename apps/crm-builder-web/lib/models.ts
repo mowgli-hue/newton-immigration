@@ -251,6 +251,16 @@ export type AppUser = {
   workspaceDriveLink?: string;
   workspaceDriveFolderId?: string;
   caseId?: string;
+  staffNotes?: StaffNote[];
+};
+
+export type StaffNote = {
+  id: string;
+  authorId: string;
+  authorName: string;
+  text: string;
+  createdAt: string;
+  pinned?: boolean;
 };
 
 export type Session = {

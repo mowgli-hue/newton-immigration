@@ -41,6 +41,9 @@ function toIso(value: unknown) {
 }
 
 async function loadFromNormalizedTables(): Promise<Partial<AppStore>> {
+  // Return empty store if normalized tables don't exist yet
+  // The snapshot table is the primary storage
+  return {};
   const db = getPool();
   const [
     companiesRes,

@@ -79,7 +79,12 @@ function sameOrigin(request: NextRequest) {
 
 export function middleware(request: NextRequest) {
   const isApi = request.nextUrl.pathname.startsWith("/api/");
+  const isWhatsAppWebhook = request.nextUrl.pathname === "/api/whatsapp";
   if (isApi) {
+    // Allow WhatsApp webhook from Meta servers
+    if (isWhatsAppWebhook) {
+      return withSecurityHeaders(NextResponse.next());
+    }
     if (isStateChangingMethod(request.method) && !sameOrigin(request)) {
       return withSecurityHeaders(
         NextResponse.json(

@@ -10,24 +10,26 @@ export type AppScreen =
   | "accounting"
   | "tasks"
   | "chat"
-  | "files";
+  | "files"
+  | "team"
+  | "inbox";
 
 // Each role only sees what they need
 const STAFF_ROLE_TAB_ACCESS: Record<Exclude<Role, "Client">, AppScreen[]> = {
   // Admin sees everything
-  Admin: ["dashboard", "cases", "communications", "results", "submission", "accounting", "tasks", "chat", "files", "settings"],
+  Admin: ["dashboard", "cases", "communications", "results", "submission", "accounting", "tasks", "inbox", "team", "settings"],
 
   // Marketing creates cases, tracks leads, sees accounting
-  Marketing: ["dashboard", "cases", "communications", "accounting", "tasks", "chat"],
+  Marketing: ["dashboard", "cases", "communications", "tasks", "inbox", "team"],
 
   // Processing works cases assigned to them — no need to create cases or see accounting
-  Processing: ["dashboard", "cases", "submission", "tasks", "chat", "files"],
+  Processing: ["dashboard", "cases", "submission", "tasks", "inbox", "team"],
 
   // Processing Lead can also see results and reassign
-  ProcessingLead: ["dashboard", "cases", "results", "submission", "tasks", "chat", "files", "settings"],
+  ProcessingLead: ["dashboard", "cases", "results", "submission", "tasks", "inbox", "team", "settings"],
 
   // Reviewer just reviews cases
-  Reviewer: ["dashboard", "cases", "tasks", "chat"],
+  Reviewer: ["dashboard", "cases", "tasks", "inbox", "team"],
 };
 
 function normalizeRole(role: Role | string): Role {
@@ -62,7 +64,7 @@ export function canCreateCase(role: Role): boolean {
 
 export function canUseAccounting(role: Role): boolean {
   const r = normalizeRole(role);
-  return r === "Admin" || r === "Marketing" || r === "ProcessingLead";
+  return r === "Admin";
 }
 
 export function canUseCommunications(role: Role): boolean {

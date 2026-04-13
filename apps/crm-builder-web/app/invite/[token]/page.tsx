@@ -32,14 +32,11 @@ export default function InvitePage({ params }: { params: { token: string } }) {
         setLoading(false);
         return;
       }
-      const data = body as InvitePayload;
-      setPayload(data);
+      setPayload(body as InvitePayload);
       setLoading(false);
     }
     void load();
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, [params.token]);
 
   async function handleSubmit(event: FormEvent) {
@@ -54,7 +51,7 @@ export default function InvitePage({ params }: { params: { token: string } }) {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(String(body.error || "Could not create account"));
+        setError(String(body.error || "Could not open portal. Please try again."));
         return;
       }
       const slug = String(body?.company?.slug || "");
@@ -66,81 +63,91 @@ export default function InvitePage({ params }: { params: { token: string } }) {
   }
 
   return (
-    <main className="mx-auto flex min-h-[80vh] max-w-2xl items-center px-4 py-8">
-      <section className="w-full rounded-2xl border-2 border-slate-300 bg-white p-6">
-        {loading ? <p className="text-sm text-slate-600">Loading invite...</p> : null}
-
-        {!loading && payload ? (
-          <>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Client Invite</p>
-            <h1 className="mt-1 text-2xl font-bold text-slate-900">{payload.company.name} invited you</h1>
-            <p className="mt-1 text-sm text-slate-600">
-              Case {payload.case.id} • {payload.case.formType}
-            </p>
-
-            <div className="mt-4 grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
-              <p>1. Open secure portal link (no login required)</p>
-              <p>2. Review and e-sign retainer agreement</p>
-              <p>3. Upload documents and complete questions</p>
+    <main className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center px-4 py-8">
+      <div className="w-full max-w-md">
+        {loading && (
+          <div className="text-center">
+            <div className="inline-flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-6 py-4 text-white">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+              <span className="text-sm font-medium">Loading your portal...</span>
             </div>
+          </div>
+        )}
 
-            <form className="mt-4 space-y-3" onSubmit={handleSubmit}>
-              <label className="block text-sm">
-                <span className="text-xs font-medium text-slate-600">Full Name (optional)</span>
-                <input value={name} onChange={(e) => setName(e.target.value)} className="mt-1 w-full rounded-lg border-2 border-slate-300 px-3 py-2" placeholder="Client full name" />
-              </label>
-
-              {error ? <p className="text-xs text-red-600">{error}</p> : null}
-
-              <button
-                disabled={submitting || payload.invite.status === "expired"}
-                className="w-full rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
-                type="submit"
-              >
-                {payload.invite.status === "expired"
-                  ? "Invite Expired"
-                  : submitting
-                    ? "Opening Portal..."
-                    : "Open Client Portal"}
-              </button>
-            </form>
-          </>
-        ) : null}
-
-        {!loading && !payload ? (
-          <div className="space-y-3">
-            <p className="text-base font-semibold text-red-700">This invite link is no longer available.</p>
-            <p className="text-sm text-slate-600">
-              Please request a new secure link from Newton Immigration.
-            </p>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
-              <p>Support phone: {supportPhone}</p>
-              <p>Support email: {supportEmail}</p>
-              {error ? <p className="mt-1 text-red-600">Details: {error}</p> : null}
+        {!loading && payload && (
+          <div className="rounded-3xl border border-white/10 bg-white shadow-2xl overflow-hidden">
+            <div className="bg-gradient-to-r from-slate-900 to-slate-700 px-8 py-8 text-center">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 text-2xl">🏛️</div>
+              <h1 className="text-xl font-bold text-white">Newton Immigration</h1>
+              <p className="mt-1 text-sm text-slate-300">Secure Client Portal</p>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <a
-                href={`tel:${supportPhone}`}
-                className="rounded bg-slate-900 px-3 py-2 text-xs font-semibold text-white"
-              >
-                Call Support
+            <div className="px-8 py-8">
+              <div className="mb-6 rounded-2xl bg-slate-50 p-4">
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-400 mb-1">Your Application</p>
+                <p className="text-base font-bold text-slate-900">{payload.case.formType}</p>
+                <p className="text-xs text-slate-500 mt-0.5">Case {payload.case.id}</p>
+              </div>
+              <div className="mb-6 space-y-3">
+                {[
+                  { icon: "📝", text: "Review & sign your retainer agreement" },
+                  { icon: "📋", text: "Answer a few quick questions" },
+                  { icon: "📎", text: "Upload your documents securely" },
+                  { icon: "✅", text: "Newton team handles the rest" },
+                ].map((step, i) => (
+                  <div key={i} className="flex items-center gap-3">
+                    <span className="text-lg">{step.icon}</span>
+                    <p className="text-sm text-slate-700">{step.text}</p>
+                  </div>
+                ))}
+              </div>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-1.5">Your Name (optional)</label>
+                  <input value={name} onChange={(e) => setName(e.target.value)}
+                    className="w-full rounded-xl border-2 border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-900 placeholder-slate-300 focus:border-slate-900 focus:bg-white focus:outline-none"
+                    placeholder="Enter your full name" />
+                </div>
+                {error && (
+                  <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3">
+                    <p className="text-xs font-semibold text-red-700">{error}</p>
+                  </div>
+                )}
+                <button disabled={submitting || payload.invite.status === "expired"}
+                  className="w-full rounded-xl bg-slate-900 px-4 py-4 text-sm font-bold text-white hover:bg-slate-700 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  type="submit">
+                  {payload.invite.status === "expired" ? "⚠️ Link Expired — Contact Newton" : submitting ? "Opening your portal..." : "Open My Portal →"}
+                </button>
+              </form>
+              <p className="mt-4 text-center text-xs text-slate-400">Secure & private · Your data is protected</p>
+            </div>
+          </div>
+        )}
+
+        {!loading && !payload && (
+          <div className="rounded-3xl border border-white/10 bg-white shadow-2xl overflow-hidden">
+            <div className="bg-gradient-to-r from-red-900 to-red-700 px-8 py-8 text-center">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 text-2xl">🔒</div>
+              <h1 className="text-xl font-bold text-white">Link Not Available</h1>
+              <p className="mt-1 text-sm text-red-200">This portal link has expired or is invalid</p>
+            </div>
+            <div className="px-8 py-8 space-y-4">
+              <p className="text-sm text-slate-600 text-center">Please contact Newton Immigration to get a new secure link.</p>
+              <a href={`https://wa.me/${supportPhone}?text=Hi, I need a new portal link for my immigration case.`} target="_blank"
+                className="flex items-center justify-center gap-2 w-full rounded-xl bg-emerald-600 px-4 py-4 text-sm font-bold text-white hover:bg-emerald-700">
+                📱 WhatsApp Newton Immigration
               </a>
-              <a
-                href={`mailto:${supportEmail}?subject=Request%20New%20Client%20Portal%20Link`}
-                className="rounded border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
-              >
-                Request New Link
+              <a href={`tel:${supportPhone}`}
+                className="flex items-center justify-center gap-2 w-full rounded-xl border-2 border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50">
+                📞 Call {supportPhone}
               </a>
-              <a
-                href="/"
-                className="rounded border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
-              >
-                Go to Portal Home
+              <a href={`mailto:${supportEmail}?subject=Request New Portal Link`}
+                className="flex items-center justify-center gap-2 w-full rounded-xl border-2 border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50">
+                ✉️ Email Us
               </a>
             </div>
           </div>
-        ) : null}
-      </section>
+        )}
+      </div>
     </main>
   );
 }

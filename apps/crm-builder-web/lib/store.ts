@@ -28,6 +28,8 @@ import { sampleCases, seedCompany, seedUsers } from "@/lib/data";
 import { getMissingChecklistDocs } from "@/lib/application-checklists";
 import { getMissingImm5710Questions } from "@/lib/imm5710";
 import { NEWTON_TEAM_MEMBERS } from "@/lib/newton-team";
+import { SUBMITTED_APPS_LOOKUP } from "@/lib/submitted-apps-lookup";
+import { SUBMITTED_APPS } from "@/lib/submitted-apps";
 import { generatePgwpDraft } from "@/lib/pgwp";
 import { getStorePath } from "@/lib/storage-paths";
 import { hashPassword, isPasswordHash, verifyPassword } from "@/lib/security";
@@ -1615,7 +1617,7 @@ export async function updateCaseLinks(
     Pick<
       CaseItem,
       "questionnaireLink" | "docsUploadLink" | "applicationFormsLink" | "submittedFolderLink" | "correspondenceFolderLink"
-    >
+    > & { intakeSheetId?: string; intakeSheetUrl?: string }
   >
 ): Promise<CaseItem | null> {
   const store = await readStore();
@@ -1635,7 +1637,10 @@ export async function updateCaseLinks(
     correspondenceFolderLink:
       patch.correspondenceFolderLink !== undefined
         ? String(patch.correspondenceFolderLink)
-        : current.correspondenceFolderLink
+        : current.correspondenceFolderLink,
+    // Intake sheet tracking (extends the base model via spread)
+    ...((patch as any).intakeSheetId !== undefined ? { intakeSheetId: String((patch as any).intakeSheetId) } : {}),
+    ...((patch as any).intakeSheetUrl !== undefined ? { intakeSheetUrl: String((patch as any).intakeSheetUrl) } : {}),
   };
   await writeStore(store);
   return store.cases[idx];
@@ -1896,6 +1901,46 @@ export async function setUserActive(
   return store.users[idx];
 }
 
+export async function addStaffNote(
+  companyId: string,
+  targetUserId: string,
+  note: { authorId: string; authorName: string; text: string }
+): Promise<AppUser | null> {
+  const store = await readStore();
+  const idx = store.users.findIndex((u) => u.companyId === companyId && u.id === targetUserId);
+  if (idx === -1) return null;
+  const newNote = {
+    id: `NOTE-${randomUUID()}`,
+    authorId: note.authorId,
+    authorName: note.authorName,
+    text: note.text,
+    createdAt: new Date().toISOString(),
+    pinned: false,
+  };
+  store.users[idx] = {
+    ...store.users[idx],
+    staffNotes: [...(store.users[idx].staffNotes || []), newNote],
+  };
+  await writeStore(store);
+  return store.users[idx];
+}
+
+export async function deleteStaffNote(
+  companyId: string,
+  targetUserId: string,
+  noteId: string
+): Promise<AppUser | null> {
+  const store = await readStore();
+  const idx = store.users.findIndex((u) => u.companyId === companyId && u.id === targetUserId);
+  if (idx === -1) return null;
+  store.users[idx] = {
+    ...store.users[idx],
+    staffNotes: (store.users[idx].staffNotes || []).filter((n) => n.id !== noteId),
+  };
+  await writeStore(store);
+  return store.users[idx];
+}
+
 export async function listMessages(companyId: string, caseId: string): Promise<MessageItem[]> {
   const store = await readStore();
   return store.messages
@@ -2026,15 +2071,70 @@ export async function addLegacyResult(input: {
           (c) => c.companyId === input.companyId && c.id === input.forceMatchedCaseId
         ) ?? null
       : null;
-  const matchedCase =
-    forcedCase ??
-    store.cases.find(
-      (c) =>
-        c.companyId === input.companyId &&
-        String(c.applicationNumber || "")
-          .trim()
-          .toLowerCase() === appNo
-    ) ?? null;
+  // Normalize app number for matching - remove spaces, lowercase
+  const normalizeApp = (v: string) => String(v || "").replace(/[^a-z0-9]/gi, "").toLowerCase();
+  const appNoNorm = normalizeApp(appNo);
+
+  // Match by application number first (exact normalized match)
+  const matchByAppNo = appNoNorm
+    ? store.cases.find(
+        (c) =>
+          c.companyId === input.companyId &&
+          normalizeApp(String(c.applicationNumber || "")) === appNoNorm
+      ) ?? null
+    : null;
+
+  // Also try submitted apps lookup for phone if missing
+  let lookupPhone = String(input.phone || "").trim();
+  if (!lookupPhone && appNoNorm) {
+    const sub = SUBMITTED_APPS.find(a => normalizeApp(a.appNum) === appNoNorm);
+    if (sub?.phone) lookupPhone = sub.phone;
+  }
+
+  // Fallback: match by client name (normalize spaces, case-insensitive, first name match)
+  const inputName = String(input.clientName || "").trim().toLowerCase().replace(/\s+/g, " ");
+  const inputFirstName = inputName.split(" ")[0];
+  const matchByName = !matchByAppNo && inputName.length > 2
+    ? store.cases.find((c) => {
+        const caseName = String(c.client || "").trim().toLowerCase().replace(/\s+/g, " ");
+        const caseFirst = caseName.split(" ")[0];
+        return c.companyId === input.companyId &&
+          (caseName === inputName ||
+           caseName.includes(inputName) ||
+           inputName.includes(caseName) ||
+           (inputFirstName.length > 3 && caseFirst === inputFirstName));
+      }) ?? null
+    : null;
+
+  const matchedCase = forcedCase ?? matchByAppNo ?? matchByName ?? null;
+
+  // If we matched by name and have an app number, save it to the case
+  if (matchByName && appNo && !matchByName.applicationNumber) {
+    matchByName.applicationNumber = input.applicationNumber;
+  }
+
+  // Look up phone + name from submitted apps database table
+  let resolvedPhone = String(input.phone || "").trim();
+  let resolvedClientName = String(input.clientName || "").trim();
+  if (!resolvedPhone && appNoNorm) {
+    try {
+      const { Pool } = await import("pg");
+      const _pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+      const res = await _pool.query(
+        `SELECT name, phone FROM submitted_apps_lookup WHERE app_num = $1`,
+        [appNoNorm]
+      );
+      if (res.rows.length && res.rows[0].phone) {
+        resolvedPhone = res.rows[0].phone;
+        if (!resolvedClientName || resolvedClientName === "Legacy Client") {
+          resolvedClientName = res.rows[0].name || resolvedClientName;
+        }
+      }
+      await _pool.end();
+    } catch { /* table may not exist yet */ }
+  }
+
+
   const matchedClient = matchedCase
     ? store.clients.find((c) => c.companyId === input.companyId && c.id === matchedCase.clientId)
     : undefined;
@@ -2045,8 +2145,8 @@ export async function addLegacyResult(input: {
     id: `LRES-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     companyId: input.companyId,
     entryType: input.entryType || "result",
-    clientName: String(input.clientName || "").trim() || matchedCase?.client || "Legacy Client",
-    phone: String(input.phone || "").trim() || matchedCase?.leadPhone || matchedClient?.phone || undefined,
+    clientName: resolvedClientName || matchedCase?.client || "Legacy Client",
+    phone: String(input.phone || "").trim() || lookupPhone || matchedCase?.leadPhone || matchedClient?.phone || undefined,
     applicationNumber: String(input.applicationNumber || "").trim(),
     resultDate,
     autoCategory,
