@@ -208,6 +208,7 @@ Reply with ONLY a JSON object:
         try {
           const intakeMod = await import("@/lib/whatsapp-ai-intake");
           const session = await intakeMod.getActiveSession(from, COMPANY_ID);
+          console.log(`🔍 Session lookup for ${from}: ${session ? `FOUND phase=${session.phase}` : "NOT FOUND"}`);
           if (session) {
             await intakeMod.handleIncomingReply({ phone: from, message: text, companyId: COMPANY_ID });
             handledByIntake = true;
