@@ -364,16 +364,7 @@ async function completeIntake(session: IntakeSession): Promise<void> {
     const checklist = getChecklistForFormType(session.formType);
     const requiredDocs = checklist.filter(i => i.required).map(i => i.label);
 
-    const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL || process.env.APP_BASE_URL || "https://junglecrm-builder-web-production-d358.up.railway.app"}/questionnaire/${session.caseId}`;
-
-    // Send checklist to client
-    await sendDocumentChecklist({
-      clientName: session.clientName,
-      phone: session.phone,
-      checklistItems: requiredDocs,
-      portalUrl
-    });
-
+    // Don't send checklist - client will send docs via WhatsApp directly
     clearSession(session.phone);
     console.log(`✅ WhatsApp intake complete for case ${session.caseId}`);
 
