@@ -14,22 +14,22 @@ const execAsync = promisify(exec);
 
 // Which forms to generate per application type
 const FORM_MAP: Record<string, string[]> = {
-  "post-graduation work permit": ["imm5710"],
-  "pgwp": ["imm5710"],
-  "spousal open work permit": ["imm5710"],
-  "sowp": ["imm5710"],
-  "bridging open work permit": ["imm5710"],
-  "bowp": ["imm5710"],
-  "open work permit": ["imm5710"],
-  "lmia-based work permit": ["imm5710"],
-  "lmia-exempt work permit": ["imm5710"],
-  "vulnerable open work permit": ["imm5710"],
-  "visitor record": ["imm5708"],
-  "visitor visa": ["imm5257"],
-  "trv": ["imm5257"],
-  "study permit": ["imm5709"],
-  "study permit extension": ["imm5709"],
-  "restoration": ["imm5710"],
+  "post-graduation work permit": ["imm5710", "imm5476", "rep_letter"],
+  "pgwp": ["imm5710", "imm5476", "rep_letter"],
+  "spousal open work permit": ["imm5710", "imm5476", "rep_letter"],
+  "sowp": ["imm5710", "imm5476", "rep_letter"],
+  "bridging open work permit": ["imm5710", "imm5476", "rep_letter"],
+  "bowp": ["imm5710", "imm5476", "rep_letter"],
+  "open work permit": ["imm5710", "imm5476", "rep_letter"],
+  "lmia-based work permit": ["imm5710", "imm5476", "rep_letter"],
+  "lmia-exempt work permit": ["imm5710", "imm5476", "rep_letter"],
+  "vulnerable open work permit": ["imm5710", "imm5476", "rep_letter"],
+  "visitor record": ["imm5708", "imm5476", "rep_letter"],
+  "visitor visa": ["imm5257", "imm5476", "rep_letter"],
+  "trv": ["imm5257", "imm5476", "rep_letter"],
+  "study permit": ["imm5709", "imm5476", "rep_letter"],
+  "study permit extension": ["imm5709", "imm5476", "rep_letter"],
+  "restoration": ["imm5710", "imm5476", "rep_letter"],
 };
 
 function getFormsForType(formType: string): string[] {
@@ -70,15 +70,49 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       const outputPath = join(tmpDir, `${formId}_${params.id}.pdf`);
       const blankPath = join(process.cwd(), "public", "forms", `${formId}e.pdf`);
 
-      // Map CRM intake to form fields using TypeScript mapper
+      // Map CRM intake to form fields
       let mappedData: Record<string, any> = {};
       if (formId === "imm5710") {
         mappedData = mapIntakeToImm5710(intake, caseItem.formType);
+      } else if (formId === "imm5476") {
+        // IMM5476 uses client name + RCIC details
+        const nameParts = (caseItem.client || "").trim().split(" ");
+        mappedData = {
+          family_name: nameParts.slice(1).join(" ") || nameParts[0],
+          given_name: nameParts[0],
+          dob: intake.dob || intake.date_of_birth || "",
+          passport_number: intake.passport_number || intake.passportNumber || "",
+          uci: intake.uci || intake.uciNumber || "",
+        };
+      } else if (formId === "rep_letter") {
+        // Representative letter
+        const intake_data = intake || {};
+        mappedData = {
+          client_name: caseItem.client || "",
+          form_type: caseItem.formType || "",
+          passport_number: intake_data.passport_number || intake_data.passportNumber || "",
+          arrival_date: intake_data.arrival_date || intake_data.originalEntryDate || intake_data.date_entered_canada || "",
+          institution: intake_data.institution || intake_data.school_name || intake_data.institutionName || "",
+          program: intake_data.program || intake_data.field_of_study || intake_data.programOfStudy || "",
+          uci: intake_data.uci || "",
+        };
       } else {
-        mappedData = intake; // fallback for other forms
+        mappedData = intake;
       }
 
-      const pythonScript = `
+      // Python script varies by form type
+      const pythonModule = formId === "rep_letter" ? "generate_rep_letter" : `fill_${formId}`;
+      const pythonFunc = formId === "rep_letter" ? "generate_rep_letter" : `fill_${formId}`;
+      const needsBlank = !["rep_letter"].includes(formId);
+
+      const pythonScript = formId === "rep_letter" ? `
+import sys, json
+sys.path.insert(0, '${process.cwd()}/lib/python')
+from generate_rep_letter import generate_rep_letter
+
+mapped = json.loads(sys.argv[1])
+generate_rep_letter(mapped, '${outputPath}')
+` : `
 import sys, json
 sys.path.insert(0, '${process.cwd()}/lib/python')
 from fill_${formId} import fill_${formId}, EMPTY_CLIENT
@@ -94,7 +128,18 @@ fill_${formId}(client_data, '${blankPath}', '${outputPath}')
 
       // Read output and upload to S3 / save as document
       const pdfBuffer = await readFile(outputPath);
-      const fileName = `${formId.toUpperCase()}_${caseItem.client.replace(/\s+/g,"_")}_${new Date().toISOString().slice(0,10)}.pdf`;
+      // File naming: [Client Name]- [Document Name].pdf per Newton Immigration convention
+      const clientNameClean = (caseItem.client || "Client").replace(/[^a-zA-Z0-9 ]/g, "").trim();
+      const formLabels: Record<string, string> = {
+        imm5710: "imm5710e",
+        imm5476: "imm5476e", 
+        imm5257: "imm5257e",
+        imm5708: "imm5708e",
+        imm5709: "imm5709e",
+        rep_letter: "Representative Letter",
+      };
+      const formLabel = formLabels[formId] || formId.toUpperCase();
+      const fileName = `${clientNameClean}- ${formLabel}.pdf`;
 
       let fileLink = "";
       if (isS3StorageEnabled()) {
