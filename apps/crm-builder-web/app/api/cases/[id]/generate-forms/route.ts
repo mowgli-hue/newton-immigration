@@ -3,6 +3,7 @@ import { mapIntakeToImm5710 } from "@/lib/imm5710-mapper";
 import { getCurrentUserFromRequest } from "@/lib/auth";
 import { getCase, addDocument } from "@/lib/store";
 import { buildS3ObjectKey, putObjectToS3, toS3StoredLink, isS3StorageEnabled } from "@/lib/object-storage";
+import { uploadFileToDriveFolder } from "@/lib/google-drive";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { writeFile, readFile, unlink, mkdir } from "fs/promises";
@@ -102,6 +103,26 @@ fill_${formId}(client_data, '${blankPath}', '${outputPath}')
         fileLink = toS3StoredLink(key);
       }
 
+      // Upload to Google Drive folder if case has one
+      let driveLink = fileLink;
+      try {
+        const driveFolderId = (caseItem as any).driveFolderId || (caseItem as any).driveApplicationFolderId;
+        if (driveFolderId) {
+          const driveResult = await uploadFileToDriveFolder({
+            folderId: driveFolderId,
+            fileName: fileName,
+            fileBuffer: pdfBuffer,
+            mimeType: "application/pdf"
+          });
+          if (driveResult?.webViewLink) {
+            driveLink = driveResult.webViewLink;
+            console.log(`📁 Form uploaded to Drive: ${fileName} → ${driveResult.webViewLink}`);
+          }
+        }
+      } catch (driveErr) {
+        console.error("Drive upload failed (non-fatal):", (driveErr as Error).message);
+      }
+
       // Save as document in case
       await addDocument({
         companyId,
@@ -109,7 +130,7 @@ fill_${formId}(client_data, '${blankPath}', '${outputPath}')
         name: `${formId.toUpperCase()} - Auto-filled`,
         category: "application_form",
         status: "generated",
-        link: fileLink,
+        link: driveLink || fileLink,
       });
 
       generated.push(formId);
