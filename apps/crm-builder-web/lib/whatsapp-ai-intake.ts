@@ -45,15 +45,11 @@ export async function getSession(phone: string, companyId?: string): Promise<Int
 
 export async function setSession(phone: string, session: IntakeSession): Promise<void> {
   try {
-    const { getCase, updateCaseProcessing } = await import("@/lib/store");
-    const caseItem = await getCase(session.companyId, session.caseId);
-    if (!caseItem) return;
-    await updateCaseProcessing(session.companyId, session.caseId, {
-      pgwpIntake: {
-        ...((caseItem.pgwpIntake as Record<string, string>) || {}),
-        whatsappSession: JSON.stringify(session),
-      }
-    });
+    const { updateCasePgwpIntake } = await import("@/lib/store");
+    await updateCasePgwpIntake(session.companyId, session.caseId, {
+      whatsappSession: JSON.stringify(session),
+    } as any);
+    console.log(`💾 Session saved: caseId=${session.caseId} phase=${session.phase}`);
   } catch (e) { console.error("setSession error:", e); }
 }
 
