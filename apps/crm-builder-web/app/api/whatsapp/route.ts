@@ -19,7 +19,22 @@ async function downloadWaMedia(mediaId: string): Promise<{ buffer: Buffer; mimeT
     });
     const buffer = Buffer.from(await fileRes.arrayBuffer());
     const mimeType = urlData.mime_type || "application/octet-stream";
-    const ext = mimeType.includes("pdf") ? ".pdf" : mimeType.includes("jpeg") ? ".jpg" : mimeType.includes("png") ? ".png" : ".bin";
+    // Get proper extension from mime type
+    const extMap: Record<string, string> = {
+      "application/pdf": ".pdf",
+      "image/jpeg": ".jpg", "image/jpg": ".jpg",
+      "image/png": ".png",
+      "image/heic": ".heic",
+      "application/zip": ".zip",
+      "application/x-zip-compressed": ".zip",
+      "application/msword": ".doc",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+      "application/vnd.ms-excel": ".xls",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+      "video/mp4": ".mp4",
+      "audio/ogg": ".ogg", "audio/mpeg": ".mp3",
+    };
+    const ext = extMap[mimeType] || (mimeType.includes("zip") ? ".zip" : mimeType.includes("pdf") ? ".pdf" : mimeType.includes("image") ? ".jpg" : ".bin");
     const filename = `wa_doc_${Date.now()}${ext}`;
     return { buffer, mimeType, filename };
   } catch (e) {
@@ -87,7 +102,8 @@ export async function POST(req: NextRequest) {
       // Handle document/image uploads → save to Drive
       if (matched && (msgType === "document" || msgType === "image" || msgType === "audio")) {
         const mediaId = message[msgType]?.id;
-        const mediaCaption = message[msgType]?.caption || message[msgType]?.filename || msgType;
+        const originalFilename = message[msgType]?.filename || message[msgType]?.name || null;
+        const mediaCaption = message[msgType]?.caption || originalFilename || message[msgType]?.filename || msgType;
 
         if (mediaId) {
           console.log(`📎 WA media from ${matched.client}: ${mediaCaption}`);
@@ -99,9 +115,10 @@ export async function POST(req: NextRequest) {
               const caseItem = await getCase(COMPANY_ID, matched.id);
               const driveFolderId = extractDriveFolderId(caseItem?.docsUploadLink || "");
               if (driveFolderId) {
+                const saveFileName = originalFilename || `WA_${matched.client}_${media.filename}`;
                 await uploadFileToDriveFolder({
                   folderId: driveFolderId,
-                  fileName: `WA_${matched.client}_${media.filename}`,
+                  fileName: saveFileName,
                   fileBuffer: media.buffer,
                   mimeType: media.mimeType
                 });
@@ -112,10 +129,11 @@ export async function POST(req: NextRequest) {
               await addDocument({
                 companyId: COMPANY_ID,
                 caseId: matched.id,
-                name: mediaCaption || media.filename,
+                name: originalFilename || mediaCaption || media.filename,
                 category: "client",
                 uploadedBy: matched.client || "Client (WhatsApp)",
-                fileLink: `wa://media/${mediaId}`
+                status: "received",
+                link: `wa://media/${mediaId}`
               });
               // Send confirmation
               const { sendWhatsAppText } = await import("@/lib/whatsapp");
