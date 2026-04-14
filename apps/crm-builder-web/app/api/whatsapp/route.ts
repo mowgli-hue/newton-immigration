@@ -255,7 +255,7 @@ Reply with ONLY a JSON object:
             console.error("Team notification error:", (e as Error).message);
           }
 
-          // Auto AI reply for general client messages
+          // Smart AI auto-reply for client messages
           try {
             const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_BASE_URL || "https://junglecrm-builder-web-production-d358.up.railway.app";
             const aiRes = await fetch(`${appUrl}/api/ai-reply`, {
@@ -265,11 +265,14 @@ Reply with ONLY a JSON object:
                 phone: from,
                 message: text,
                 caseId: matched.id,
-                action: "send"
+                action: "send",
+                systemToken: process.env.AUTH_RECOVERY_TOKEN || "newton-recovery-2024"
               })
             });
             if (aiRes.ok) {
-              console.log(`🤖 AI auto-reply sent to ${matched.client}`);
+              console.log(`🤖 AI smart reply sent to ${matched.client}`);
+            } else {
+              console.error(`🤖 AI reply failed: ${aiRes.status}`);
             }
           } catch (e) {
             console.error("AI auto-reply failed (non-fatal):", e);
