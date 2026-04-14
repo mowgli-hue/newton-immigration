@@ -19,18 +19,23 @@ async function fillViaXfa(
 ): Promise<void> {
   const tmpJson = path.join(os.tmpdir(), `crm_fill_${Date.now()}.json`);
   await writeFile(tmpJson, JSON.stringify(clientData));
-  const runner = `
-import sys, json
-sys.path.insert(0, ${JSON.stringify(path.dirname(scriptPath))})
-from ${path.basename(scriptPath).replace(".py", "")} import fill_imm5710, EMPTY_CLIENT
-with open(${JSON.stringify(tmpJson)}) as f:
-    client = json.load(f)
-merged = {**EMPTY_CLIENT, **client}
-fill_imm5710(merged, ${JSON.stringify(blankPath)}, ${JSON.stringify(outputPath)})
-`;
+  const runner = [
+    "import sys, json",
+    `sys.path.insert(0, ${JSON.stringify(path.dirname(scriptPath))})`,
+    `from ${path.basename(scriptPath).replace(".py", "")} import fill_imm5710, EMPTY_CLIENT`,
+    `f = open(${JSON.stringify(tmpJson)})`,
+    "client = json.load(f)",
+    "f.close()",
+    "merged = {**EMPTY_CLIENT, **client}",
+    `fill_imm5710(merged, ${JSON.stringify(blankPath)}, ${JSON.stringify(outputPath)})`,
+  ].join("\n");
   const result = spawnSync(PYTHON_BIN, ["-c", runner], { timeout: 30_000, encoding: "utf8" });
   await unlink(tmpJson).catch(() => {});
-  if (result.status !== 0) const errMsg = `Python failed (exit ${result.status}): ${result.stderr?.trim() || result.stdout?.trim() || "no output"}`; console.error(errMsg); throw new Error(errMsg);
+  if (result.status !== 0) {
+    const errMsg = `Python failed (exit ${result.status}): ${result.stderr?.trim() || result.stdout?.trim() || "no output"}`;
+    console.error(errMsg);
+    throw new Error(errMsg);
+  }
 }
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
@@ -63,7 +68,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const generated: string[] = [];
     const errors: string[] = [];
 
-    if (!existsSync(blank)) return NextResponse.json({ ok: false, error: `blank_${formId}.pdf not found` });
+    if (!existsSync(blank)) {
+      return NextResponse.json({ ok: false, error: `blank_${formId}.pdf not found` });
+    }
 
     const clientNameClean = clientName.replace(/[^a-zA-Z0-9 ]/g, "").trim();
     const fileName = `${clientNameClean} - ${formLabel}.pdf`;
@@ -74,7 +81,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     await unlink(outputPath).catch(() => {});
     generated.push(formId);
 
-    // Upload to Google Drive
     let folderId: string | undefined;
     const appFormsLink = caseItem.applicationFormsLink;
     if (appFormsLink) { const m = appFormsLink.match(/\/folders\/([-\w]{25,})/); if (m) folderId = m[1]; }
