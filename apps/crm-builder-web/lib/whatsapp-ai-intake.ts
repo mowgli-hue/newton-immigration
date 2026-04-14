@@ -48,7 +48,7 @@ export async function setSession(phone: string, session: IntakeSession): Promise
     const { updateCasePgwpIntake } = await import("@/lib/store");
     await updateCasePgwpIntake(session.companyId, session.caseId, {
       whatsappSession: JSON.stringify(session),
-    } as any);
+    });
     console.log(`💾 Session saved: caseId=${session.caseId} phase=${session.phase}`);
   } catch (e) { console.error("setSession error:", e); }
 }

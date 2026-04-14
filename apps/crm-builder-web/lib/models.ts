@@ -8,6 +8,7 @@ export type NotificationType = "deadline" | "missing_doc" | "ai_alert";
 export type DocRequestStatus = "open" | "fulfilled";
 
 export type PgwpIntakeData = {
+  whatsappSession?: string;
   fullName?: string;
   applicationType?: string;
   applicationSpecificAnswers?: string;
