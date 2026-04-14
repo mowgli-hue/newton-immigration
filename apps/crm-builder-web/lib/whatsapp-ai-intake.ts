@@ -237,62 +237,64 @@ export async function handleIncomingReply(params: {
 
   const text = message.trim();
 
-  // Phase: waiting for template reply → start AI chat
+  // Phase: waiting for template reply → start questions directly
   if (session.phase === "awaiting_template_reply") {
     session.phase = "ai_chat";
     session.chatTurns = 0;
     await setSession(phone, session);
 
-    const firstMsg = await getAiNextMessage(session, null);
-    session.conversationHistory.push({ role: "assistant", content: firstMsg });
-    await setSession(phone, session);
+    const firstName = session.clientName.split(" ")[0];
+    const firstQuestion = session.questions[0];
+    const firstMsg = `ਸਤ ਸ੍ਰੀ ਅਕਾਲ ${firstName} ਜੀ! 🙏 Hi *${firstName}*!\n\nTo prepare your *${session.formType}* application, I need to ask you ${session.questions.length} questions. Please reply to each one.\n\n*(1/${session.questions.length})* ${firstQuestion}`;
     await sendWhatsAppText(phone, firstMsg);
     return;
   }
 
-  // Phase: AI chat — process client answer and send next question
+  // Phase: AI chat — ask questions one by one based on chatTurns index
   if (session.phase === "ai_chat") {
-    // Add client message to history
-    session.conversationHistory.push({ role: "user", content: text });
+    const qIndex = session.chatTurns;
+    const currentQuestion = session.questions[qIndex];
+    const firstName = session.clientName.split(" ")[0];
 
-    // Extract info from this answer
-    const currentQuestion = session.questions[Math.min(session.chatTurns, session.questions.length - 1)];
-    const extracted = await extractInfo(currentQuestion, text, session.formType);
-    session.collectedFields = { ...session.collectedFields, ...extracted };
+    // Save this answer
+    if (currentQuestion && text) {
+      session.answers[`q${qIndex + 1}`] = text;
+      session.answers[currentQuestion.slice(0, 50)] = text;
+    }
+
     session.chatTurns++;
-
-    // Check if done
-    const isDone = Object.keys(session.collectedFields).length >= Math.min(session.questions.length, 15) 
-      || session.chatTurns >= 20;
-
-    // Get AI's next message
-    const nextMsg = await getAiNextMessage(session, text);
-    session.conversationHistory.push({ role: "assistant", content: nextMsg });
+    const nextIndex = session.chatTurns;
+    const isDone = nextIndex >= session.questions.length;
 
     if (isDone) {
       session.phase = "complete";
-    }
+      await setSession(phone, session);
 
-    await setSession(phone, session);
-    await sendWhatsAppText(phone, nextMsg);
+      const doneMsg = [
+        `✅ *Thank you ${firstName}!*`,
+        ``,
+        `I have all the information needed for your *${session.formType}* application.`,
+        `Our team will prepare your forms and be in touch shortly! 🙏`,
+        ``,
+        `— Newton Immigration Team 🍁`,
+      ].join("\n");
+      await sendWhatsAppText(phone, doneMsg);
 
-    // If complete, trigger intake completion
-    if (isDone || session.phase === "complete") {
-      // Save all collected data to case
-      const allAnswers = {
-        ...session.collectedFields,
-        conversationLog: JSON.stringify(session.conversationHistory),
+      // Save all answers to case
+      const { updateCasePgwpIntake: savePgwp } = await import("@/lib/store");
+      await savePgwp(session.companyId, session.caseId, {
+        ...session.answers as any,
         whatsappIntakePhase: "complete",
         whatsappIntakeCompletedAt: new Date().toISOString(),
-      };
-
-      await updateCaseProcessing(session.companyId, session.caseId, {
-        pgwpIntake: allAnswers,
-        aiStatus: "intake_complete"
       });
-
-      // Complete intake — send checklist and generate forms
       await completeIntake(session);
+    } else {
+      await setSession(phone, session);
+      const nextQuestion = session.questions[nextIndex];
+      const ackPhrases = ["Got it! ✓", "Perfect! ✓", "Thank you! ✓", "Noted! ✓", "Great! ✓"];
+      const ack = ackPhrases[qIndex % ackPhrases.length];
+      const msg = `${ack}\n\n*(${nextIndex + 1}/${session.questions.length})* ${nextQuestion}`;
+      await sendWhatsAppText(phone, msg);
     }
 
     return;
