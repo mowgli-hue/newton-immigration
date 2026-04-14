@@ -135,7 +135,20 @@ fill_${formId}(client_data, '${blankPath}', '${outputPath}')
       await writeFile(scriptPath, pythonScript);
 
       const mappedJson = JSON.stringify(mappedData).replace(/'/g, "\\'");
-      await execAsync(`python3 ${scriptPath} '${mappedJson}'`);
+      // Try multiple python paths for Railway compatibility
+      const pythonPaths = ["python3", "python", "/usr/bin/python3", "/usr/local/bin/python3"];
+      let lastErr = "";
+      let ran = false;
+      for (const py of pythonPaths) {
+        try {
+          await execAsync(`${py} ${scriptPath} '${mappedJson}'`);
+          ran = true;
+          break;
+        } catch (e) {
+          lastErr = String(e);
+        }
+      }
+      if (!ran) throw new Error(`python not found. Last error: ${lastErr}`);
 
       // Read output and upload to S3 / save as document
       const pdfBuffer = await readFile(outputPath);
