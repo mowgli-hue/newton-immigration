@@ -5490,6 +5490,15 @@ We will notify you as soon as we receive a decision. This usually takes a few we
                             className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50">
                             {sheetSyncRunning ? "Syncing…" : "↗ Sheets"}
                           </button>
+                          <button onClick={async () => {
+                            setAiLoading(true);
+                            const res = await apiFetch(`/cases/${selectedCase.id}/ai-smart`, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"overdue_check"})}).catch(()=>null);
+                            const d = await res?.json().catch(()=>({}));
+                            setAiResult({caseId:selectedCase.id, text:d?.text||"Failed", action:"overdue_check"});
+                            setAiLoading(false);
+                          }} disabled={aiLoading} className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50">
+                            {aiLoading ? "..." : "⚡ Urgency"}
+                          </button>
                         </div>
                       </div>
 
@@ -8084,6 +8093,16 @@ We will notify you as soon as we receive a decision. This usually takes a few we
                             rows={3}
                             className="w-full rounded-xl border-2 border-slate-200 bg-slate-50 px-4 py-3 text-sm focus:border-emerald-400 focus:outline-none resize-none"
                           />
+                          <div className="flex gap-2">
+                          <button onClick={async () => {
+                            // AI suggests note content
+                            const el = document.getElementById("case-note-input") as HTMLTextAreaElement;
+                            const res = await apiFetch(`/cases/${selectedCase.id}/ai-smart`, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"draft_notes"})}).catch(()=>null);
+                            const d = await res?.json().catch(()=>({}));
+                            if (d?.text && el) el.value = d.text;
+                          }} className="rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-bold text-violet-700 hover:bg-violet-100">
+                            🤖 AI Draft
+                          </button>
                           <button onClick={async () => {
                             const el = document.getElementById("case-note-input") as HTMLTextAreaElement;
                             const text = el?.value?.trim();
@@ -8106,6 +8125,7 @@ We will notify you as soon as we receive a decision. This usually takes a few we
                           }} className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white hover:bg-slate-700">
                             + Add Note
                           </button>
+                          </div>
                         </div>
                         <div className="space-y-2">
                           {(caseNotes[selectedCase.id] || []).length === 0 ? (
@@ -8135,7 +8155,12 @@ We will notify you as soon as we receive a decision. This usually takes a few we
           <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="bg-violet-600 px-4 py-3 flex items-center justify-between">
               <p className="text-sm font-bold text-white">
-                {aiResult.action === "summary" ? "🤖 AI Case Summary" : aiResult.action === "intake_check" ? "🔍 AI Intake Check" : "🤖 AI Result"}
+                {aiResult.action === "summary" ? "📋 AI Case Summary" 
+                  : aiResult.action === "intake_check" ? "🔍 AI Intake Check" 
+                  : aiResult.action === "draft_notes" ? "✍️ AI Draft Notes"
+                  : aiResult.action === "overdue_check" ? "⚡ Urgency Analysis"
+                  : aiResult.action === "smart_reply" ? "💬 AI Smart Reply"
+                  : "🤖 AI Result"}
               </p>
               <button onClick={() => setAiResult(null)} className="text-violet-100 hover:text-white text-xl">✕</button>
             </div>
