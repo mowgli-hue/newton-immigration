@@ -1,214 +1,234 @@
 import { NextRequest, NextResponse } from "next/server";
-import { mapIntakeToImm5710 } from "@/lib/imm5710-mapper";
 import { getCurrentUserFromRequest } from "@/lib/auth";
 import { getCase, addDocument } from "@/lib/store";
-import { buildS3ObjectKey, putObjectToS3, toS3StoredLink, isS3StorageEnabled } from "@/lib/object-storage";
-import { uploadFileToDriveFolder } from "@/lib/google-drive";
-import { exec } from "child_process";
-import { promisify } from "util";
-import { writeFile, readFile, unlink, mkdir } from "fs/promises";
-import { join } from "path";
-import { tmpdir } from "os";
+import { PDFDocument, PDFName, PDFString, PDFBool } from "pdf-lib";
+import { readFile } from "fs/promises";
+import { existsSync } from "fs";
+import path from "path";
 
-const execAsync = promisify(exec);
+// Map intake data to IMM5710 fields
+function mapToImm5710Fields(intake: Record<string, string>, client: string, formType: string): Record<string, string | boolean> {
+  const get = (key: string) => String(intake[key] || "").trim();
+  
+  // Parse name
+  const fullName = get("fullName") || client || "";
+  const nameParts = fullName.trim().split(" ");
+  const firstName = get("firstName") || nameParts.slice(0, -1).join(" ") || nameParts[0] || "";
+  const lastName = get("lastName") || nameParts[nameParts.length - 1] || "";
 
-// Which forms to generate per application type
-const FORM_MAP: Record<string, string[]> = {
-  "post-graduation work permit": ["imm5710", "imm5476", "rep_letter"],
-  "pgwp": ["imm5710", "imm5476", "rep_letter"],
-  "spousal open work permit": ["imm5710", "imm5476", "rep_letter"],
-  "sowp": ["imm5710", "imm5476", "rep_letter"],
-  "bridging open work permit": ["imm5710", "imm5476", "rep_letter"],
-  "bowp": ["imm5710", "imm5476", "rep_letter"],
-  "open work permit": ["imm5710", "imm5476", "rep_letter"],
-  "lmia-based work permit": ["imm5710", "imm5476", "rep_letter"],
-  "lmia-exempt work permit": ["imm5710", "imm5476", "rep_letter"],
-  "vulnerable open work permit": ["imm5710", "imm5476", "rep_letter"],
-  "visitor record": ["imm5708", "imm5476", "rep_letter"],
-  "visitor visa": ["imm5257", "imm5476", "rep_letter"],
-  "trv": ["imm5257", "imm5476", "rep_letter"],
-  "study permit": ["imm5709", "imm5476", "rep_letter"],
-  "study permit extension": ["imm5709", "imm5476", "rep_letter"],
-  "restoration": ["imm5710", "imm5476", "rep_letter"],
-  // Types that get rep letter + imm5476 only (no standard IRCC fill form)
-  "super visa": ["imm5476", "rep_letter"],
-  "supervisa": ["imm5476", "rep_letter"],
-  "express entry": ["imm5476", "rep_letter"],
-  "pnp": ["imm5476", "rep_letter"],
-  "family sponsorship": ["imm5476", "rep_letter"],
-  "spousal sponsorship": ["imm5476", "rep_letter"],
-  "citizenship": ["imm5476", "rep_letter"],
-  "pr card": ["imm5476", "rep_letter"],
-  "trv inside": ["imm5257", "imm5476", "rep_letter"],
-  "refugee": ["imm5476", "rep_letter"],
-};
+  // Parse DOB
+  const dob = get("dateOfBirth") || "";
+  const dobParts = dob.split("-");
+  
+  // Parse address
+  const address = get("address") || get("residentialAddress") || get("mailingAddress") || "";
+  
+  // Parse phone
+  const phone = get("phone") || get("telephone") || "";
+  const phoneDigits = phone.replace(/\D/g, "");
 
-function getFormsForType(formType: string): string[] {
-  const ft = formType.toLowerCase().trim();
-  for (const [key, forms] of Object.entries(FORM_MAP)) {
-    if (ft.includes(key) || key.includes(ft)) return forms;
+  const marital = get("maritalStatus") || "Single";
+
+  return {
+    // Application type
+    "applying_extend_stay": true,
+    
+    // Personal info
+    "family_name": lastName,
+    "given_name": firstName,
+    "sex": get("gender") || get("sex") || "",
+    "dob_year": dobParts[0] || "",
+    "dob_month": dobParts[1] || "",
+    "dob_day": dobParts[2] || "",
+    "place_birth_city": get("placeOfBirthCity") || get("cityOfBirth") || "",
+    "place_birth_country": get("countryOfBirth") || get("citizenship") || "",
+    "citizenship_country": get("citizenship") || get("countryOfBirth") || "",
+    
+    // Marital status
+    "marital_status": marital,
+    "spouse_family_name": get("spouseName") ? get("spouseName").split(" ").pop() || "" : "",
+    "spouse_given_name": get("spouseName") ? get("spouseName").split(" ").slice(0, -1).join(" ") : "",
+    "date_of_marriage": get("spouseDateOfMarriage") || "",
+    
+    // Languages
+    "native_language": get("nativeLanguage") || "",
+    "communicate_language": "English",
+    "language_test_taken": get("englishTestTaken")?.toLowerCase().startsWith("y") || false,
+    
+    // Travel documents
+    "passport_number": get("passportNumber") || "",
+    "passport_country": get("citizenship") || "",
+    
+    // Contact info
+    "mailing_city": get("city") || "",
+    "mailing_province": get("province") || "",
+    "mailing_postal_code": get("postalCode") || "",
+    "mailing_country": "Canada",
+    "phone_area_code": phoneDigits.slice(-10, -7) || "",
+    "phone_first_three": phoneDigits.slice(-7, -4) || "",
+    "phone_last_five": phoneDigits.slice(-4) || "",
+    "email": get("email") || "",
+    
+    // Entry
+    "original_entry_date": get("originalEntryDate") || "",
+    "original_entry_place": get("originalEntryPlacePurpose")?.split(",")[1]?.trim() || "",
+    "original_entry_purpose": "Study",
+    
+    // Background
+    "prev_application_refused": get("refusedAnyCountry")?.toLowerCase().startsWith("y") || false,
+    "has_criminal_record": get("criminalHistory")?.toLowerCase().startsWith("y") || false,
+    "has_medical_condition": get("medicalHistory")?.toLowerCase().startsWith("y") || false,
+    "criminal_details": get("criminalHistory")?.toLowerCase().startsWith("y") ? get("criminalHistory") : "",
+    "medical_details": get("medicalHistory")?.toLowerCase().startsWith("y") ? get("medicalHistory") : "",
+  };
+}
+
+// Fill a PDF form using pdf-lib
+async function fillPdfForm(pdfPath: string, fields: Record<string, string | boolean>): Promise<Uint8Array> {
+  const pdfBytes = await readFile(pdfPath);
+  const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+  
+  const form = pdfDoc.getForm();
+  const fieldList = form.getFields();
+  
+  console.log(`PDF has ${fieldList.length} fields`);
+  
+  for (const [key, value] of Object.entries(fields)) {
+    try {
+      // Try to find field by name (exact or partial match)
+      const field = fieldList.find(f => {
+        const name = f.getName().toLowerCase();
+        return name === key.toLowerCase() || name.includes(key.toLowerCase()) || key.toLowerCase().includes(name);
+      });
+      
+      if (!field) continue;
+      
+      const fieldName = field.getName();
+      const fieldType = field.constructor.name;
+      
+      if (fieldType === "PDFTextField") {
+        form.getTextField(fieldName).setText(String(value));
+      } else if (fieldType === "PDFCheckBox") {
+        if (value === true || value === "true" || value === "Yes") {
+          form.getCheckBox(fieldName).check();
+        } else {
+          form.getCheckBox(fieldName).uncheck();
+        }
+      } else if (fieldType === "PDFDropdown") {
+        try {
+          form.getDropdown(fieldName).select(String(value));
+        } catch { /* value might not be in options */ }
+      } else if (fieldType === "PDFRadioGroup") {
+        try {
+          form.getRadioGroup(fieldName).select(String(value));
+        } catch { /* value might not be an option */ }
+      }
+    } catch { /* skip invalid fields */ }
   }
-  return [];
+  
+  return await pdfDoc.save();
 }
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
-  // Allow both staff and system (from questionnaire completion)
-  const user = await getCurrentUserFromRequest(request).catch(() => null);
-  const body = await request.json().catch(() => ({}));
-  const isSystemCall = body.systemToken === (process.env.AUTH_RECOVERY_TOKEN || "newton-recovery-2024");
-  if (!user && !isSystemCall) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const companyId = user?.companyId || process.env.DEFAULT_COMPANY_ID || "newton";
-  const caseItem = await getCase(companyId, params.id);
-  if (!caseItem) return NextResponse.json({ error: "Case not found" }, { status: 404 });
-
-  const intake = body.intake || (caseItem as any).pgwpIntake || {};
-  const formType = caseItem.formType || "";
-  const forms = getFormsForType(formType);
-
-  if (!forms.length) {
-    return NextResponse.json({ ok: true, message: `No forms configured for ${formType}`, generated: [] });
-  }
-
-  const generated: string[] = [];
-  const tmpDir = join(tmpdir(), `forms-${params.id}-${Date.now()}`);
-  await mkdir(tmpDir, { recursive: true });
-
-  for (const formId of forms) {
-    try {
-      // Write Python script inline to temp dir
-      const scriptPath = join(tmpDir, `run_${formId}.py`);
-      const outputPath = join(tmpDir, `${formId}_${params.id}.pdf`);
-      const blankPath = join(process.cwd(), "public", "forms", `${formId}e.pdf`);
-
-      // Map CRM intake to form fields
-      let mappedData: Record<string, any> = {};
-      if (formId === "imm5710") {
-        mappedData = mapIntakeToImm5710(intake, caseItem.formType);
-      } else if (formId === "imm5476") {
-        // IMM5476 uses client name + RCIC details
-        const nameParts = (caseItem.client || "").trim().split(" ");
-        mappedData = {
-          family_name: nameParts.slice(1).join(" ") || nameParts[0],
-          given_name: nameParts[0],
-          dob: intake.dob || intake.date_of_birth || "",
-          passport_number: intake.passport_number || intake.passportNumber || "",
-          uci: intake.uci || intake.uciNumber || "",
-        };
-      } else if (formId === "rep_letter") {
-        // Representative letter
-        const intake_data = intake || {};
-        mappedData = {
-          client_name: caseItem.client || "",
-          form_type: caseItem.formType || "",
-          passport_number: intake_data.passport_number || intake_data.passportNumber || "",
-          arrival_date: intake_data.arrival_date || intake_data.originalEntryDate || intake_data.date_entered_canada || "",
-          institution: intake_data.institution || intake_data.school_name || intake_data.institutionName || "",
-          program: intake_data.program || intake_data.field_of_study || intake_data.programOfStudy || "",
-          uci: intake_data.uci || "",
-        };
-      } else {
-        mappedData = intake;
-      }
-
-      // Python script varies by form type
-      const pythonModule = formId === "rep_letter" ? "generate_rep_letter" : `fill_${formId}`;
-      const pythonFunc = formId === "rep_letter" ? "generate_rep_letter" : `fill_${formId}`;
-      const needsBlank = !["rep_letter"].includes(formId);
-
-      const pythonScript = formId === "rep_letter" ? `
-import sys, json
-sys.path.insert(0, '${process.cwd()}/lib/python')
-from generate_rep_letter import generate_rep_letter
-
-mapped = json.loads(sys.argv[1])
-generate_rep_letter(mapped, '${outputPath}')
-` : `
-import sys, json
-sys.path.insert(0, '${process.cwd()}/lib/python')
-from fill_${formId} import fill_${formId}, EMPTY_CLIENT
-
-mapped = json.loads(sys.argv[1])
-client_data = {**EMPTY_CLIENT, **mapped}
-fill_${formId}(client_data, '${blankPath}', '${outputPath}')
-`;
-      await writeFile(scriptPath, pythonScript);
-
-      const mappedJson = JSON.stringify(mappedData).replace(/'/g, "\\'");
-      // Try multiple python paths for Railway compatibility
-      const pythonPaths = ["python3", "python", "/usr/bin/python3", "/usr/local/bin/python3"];
-      let lastErr = "";
-      let ran = false;
-      for (const py of pythonPaths) {
-        try {
-          await execAsync(`${py} ${scriptPath} '${mappedJson}'`);
-          ran = true;
-          break;
-        } catch (e) {
-          lastErr = String(e);
-        }
-      }
-      if (!ran) throw new Error(`python not found. Last error: ${lastErr}`);
-
-      // Read output and upload to S3 / save as document
-      const pdfBuffer = await readFile(outputPath);
-      // File naming: [Client Name]- [Document Name].pdf per Newton Immigration convention
-      const clientNameClean = (caseItem.client || "Client").replace(/[^a-zA-Z0-9 ]/g, "").trim();
-      const formLabels: Record<string, string> = {
-        imm5710: "imm5710e",
-        imm5476: "imm5476e", 
-        imm5257: "imm5257e",
-        imm5708: "imm5708e",
-        imm5709: "imm5709e",
-        rep_letter: "Representative Letter",
-      };
-      const formLabel = formLabels[formId] || formId.toUpperCase();
-      const fileName = `${clientNameClean}- ${formLabel}.pdf`;
-
-      let fileLink = "";
-      if (isS3StorageEnabled()) {
-        const key = buildS3ObjectKey({ companyId, caseId: params.id, fileName });
-        await putObjectToS3({ key, content: pdfBuffer, contentType: "application/pdf" });
-        fileLink = toS3StoredLink(key);
-      }
-
-      // Upload to Google Drive folder if case has one
-      let driveLink = fileLink;
-      try {
-        const driveFolderId = (caseItem as any).driveFolderId || (caseItem as any).driveApplicationFolderId;
-        if (driveFolderId) {
-          const driveResult = await uploadFileToDriveFolder({
-            folderId: driveFolderId,
-            fileName: fileName,
-            fileBuffer: pdfBuffer,
-            mimeType: "application/pdf"
-          });
-          if (driveResult?.webViewLink) {
-            driveLink = driveResult.webViewLink;
-            console.log(`📁 Form uploaded to Drive: ${fileName} → ${driveResult.webViewLink}`);
-          }
-        }
-      } catch (driveErr) {
-        console.error("Drive upload failed (non-fatal):", (driveErr as Error).message);
-      }
-
-      // Save as document in case
-      await addDocument({
-        companyId,
-        caseId: params.id,
-        name: `${formId.toUpperCase()} - Auto-filled`,
-        category: "application_form",
-        status: "generated",
-        link: driveLink || fileLink,
-      });
-
-      generated.push(formId);
-      await unlink(outputPath).catch(() => {});
-      await unlink(scriptPath).catch(() => {});
-    } catch (e) {
-      console.error(`Form generation failed for ${formId}:`, (e as Error).message);
+  try {
+    const body = await request.json().catch(() => ({}));
+    const systemToken = body.systemToken;
+    const isSystemCall = systemToken === (process.env.AUTH_RECOVERY_TOKEN || "newton-recovery-2024");
+    
+    if (!isSystemCall) {
+      const user = await getCurrentUserFromRequest(request);
+      if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-  }
 
-  return NextResponse.json({ ok: true, generated, caseId: params.id });
+    const companyId = process.env.DEFAULT_COMPANY_ID || "newton";
+    const caseItem = await getCase(companyId, params.id);
+    if (!caseItem) return NextResponse.json({ error: "Case not found" }, { status: 404 });
+
+    const intake = (caseItem.pgwpIntake as Record<string, string>) || {};
+    const formType = caseItem.formType || "PGWP";
+    const clientName = caseItem.client || "Client";
+    
+    const mappedData = mapToImm5710Fields(intake, clientName, formType);
+    const generated: string[] = [];
+    const errors: string[] = [];
+
+    // Find blank PDFs
+    const libPath = path.join(process.cwd(), "lib", "python");
+    const pdfForms: Array<{ id: string; blank: string; label: string }> = [
+      { id: "imm5710", blank: path.join(libPath, "blank_imm5710.pdf"), label: "IMM5710E" },
+      { id: "imm5476", blank: path.join(libPath, "blank_imm5476.pdf"), label: "IMM5476E" },
+    ];
+
+    const results: Array<{ formId: string; fileName: string; buffer: Buffer }> = [];
+
+    for (const form of pdfForms) {
+      if (!existsSync(form.blank)) {
+        console.log(`Blank PDF not found: ${form.blank} — skipping`);
+        continue;
+      }
+
+      try {
+        const filledBytes = await fillPdfForm(form.blank, mappedData as Record<string, string | boolean>);
+        const clientNameClean = clientName.replace(/[^a-zA-Z0-9 ]/g, "").trim();
+        const fileName = `${clientNameClean}- ${form.label}.pdf`;
+        results.push({ formId: form.id, fileName, buffer: Buffer.from(filledBytes) });
+        generated.push(form.id);
+        console.log(`✅ Generated ${fileName}`);
+      } catch (e) {
+        console.error(`Form generation failed for ${form.id}:`, (e as Error).message);
+        errors.push(`${form.id}: ${(e as Error).message}`);
+      }
+    }
+
+    // Upload to S3 and save as documents
+    for (const result of results) {
+      try {
+        const { PutObjectCommand, S3Client } = await import("@aws-sdk/client-s3");
+        const s3 = new S3Client({
+          region: process.env.AWS_REGION || "us-east-1",
+          credentials: {
+            accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
+            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
+          },
+          endpoint: process.env.S3_ENDPOINT,
+        });
+
+        const key = `forms/${companyId}/${params.id}/${result.fileName}`;
+        await s3.send(new PutObjectCommand({
+          Bucket: process.env.S3_BUCKET_NAME || "",
+          Key: key,
+          Body: result.buffer,
+          ContentType: "application/pdf",
+        }));
+
+        const fileUrl = `${process.env.S3_ENDPOINT || ""}/${process.env.S3_BUCKET_NAME || ""}/${key}`;
+        
+        await addDocument({
+          companyId,
+          caseId: params.id,
+          name: result.fileName,
+          category: "form",
+          uploadedBy: "AI Autofill",
+          status: "generated",
+          link: fileUrl,
+        });
+      } catch (e) {
+        console.error(`Upload failed for ${result.fileName}:`, (e as Error).message);
+      }
+    }
+
+    if (generated.length === 0 && errors.length > 0) {
+      return NextResponse.json({ 
+        ok: false, 
+        error: "No blank PDFs found or all failed",
+        errors,
+        note: "Place blank_imm5710.pdf and blank_imm5476.pdf in apps/crm-builder-web/lib/python/"
+      });
+    }
+
+    return NextResponse.json({ ok: true, generated, errors });
+  } catch (e) {
+    console.error("generate-forms error:", (e as Error).message);
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+  }
 }

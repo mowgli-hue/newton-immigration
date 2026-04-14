@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev -H 0.0.0.0 -p 3006",
     "build": "next build",
-    "start": "sh -c 'which python3 || (apt-get install -y python3 -qq 2>/dev/null); pip install pypdf --break-system-packages -q 2>/dev/null || pip3 install pypdf -q 2>/dev/null; next start -H 0.0.0.0 -p \"${PORT:-3006}\"'",
+    "start": "next start -H 0.0.0.0 -p \"${PORT:-3006}\"",
     "lint": "next lint",
     "db:migrate:init": "bash ./scripts/db-migrate-init.sh",
     "db:migrate:store": "node ./scripts/migrate-store-to-postgres.mjs",
@@ -16,6 +16,7 @@
     "@aws-sdk/s3-request-presigner": "^3.888.0",
     "lucide-react": "^0.511.0",
     "next": "14.2.35",
+    "pdf-lib": "^1.17.1",
     "pg": "^8.13.1",
     "react": "18.3.1",
     "react-dom": "18.3.1"
