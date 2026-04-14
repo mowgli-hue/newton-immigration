@@ -296,7 +296,7 @@ async function getSheetsAccessToken(): Promise<string> {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth2:grant/jwt-bearer",
+      grant_type: "urn:ietf:params:oauth2:grant-type:jwt-bearer",
       assertion,
     }).toString(),
   });

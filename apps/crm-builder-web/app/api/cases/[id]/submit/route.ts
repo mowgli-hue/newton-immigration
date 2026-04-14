@@ -23,7 +23,7 @@ async function syncToLookup(caseItem: any, applicationNumber: string, date: stri
       ON CONFLICT (app_num) DO UPDATE SET
         name=excluded.name, phone=excluded.phone,
         app_type=excluded.app_type, submission_date=excluded.submission_date, updated_at=NOW()
-    `, [applicationNumber, caseItem.client, phone, caseItem.formType, date]);
+    `, [applicationNumber, caseItem.client, phone, caseItem.formType, "", date]);
   } catch (e) {
     console.error("Lookup sync failed:", (e as Error).message);
   }
