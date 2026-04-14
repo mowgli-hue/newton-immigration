@@ -260,9 +260,17 @@ Reply with ONLY a JSON object:
           const intakeMod = await import("@/lib/whatsapp-ai-intake");
           const session = await intakeMod.getActiveSession(from, COMPANY_ID);
           console.log(`🔍 Session lookup for ${from}: ${session ? `FOUND phase=${session.phase}` : "NOT FOUND"}`);
-          if (session) {
+          
+          // Skip intake for College Change / Study Permit Extension cases
+          const skipFormTypes = ["college change", "college transfer", "study permit extension", "spe"];
+          const matchedFormType = String(matched?.formType || "").toLowerCase();
+          const skipIntake = skipFormTypes.some(t => matchedFormType.includes(t));
+          
+          if (session && !skipIntake) {
             await intakeMod.handleIncomingReply({ phone: from, message: text, companyId: COMPANY_ID });
             handledByIntake = true;
+          } else if (session && skipIntake) {
+            console.log(`⏭️ Skipping intake for ${matched?.formType} — forwarding to team`);
           }
         } catch (e) {
           console.error("Intake handler error:", (e as Error).message);
