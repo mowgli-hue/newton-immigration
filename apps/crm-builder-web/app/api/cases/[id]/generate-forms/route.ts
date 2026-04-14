@@ -1,140 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
-import { getCase, addDocument } from "@/lib/store";
-import { PDFDocument, PDFName, PDFString, PDFBool } from "pdf-lib";
-import { readFile } from "fs/promises";
+import { getCase, addDocument, updateCaseLinks } from "@/lib/store";
+import { mapIntakeToImm5710 } from "@/lib/imm5710-mapper";
+import { uploadFileToDriveFolder, getOrCreateDriveSubfolder } from "@/lib/google-drive";
+import { readFile, writeFile, unlink } from "fs/promises";
 import { existsSync } from "fs";
+import { spawnSync } from "child_process";
 import path from "path";
+import os from "os";
 
-// Map intake data to IMM5710 fields
-function mapToImm5710Fields(intake: Record<string, string>, client: string, formType: string): Record<string, string | boolean> {
-  const get = (key: string) => String(intake[key] || "").trim();
-  
-  // Parse name
-  const fullName = get("fullName") || client || "";
-  const nameParts = fullName.trim().split(" ");
-  const firstName = get("firstName") || nameParts.slice(0, -1).join(" ") || nameParts[0] || "";
-  const lastName = get("lastName") || nameParts[nameParts.length - 1] || "";
+const PYTHON_BIN = process.env.PYTHON_BIN || "python3";
 
-  // Parse DOB
-  const dob = get("dateOfBirth") || "";
-  const dobParts = dob.split("-");
-  
-  // Parse address
-  const address = get("address") || get("residentialAddress") || get("mailingAddress") || "";
-  
-  // Parse phone
-  const phone = get("phone") || get("telephone") || "";
-  const phoneDigits = phone.replace(/\D/g, "");
-
-  const marital = get("maritalStatus") || "Single";
-
-  return {
-    // Application type
-    "applying_extend_stay": true,
-    
-    // Personal info
-    "family_name": lastName,
-    "given_name": firstName,
-    "sex": get("gender") || get("sex") || "",
-    "dob_year": dobParts[0] || "",
-    "dob_month": dobParts[1] || "",
-    "dob_day": dobParts[2] || "",
-    "place_birth_city": get("placeOfBirthCity") || get("cityOfBirth") || "",
-    "place_birth_country": get("countryOfBirth") || get("citizenship") || "",
-    "citizenship_country": get("citizenship") || get("countryOfBirth") || "",
-    
-    // Marital status
-    "marital_status": marital,
-    "spouse_family_name": get("spouseName") ? get("spouseName").split(" ").pop() || "" : "",
-    "spouse_given_name": get("spouseName") ? get("spouseName").split(" ").slice(0, -1).join(" ") : "",
-    "date_of_marriage": get("spouseDateOfMarriage") || "",
-    
-    // Languages
-    "native_language": get("nativeLanguage") || "",
-    "communicate_language": "English",
-    "language_test_taken": get("englishTestTaken")?.toLowerCase().startsWith("y") || false,
-    
-    // Travel documents
-    "passport_number": get("passportNumber") || "",
-    "passport_country": get("citizenship") || "",
-    
-    // Contact info
-    "mailing_city": get("city") || "",
-    "mailing_province": get("province") || "",
-    "mailing_postal_code": get("postalCode") || "",
-    "mailing_country": "Canada",
-    "phone_area_code": phoneDigits.slice(-10, -7) || "",
-    "phone_first_three": phoneDigits.slice(-7, -4) || "",
-    "phone_last_five": phoneDigits.slice(-4) || "",
-    "email": get("email") || "",
-    
-    // Entry
-    "original_entry_date": get("originalEntryDate") || "",
-    "original_entry_place": get("originalEntryPlacePurpose")?.split(",")[1]?.trim() || "",
-    "original_entry_purpose": "Study",
-    
-    // Background
-    "prev_application_refused": get("refusedAnyCountry")?.toLowerCase().startsWith("y") || false,
-    "has_criminal_record": get("criminalHistory")?.toLowerCase().startsWith("y") || false,
-    "has_medical_condition": get("medicalHistory")?.toLowerCase().startsWith("y") || false,
-    "criminal_details": get("criminalHistory")?.toLowerCase().startsWith("y") ? get("criminalHistory") : "",
-    "medical_details": get("medicalHistory")?.toLowerCase().startsWith("y") ? get("medicalHistory") : "",
-  };
-}
-
-// Fill a PDF form using pdf-lib
-async function fillPdfForm(pdfPath: string, fields: Record<string, string | boolean>): Promise<Uint8Array> {
-  const pdfBytes = await readFile(pdfPath);
-  const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
-  
-  const form = pdfDoc.getForm();
-  const fieldList = form.getFields();
-  
-  console.log(`PDF has ${fieldList.length} fields`);
-  
-  for (const [key, value] of Object.entries(fields)) {
-    try {
-      // Try to find field by name (exact or partial match)
-      const field = fieldList.find(f => {
-        const name = f.getName().toLowerCase();
-        return name === key.toLowerCase() || name.includes(key.toLowerCase()) || key.toLowerCase().includes(name);
-      });
-      
-      if (!field) continue;
-      
-      const fieldName = field.getName();
-      const fieldType = field.constructor.name;
-      
-      if (fieldType === "PDFTextField") {
-        form.getTextField(fieldName).setText(String(value));
-      } else if (fieldType === "PDFCheckBox") {
-        if (value === true || value === "true" || value === "Yes") {
-          form.getCheckBox(fieldName).check();
-        } else {
-          form.getCheckBox(fieldName).uncheck();
-        }
-      } else if (fieldType === "PDFDropdown") {
-        try {
-          form.getDropdown(fieldName).select(String(value));
-        } catch { /* value might not be in options */ }
-      } else if (fieldType === "PDFRadioGroup") {
-        try {
-          form.getRadioGroup(fieldName).select(String(value));
-        } catch { /* value might not be an option */ }
-      }
-    } catch { /* skip invalid fields */ }
-  }
-  
-  return await pdfDoc.save();
+async function fillViaXfa(
+  scriptPath: string,
+  blankPath: string,
+  clientData: Record<string, unknown>,
+  outputPath: string
+): Promise<void> {
+  const tmpJson = path.join(os.tmpdir(), `crm_fill_${Date.now()}.json`);
+  await writeFile(tmpJson, JSON.stringify(clientData));
+  const runner = `
+import sys, json
+sys.path.insert(0, ${JSON.stringify(path.dirname(scriptPath))})
+from ${path.basename(scriptPath).replace(".py", "")} import fill_imm5710, EMPTY_CLIENT
+with open(${JSON.stringify(tmpJson)}) as f:
+    client = json.load(f)
+merged = {**EMPTY_CLIENT, **client}
+fill_imm5710(merged, ${JSON.stringify(blankPath)}, ${JSON.stringify(outputPath)})
+`;
+  const result = spawnSync(PYTHON_BIN, ["-c", runner], { timeout: 30_000, encoding: "utf8" });
+  await unlink(tmpJson).catch(() => {});
+  if (result.status !== 0) throw new Error(result.stderr?.trim() || "Python fill script failed");
 }
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const body = await request.json().catch(() => ({}));
-    const systemToken = body.systemToken;
-    const isSystemCall = systemToken === (process.env.AUTH_RECOVERY_TOKEN || "newton-recovery-2024");
-    
+    const isSystemCall = body.systemToken === (process.env.AUTH_RECOVERY_TOKEN || "newton-recovery-2024");
     if (!isSystemCall) {
       const user = await getCurrentUserFromRequest(request);
       if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -144,86 +46,56 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const caseItem = await getCase(companyId, params.id);
     if (!caseItem) return NextResponse.json({ error: "Case not found" }, { status: 404 });
 
-    const intake = (caseItem.pgwpIntake as Record<string, string>) || {};
+    const intake = (caseItem.pgwpIntake as Record<string, unknown>) || {};
     const formType = caseItem.formType || "PGWP";
-    const clientName = caseItem.client || "Client";
-    
-    const mappedData = mapToImm5710Fields(intake, clientName, formType);
+    const clientName = (caseItem.client as string) || "Client";
+    const clientData = mapIntakeToImm5710(intake, formType);
+    const libPath = path.join(process.cwd(), "lib", "python");
+    const ft = formType.toLowerCase();
+
+    let formId = "imm5710"; let formLabel = "IMM5710E";
+    if (ft.includes("visitor visa") || ft.includes("trv")) { formId = "imm5257"; formLabel = "IMM5257E"; }
+    else if (ft.includes("visitor record")) { formId = "imm5708"; formLabel = "IMM5708E"; }
+    else if (ft.includes("study permit")) { formId = "imm5709"; formLabel = "IMM5709E"; }
+
+    const blank = path.join(libPath, `blank_${formId}.pdf`);
+    const script = path.join(libPath, "fill_imm5710.py");
     const generated: string[] = [];
     const errors: string[] = [];
 
-    // Find blank PDFs
-    const libPath = path.join(process.cwd(), "lib", "python");
-    const pdfForms: Array<{ id: string; blank: string; label: string }> = [
-      { id: "imm5710", blank: path.join(libPath, "blank_imm5710.pdf"), label: "IMM5710E" },
-      { id: "imm5476", blank: path.join(libPath, "blank_imm5476.pdf"), label: "IMM5476E" },
-    ];
+    if (!existsSync(blank)) return NextResponse.json({ ok: false, error: `blank_${formId}.pdf not found` });
 
-    const results: Array<{ formId: string; fileName: string; buffer: Buffer }> = [];
+    const clientNameClean = clientName.replace(/[^a-zA-Z0-9 ]/g, "").trim();
+    const fileName = `${clientNameClean} - ${formLabel}.pdf`;
+    const outputPath = path.join(os.tmpdir(), `crm_${Date.now()}.pdf`);
 
-    for (const form of pdfForms) {
-      if (!existsSync(form.blank)) {
-        console.log(`Blank PDF not found: ${form.blank} — skipping`);
-        continue;
-      }
+    await fillViaXfa(script, blank, clientData, outputPath);
+    const buffer = await readFile(outputPath);
+    await unlink(outputPath).catch(() => {});
+    generated.push(formId);
 
-      try {
-        const filledBytes = await fillPdfForm(form.blank, mappedData as Record<string, string | boolean>);
-        const clientNameClean = clientName.replace(/[^a-zA-Z0-9 ]/g, "").trim();
-        const fileName = `${clientNameClean}- ${form.label}.pdf`;
-        results.push({ formId: form.id, fileName, buffer: Buffer.from(filledBytes) });
-        generated.push(form.id);
-        console.log(`✅ Generated ${fileName}`);
-      } catch (e) {
-        console.error(`Form generation failed for ${form.id}:`, (e as Error).message);
-        errors.push(`${form.id}: ${(e as Error).message}`);
-      }
-    }
-
-    // Upload to S3 and save as documents
-    for (const result of results) {
-      try {
-        const { PutObjectCommand, S3Client } = await import("@aws-sdk/client-s3");
-        const s3 = new S3Client({
-          region: process.env.AWS_REGION || "us-east-1",
-          credentials: {
-            accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
-            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
-          },
-          endpoint: process.env.S3_ENDPOINT,
-        });
-
-        const key = `forms/${companyId}/${params.id}/${result.fileName}`;
-        await s3.send(new PutObjectCommand({
-          Bucket: process.env.S3_BUCKET_NAME || "",
-          Key: key,
-          Body: result.buffer,
-          ContentType: "application/pdf",
-        }));
-
-        const fileUrl = `${process.env.S3_ENDPOINT || ""}/${process.env.S3_BUCKET_NAME || ""}/${key}`;
-        
-        await addDocument({
-          companyId,
-          caseId: params.id,
-          name: result.fileName,
-          category: "form",
-          uploadedBy: "AI Autofill",
-          status: "generated",
-          link: fileUrl,
-        });
-      } catch (e) {
-        console.error(`Upload failed for ${result.fileName}:`, (e as Error).message);
+    // Upload to Google Drive
+    let folderId: string | undefined;
+    const appFormsLink = caseItem.applicationFormsLink;
+    if (appFormsLink) { const m = appFormsLink.match(/\/folders\/([-\w]{25,})/); if (m) folderId = m[1]; }
+    if (!folderId) {
+      const docsLink = caseItem.docsUploadLink;
+      if (docsLink) {
+        const m = docsLink.match(/\/folders\/([-\w]{25,})/);
+        if (m) {
+          const sub = await getOrCreateDriveSubfolder(m[1], "Application Forms");
+          folderId = sub.id;
+          await updateCaseLinks(companyId, params.id, { applicationFormsLink: sub.webViewLink });
+        }
       }
     }
 
-    if (generated.length === 0 && errors.length > 0) {
-      return NextResponse.json({ 
-        ok: false, 
-        error: "No blank PDFs found or all failed",
-        errors,
-        note: "Place blank_imm5710.pdf and blank_imm5476.pdf in apps/crm-builder-web/lib/python/"
-      });
+    if (!folderId) {
+      errors.push("no Drive folder found — open case and set up Drive folders first");
+    } else {
+      const driveFile = await uploadFileToDriveFolder({ folderId, fileName, fileBuffer: buffer, mimeType: "application/pdf" });
+      await addDocument({ companyId, caseId: params.id, name: fileName, category: "form", uploadedBy: "AI Autofill", status: "generated", link: driveFile.webViewLink });
+      console.log(`📁 Uploaded to Drive: ${driveFile.webViewLink}`);
     }
 
     return NextResponse.json({ ok: true, generated, errors });
