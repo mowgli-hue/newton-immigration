@@ -73,9 +73,11 @@ const CHECKLISTS: Record<string, ApplicationChecklistItem[]> = {
     { key: "old_studies", label: "Old/Past College Documents (if transfer)", required: false, keywords: ["old college", "past stud", "previous college"] }
   ],
   trv_inside: [
-    { key: "current_permit", label: "Current Permit", required: true, keywords: ["current permit", "permit"] },
-    { key: "passport", label: "Passport", required: true, keywords: ["passport"] },
-    { key: "digital_photo", label: "Digital Photo", required: true, keywords: ["digital photo", "photo"] }
+    { key: "passport", label: "Passport (all pages, clear copies)", required: true, keywords: ["passport"] },
+    { key: "current_permit", label: "Current Status Document (study/work permit or TRV)", required: true, keywords: ["current permit", "permit", "status"] },
+    { key: "digital_photo", label: "Digital Photo (recent, white background)", required: true, keywords: ["digital photo", "photo"] },
+    { key: "funds", label: "Proof of Funds", required: true, keywords: ["fund", "bank", "statement"] },
+    { key: "ties", label: "Proof of Ties to Home Country", required: false, keywords: ["ties", "property", "employment", "family"] }
   ],
   visitor_visa: [
     { key: "current_permit", label: "Current Permit", required: true, keywords: ["current permit", "permit"] },
@@ -83,10 +85,13 @@ const CHECKLISTS: Record<string, ApplicationChecklistItem[]> = {
     { key: "digital_photo", label: "Digital Photo", required: true, keywords: ["digital photo", "photo"] }
   ],
   visitor_record: [
-    { key: "passport", label: "Passport", required: true, keywords: ["passport"] },
-    { key: "current_status", label: "Current Permit/Status Documents", required: true, keywords: ["permit", "visa", "status"] },
-    { key: "funds", label: "Proof of Funds", required: true, keywords: ["fund", "bank", "statement"] },
-    { key: "reason_letter", label: "Extension/Stay Reason Letter", required: false, keywords: ["letter", "explanation", "visitor record"] }
+    { key: "passport", label: "Passport (all pages, clear copies)", required: true, keywords: ["passport"] },
+    { key: "current_status", label: "Current Visitor Record / Status Document", required: true, keywords: ["visitor record", "permit", "visa", "status"] },
+    { key: "digital_photo", label: "Digital Photo (recent, white background)", required: true, keywords: ["photo", "digital photo"] },
+    { key: "funds", label: "Proof of Funds (bank statements last 3 months)", required: true, keywords: ["fund", "bank", "statement"] },
+    { key: "travel_history", label: "Travel History Documents (stamps, previous visas)", required: false, keywords: ["travel", "stamp", "previous visa"] },
+    { key: "reason_letter", label: "Extension/Restoration Reason Letter", required: true, keywords: ["letter", "explanation", "reason", "extension"] },
+    { key: "ties_home", label: "Proof of Ties to Home Country (property, employment, family)", required: false, keywords: ["ties", "property", "employment letter", "family"] }
   ],
   work_permit: [
     { key: "passport", label: "Passport", required: true, keywords: ["passport"] },

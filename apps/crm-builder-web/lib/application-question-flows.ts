@@ -82,20 +82,25 @@ const QUESTION_FLOWS: Record<ChecklistKey, QuestionFlow> = {
     ]
   },
   visitor_record: {
-    requiredFields: [
-      "fullName",
-      "phone",
-      "maritalStatus",
-      "address",
-      "nativeLanguage",
-      "refusedAnyCountry",
-      "criminalHistory",
-      "medicalHistory"
-    ],
+    requiredFields: DEFAULT_REQUIRED_FIELDS,
     prompts: [
-      "Current status in Canada and expiry details",
-      "Reason for extension and requested duration",
-      "Proof of funds summary"
+      "Have you used any other name? (Yes/No — if Yes, provide full other name)",
+      "What is your current marital status? (Single / Married / Common-Law / Divorced / Widowed / Separated)",
+      "If Married or Common-Law: provide partner's full name and date of marriage (YYYY-MM-DD). Reply NA if not applicable.",
+      "Current mailing address in Canada including postal code (Apt/Unit, Street Number, Street Name, City, Province, Postal Code)",
+      "Telephone number",
+      "What is your current immigration status in Canada? (Visitor / Student / Worker) and what is your status expiry date? (YYYY-MM-DD)",
+      "What are you applying for? (Extend my stay as a visitor / Restore my status as a visitor)",
+      "What is the purpose of your visit to Canada? (Tourism / Visiting family / Business / Other — provide details)",
+      "What date does your visit start? (YYYY-MM-DD) and when do you plan to leave Canada? (YYYY-MM-DD)",
+      "How much money do you have available for your stay in Canada? (amount in CAD)",
+      "Who will pay your expenses in Canada? (Myself / Parents / Other — if Other: provide name and relationship)",
+      "Will you be visiting anyone in Canada? (Yes/No — if Yes: their full name, relationship, and address in Canada)",
+      "Date and place you first entered Canada (YYYY-MM-DD, city/port of entry)",
+      "Have you ever been refused a visa or permit for Canada or any other country? (Yes/No — if Yes: country, year, reason)",
+      "Do you have any medical history that may affect your stay? (Yes/No — if Yes: provide details)",
+      "Do you have any criminal history? (Yes/No — if Yes: provide details)",
+      "What is your native language? Can you communicate in English or French? (Yes/No)"
     ]
   },
   work_permit: {
