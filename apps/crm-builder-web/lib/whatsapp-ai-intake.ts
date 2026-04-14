@@ -67,10 +67,32 @@ export async function getSession(phone: string, companyId?: string): Promise<Int
 
 export async function setSession(phone: string, session: IntakeSession): Promise<void> {
   try {
-    const { updateCasePgwpIntake } = await import("@/lib/store");
-    await updateCasePgwpIntake(session.companyId, session.caseId, {
+    const { updateCasePgwpIntake, getCase, readStore, writeStore } = await import("@/lib/store");
+    
+    // First try updateCasePgwpIntake
+    const result = await updateCasePgwpIntake(session.companyId, session.caseId, {
       whatsappSession: JSON.stringify(session),
     });
+    
+    // If case not found or pgwpIntake still null, force it via store
+    if (!result || !result.pgwpIntake) {
+      const store = await readStore();
+      const idx = store.cases.findIndex((c: any) => c.companyId === session.companyId && c.id === session.caseId);
+      if (idx !== -1) {
+        store.cases[idx] = {
+          ...store.cases[idx],
+          updatedAt: new Date().toISOString(),
+          pgwpIntake: {
+            ...(store.cases[idx].pgwpIntake || {}),
+            whatsappSession: JSON.stringify(session),
+          }
+        };
+        await writeStore(store);
+        console.log(`💾 Session saved (fallback): caseId=${session.caseId} phase=${session.phase}`);
+        return;
+      }
+    }
+    
     console.log(`💾 Session saved: caseId=${session.caseId} phase=${session.phase}`);
   } catch (e) { console.error("setSession error:", e); }
 }

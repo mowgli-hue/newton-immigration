@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
 import { sendWhatsAppText } from "@/lib/whatsapp";
-import { getCases } from "@/lib/store";
+import { listCases } from "@/lib/store";
 import { Pool } from "pg";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
   let caseContext = "";
   const companyId = process.env.DEFAULT_COMPANY_ID || "newton";
   if (caseId) {
-    const cases = await getCases(companyId);
+    const cases = await listCases(companyId);
     const c = cases.find((x: any) => x.id === caseId);
     if (c) caseContext = `Client: ${c.client} | Form: ${c.formType} | Status: ${(c as any).processingStatus || "docs_pending"}`;
   }
