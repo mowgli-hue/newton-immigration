@@ -124,21 +124,77 @@ export async function POST(req: NextRequest) {
                 });
                 console.log(`✅ Saved to Drive: WA_${matched.client}_${media.filename}`);
               }
+              // AI classify the document
+              let docCategory = "client";
+              let docName = originalFilename || mediaCaption || media.filename;
+              let properFileName = docName;
+
+              try {
+                const classifyRes = await fetch("https://api.anthropic.com/v1/messages", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    model: "claude-haiku-4-5-20251001",
+                    max_tokens: 150,
+                    messages: [{
+                      role: "user",
+                      content: `Classify this document for an immigration application.
+Filename: "${docName}"
+File type: ${media.mimeType}
+Client name: ${matched.client}
+Application type: ${matched.formType}
+
+Reply with ONLY a JSON object:
+{"category": "passport|study_permit|work_permit|completion_letter|transcripts|language_test|photo|bank_statement|job_offer|medical|police_clearance|other", "label": "Short document label e.g. Passport, Study Permit, Completion Letter"}`
+                    }]
+                  })
+                });
+                if (classifyRes.ok) {
+                  const classifyData = await classifyRes.json() as any;
+                  const raw = classifyData.content?.[0]?.text || "{}";
+                  const parsed = JSON.parse(raw.replace(/```json|```/g, "").trim());
+                  if (parsed.category) docCategory = parsed.category;
+                  if (parsed.label) {
+                    // Rename file: [Client Name]- [Label].ext
+                    const clientNameClean = String(matched.client || "").replace(/[^a-zA-Z0-9 ]/g, "").trim();
+                    const ext = docName.includes(".") ? docName.split(".").pop() : media.mimeType.includes("pdf") ? "pdf" : "jpg";
+                    properFileName = `${clientNameClean}- ${parsed.label}.${ext}`;
+                    console.log(`🤖 AI classified: ${docName} → ${properFileName} (${docCategory})`);
+                  }
+                }
+              } catch (e) {
+                console.error("AI doc classification failed (non-fatal):", e);
+              }
+
+              // Re-upload with proper filename to Drive
+              if (driveFolderId && properFileName !== docName) {
+                try {
+                  await uploadFileToDriveFolder({
+                    folderId: driveFolderId,
+                    fileName: properFileName,
+                    fileBuffer: media.buffer,
+                    mimeType: media.mimeType
+                  });
+                } catch { /* already uploaded above */ }
+              }
+
               // Also save as document in case
               const { addDocument } = await import("@/lib/store");
               await addDocument({
                 companyId: COMPANY_ID,
                 caseId: matched.id,
-                name: originalFilename || mediaCaption || media.filename,
-                category: "client",
+                name: properFileName,
+                category: docCategory,
                 uploadedBy: matched.client || "Client (WhatsApp)",
                 status: "received",
                 link: `wa://media/${mediaId}`
               });
-              // Send confirmation
+
+              // Send confirmation with what was identified
               const { sendWhatsAppText } = await import("@/lib/whatsapp");
               const firstName = String(matched.client || "").split(" ")[0];
-              await sendWhatsAppText(from, `✅ Got it ${firstName}! Your document has been saved to your file. Our team will review it.`);
+              const docLabel = properFileName.split("- ")[1]?.replace(/\.[^.]+$/, "") || "document";
+              await sendWhatsAppText(from, `✅ Got it ${firstName}! I've saved your *${docLabel}* to your file. Our team will review it. 🙏\n\n— Newton Immigration Team`);
             }
           } catch (e) {
             console.error("Media upload error:", (e as Error).message);
