@@ -179,7 +179,7 @@ Reply with ONLY a JSON object:
               }
 
               // Also save as document in case
-              const { addDocument } = await import("@/lib/store");
+              const { addDocument, updateCasePgwpIntake } = await import("@/lib/store");
               await addDocument({
                 companyId: COMPANY_ID,
                 caseId: matched.id,
@@ -189,6 +189,49 @@ Reply with ONLY a JSON object:
                 status: "received",
                 link: `wa://media/${mediaId}`
               });
+
+              // If passport detected — extract data and auto-fill intake fields
+              if (docCategory === "passport" && (media.mimeType.includes("image") || media.mimeType.includes("pdf"))) {
+                try {
+                  const imageBase64 = media.buffer.toString("base64");
+                  const extractRes = await fetch("https://api.anthropic.com/v1/messages", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      model: "claude-haiku-4-5-20251001",
+                      max_tokens: 400,
+                      messages: [{
+                        role: "user",
+                        content: [
+                          { type: "image", source: { type: "base64", media_type: media.mimeType as any, data: imageBase64 } },
+                          { type: "text", text: `Extract passport data from this image. Reply ONLY with valid JSON (no markdown): {"firstName": "", "lastName": "", "fullName": "", "dateOfBirth": "YYYY-MM-DD", "passportNumber": "", "passportIssueDate": "YYYY-MM-DD", "passportExpiryDate": "YYYY-MM-DD", "nationality": "", "placeOfBirth": "", "gender": ""}` }
+                        ]
+                      }]
+                    })
+                  });
+                  if (extractRes.ok) {
+                    const extractData = await extractRes.json() as any;
+                    const raw = extractData.content?.[0]?.text || "{}";
+                    const passport = JSON.parse(raw.replace(/\`\`\`json|\`\`\`/g, "").trim());
+                    if (passport.passportNumber) {
+                      await updateCasePgwpIntake(COMPANY_ID, matched.id, {
+                        firstName: passport.firstName,
+                        lastName: passport.lastName,
+                        fullName: passport.fullName,
+                        dateOfBirth: passport.dateOfBirth,
+                        passportNumber: passport.passportNumber,
+                        passportIssueDate: passport.passportIssueDate,
+                        passportExpiryDate: passport.passportExpiryDate,
+                        citizenship: passport.nationality,
+                        placeOfBirthCity: passport.placeOfBirth,
+                      } as any);
+                      console.log(`📘 Passport data extracted for ${matched.client}: ${passport.passportNumber}`);
+                    }
+                  }
+                } catch (e) {
+                  console.error("Passport extraction failed (non-fatal):", e);
+                }
+              }
 
               // Send confirmation with what was identified
               const { sendWhatsAppText } = await import("@/lib/whatsapp");
