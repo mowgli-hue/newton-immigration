@@ -30,6 +30,17 @@ const FORM_MAP: Record<string, string[]> = {
   "study permit": ["imm5709", "imm5476", "rep_letter"],
   "study permit extension": ["imm5709", "imm5476", "rep_letter"],
   "restoration": ["imm5710", "imm5476", "rep_letter"],
+  // Types that get rep letter + imm5476 only (no standard IRCC fill form)
+  "super visa": ["imm5476", "rep_letter"],
+  "supervisa": ["imm5476", "rep_letter"],
+  "express entry": ["imm5476", "rep_letter"],
+  "pnp": ["imm5476", "rep_letter"],
+  "family sponsorship": ["imm5476", "rep_letter"],
+  "spousal sponsorship": ["imm5476", "rep_letter"],
+  "citizenship": ["imm5476", "rep_letter"],
+  "pr card": ["imm5476", "rep_letter"],
+  "trv inside": ["imm5257", "imm5476", "rep_letter"],
+  "refugee": ["imm5476", "rep_letter"],
 };
 
 function getFormsForType(formType: string): string[] {
