@@ -364,7 +364,29 @@ async function completeIntake(session: IntakeSession): Promise<void> {
     const checklist = getChecklistForFormType(session.formType);
     const requiredDocs = checklist.filter(i => i.required).map(i => i.label);
 
-    // Don't send checklist - client will send docs via WhatsApp directly
+    // Send document checklist after intake complete
+    const { getChecklistForFormType: getChecklist } = await import("@/lib/application-checklists");
+    const docChecklist = getChecklist(session.formType);
+    const required = docChecklist.filter(i => i.required);
+    const optional = docChecklist.filter(i => !i.required);
+    
+    const checklistMsg = [
+      `📋 *Documents needed for your ${session.formType} application:*`,
+      ``,
+      `*Required:*`,
+      ...required.map((item, i) => `${i+1}. ${item.label}`),
+      ...(optional.length ? [
+        ``,
+        `*Additional (if applicable):*`,
+        ...optional.map(item => `• ${item.label}`)
+      ] : []),
+      ``,
+      `Please send clear photos or scans directly here on WhatsApp. 📸`,
+      ``,
+      `— Newton Immigration Team 🍁`,
+    ].join("\n");
+
+    await sendAndSave(session.phone, checklistMsg, session.caseId, session.clientName);
     clearSession(session.phone);
     console.log(`✅ WhatsApp intake complete for case ${session.caseId}`);
 
