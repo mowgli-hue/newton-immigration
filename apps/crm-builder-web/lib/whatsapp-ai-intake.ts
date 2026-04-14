@@ -5,6 +5,22 @@ import { getQuestionFlowForFormType, getQuestionPromptsForFormType } from "@/lib
 import { resolveApplicationChecklistKey } from "@/lib/application-checklists";
 import { sendWhatsAppText, sendWhatsAppTemplate, sendDocumentChecklist } from "@/lib/whatsapp";
 import { getCase, updateCaseProcessing, addMessage } from "@/lib/store";
+import { Pool } from "pg";
+
+// Send message AND save to inbox so it shows in chat
+async function sendAndSave(phone: string, message: string, caseId: string | null, caseName: string | null): Promise<void> {
+  await sendWhatsAppText(phone, message);
+  try {
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+    await pool.query(
+      `INSERT INTO whatsapp_inbox (id, phone, message, direction, matched_case_id, matched_case_name, is_read, created_at)
+       VALUES ($1, $2, $3, 'outbound', $4, $5, TRUE, NOW())
+       ON CONFLICT (id) DO NOTHING`,
+      [`WA-OUT-${Date.now()}-${Math.random().toString(36).slice(2,6)}`, phone, message, caseId, caseName]
+    );
+    await pool.end();
+  } catch { /* non-fatal */ }
+}
 
 export type IntakeSession = {
   caseId: string;
@@ -246,7 +262,7 @@ export async function handleIncomingReply(params: {
     const firstName = session.clientName.split(" ")[0];
     const firstQuestion = session.questions[0];
     const firstMsg = `ਸਤ ਸ੍ਰੀ ਅਕਾਲ ${firstName} ਜੀ! 🙏 Hi *${firstName}*!\n\nTo prepare your *${session.formType}* application, I need to ask you ${session.questions.length} questions. Please reply to each one.\n\n*(1/${session.questions.length})* ${firstQuestion}`;
-    await sendWhatsAppText(phone, firstMsg);
+    await sendAndSave(phone, firstMsg, session.caseId, session.clientName);
     return;
   }
 
@@ -274,11 +290,14 @@ export async function handleIncomingReply(params: {
         `✅ *Thank you ${firstName}!*`,
         ``,
         `I have all the information needed for your *${session.formType}* application.`,
+        ``,
+        `If you need to correct any answer, simply reply with the question number and your new answer (e.g. "Q3: Updated answer").`,
+        ``,
         `Our team will prepare your forms and be in touch shortly! 🙏`,
         ``,
         `— Newton Immigration Team 🍁`,
       ].join("\n");
-      await sendWhatsAppText(phone, doneMsg);
+      await sendAndSave(phone, doneMsg, session.caseId, session.clientName);
 
       // Save all answers to case
       const { updateCasePgwpIntake: savePgwp } = await import("@/lib/store");
@@ -294,7 +313,7 @@ export async function handleIncomingReply(params: {
       const ackPhrases = ["Got it! ✓", "Perfect! ✓", "Thank you! ✓", "Noted! ✓", "Great! ✓"];
       const ack = ackPhrases[qIndex % ackPhrases.length];
       const msg = `${ack}\n\n*(${nextIndex + 1}/${session.questions.length})* ${nextQuestion}`;
-      await sendWhatsAppText(phone, msg);
+      await sendAndSave(phone, msg, session.caseId, session.clientName);
     }
 
     return;
