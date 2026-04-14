@@ -1,9 +1,9 @@
 // lib/whatsapp-ai-intake.ts
-// WhatsApp AI intake — asks application-specific questions only
+// AI-powered conversational intake — Claude chats with client naturally
 
-import { getQuestionFlowForFormType } from "@/lib/application-question-flows";
+import { getQuestionFlowForFormType, getQuestionPromptsForFormType } from "@/lib/application-question-flows";
 import { resolveApplicationChecklistKey } from "@/lib/application-checklists";
-import { sendWhatsAppText, sendDocumentChecklist } from "@/lib/whatsapp";
+import { sendWhatsAppText, sendWhatsAppTemplate, sendDocumentChecklist } from "@/lib/whatsapp";
 import { getCase, updateCaseProcessing, addMessage } from "@/lib/store";
 
 export type IntakeSession = {
@@ -15,11 +15,16 @@ export type IntakeSession = {
   questions: string[];
   currentIndex: number;
   answers: Record<string, string>;
-  phase: "intake" | "complete";
+  phase: "intake" | "awaiting_template_reply" | "ai_chat" | "awaiting_bulk" | "complete";
+  conversationHistory: Array<{ role: "assistant" | "user"; content: string }>;
+  collectedFields: Record<string, string>;
+  chatTurns: number;
 };
 
-// DB-backed session store — persists across redeploys
-// Sessions stored in case.pgwpIntake.whatsappSession as JSON
+// Session store in case DB
+export async function getActiveSession(phone: string, companyId?: string) {
+  return getSession(phone, companyId);
+}
 
 export async function getSession(phone: string, companyId?: string): Promise<IntakeSession | undefined> {
   try {
@@ -46,173 +51,295 @@ export async function setSession(phone: string, session: IntakeSession): Promise
     await updateCaseProcessing(session.companyId, session.caseId, {
       pgwpIntake: {
         ...((caseItem.pgwpIntake as Record<string, string>) || {}),
-        whatsappSession: JSON.stringify(session)
+        whatsappSession: JSON.stringify(session),
       }
     });
   } catch (e) { console.error("setSession error:", e); }
 }
 
-export async function clearSession(phone: string, companyId: string, caseId: string): Promise<void> {
+export async function clearSession(phone: string): Promise<void> {
   try {
-    const { getCase, updateCaseProcessing } = await import("@/lib/store");
-    const caseItem = await getCase(companyId, caseId);
-    if (!caseItem) return;
-    const intake = { ...((caseItem.pgwpIntake as Record<string, string>) || {}) };
+    const { listCases, getCase, updateCaseProcessing } = await import("@/lib/store");
+    const cId = process.env.DEFAULT_COMPANY_ID || "newton";
+    const cases = await listCases(cId);
+    const n = phone.replace(/\D/g, "");
+    const matched = cases.find((c) => {
+      const cp = (c.leadPhone || "").replace(/\D/g, "");
+      return cp && (n.endsWith(cp) || cp.endsWith(n));
+    });
+    if (!matched) return;
+    const intake = (matched.pgwpIntake as Record<string, string>) || {};
     delete intake.whatsappSession;
-    await updateCaseProcessing(companyId, caseId, { pgwpIntake: intake });
-  } catch { /**/ }
+    await updateCaseProcessing(cId, matched.id, { pgwpIntake: intake });
+  } catch { /* non-fatal */ }
 }
 
-// Called when a new case is created
+// Start AI chat intake
 export async function startIntakeSession(params: {
   caseId: string;
   companyId: string;
-  clientName: string;
   phone: string;
+  clientName: string;
   formType: string;
 }): Promise<{ success: boolean; error?: string }> {
-  const { caseId, companyId, clientName, phone, formType } = params;
-
-  const flow = getQuestionFlowForFormType(formType);
-  const questions = flow.prompts;
-
-  if (questions.length === 0) {
-    console.log(`No specific questions for ${formType} — skipping intake`);
-    return { success: true };
-  }
+  const { caseId, companyId, phone, clientName, formType } = params;
+  const questions = getQuestionPromptsForFormType(formType);
+  const firstName = clientName.split(" ")[0];
 
   const session: IntakeSession = {
-    caseId,
-    companyId,
-    phone,
-    clientName,
-    formType,
+    caseId, companyId, phone, clientName, formType,
     questions,
     currentIndex: 0,
     answers: {},
-    phase: "intake"
+    phase: "awaiting_template_reply",
+    conversationHistory: [],
+    collectedFields: {},
+    chatTurns: 0,
   };
 
   await setSession(phone, session);
 
+  // Send template greeting first
+  const templateResult = await sendWhatsAppTemplate({
+    to: phone,
+    templateName: "newton_intake",
+    languageCode: "en",
+    components: [{
+      type: "body",
+      parameters: [
+        { type: "text", text: firstName },
+        { type: "text", text: formType }
+      ]
+    }]
+  });
+
+  if (templateResult.success) {
+    console.log(`✅ Template sent to ${phone} — waiting for reply to start AI chat`);
+    return { success: true };
+  }
+
+  // Fallback — start AI chat immediately
+  session.phase = "ai_chat";
+  await setSession(phone, session);
+  const firstMsg = await getAiNextMessage(session, null);
+  await sendWhatsAppText(phone, firstMsg);
+  return { success: true };
+}
+
+// Get AI's next message based on conversation history
+async function getAiNextMessage(session: IntakeSession, clientMessage: string | null): Promise<string> {
+  const { formType, clientName, questions, collectedFields, conversationHistory, chatTurns } = session;
   const firstName = clientName.split(" ")[0];
 
-  const welcomeMsg = `ਸਤ ਸ੍ਰੀ ਅਕਾਲ ${firstName} ਜੀ! 🙏
-Hi ${firstName}! Welcome to *Newton Immigration*.
+  // Build what's been collected so far
+  const collectedCount = Object.keys(collectedFields).length;
+  const totalNeeded = Math.min(questions.length, 15);
+  const remaining = questions.filter(q => {
+    const key = q.slice(0, 30).toLowerCase();
+    return !Object.keys(collectedFields).some(k => k.includes(key.slice(0, 15)));
+  });
 
-We've started your *${formType}* file. I have ${questions.length} quick question${questions.length > 1 ? "s" : ""} for you.
-ਤੁਹਾਡੀ *${formType}* ਫਾਈਲ ਸ਼ੁਰੂ ਹੋ ਗਈ ਹੈ। ਮੇਰੇ ਕੋਲ ${questions.length} ਸਵਾਲ ਹਨ।
+  // Check if we have enough info
+  const isDone = collectedCount >= totalNeeded || chatTurns >= 20 || remaining.length === 0;
 
-━━━━━━━━━━━━━━━
-*Question 1 of ${questions.length}:*
-${questions[0]}`;
+  if (isDone) {
+    return `Thank you ${firstName}! 🙏 I have collected all the information needed for your ${formType} application.\n\nOur team will now review everything and prepare your application forms. We'll be in touch shortly!\n\n— Newton Immigration Team 🍁`;
+  }
 
-  return sendWhatsAppText(phone, welcomeMsg);
+  // Build system prompt for Claude
+  const systemPrompt = `You are a friendly immigration consultant at Newton Immigration helping ${firstName} with their ${formType} application.
+
+Your job is to collect the following information through natural conversation:
+${questions.map((q, i) => `${i+1}. ${q}`).join("\n")}
+
+Already collected (${collectedCount}/${totalNeeded}):
+${Object.entries(collectedFields).map(([k,v]) => `✓ ${k}: ${v}`).join("\n") || "Nothing yet"}
+
+Rules:
+- Be warm, friendly, and professional
+- Ask ONE question at a time in plain conversational language
+- After each client answer, acknowledge it briefly then ask the next question
+- Don't number the questions - make it feel like natural conversation
+- If answer is unclear, politely ask to clarify
+- Keep messages SHORT (2-3 sentences max)
+- Use simple English, avoid legal jargon
+- Never ask for documents — only ask for information
+- Focus on the next UNANSWERED question from the list above
+${chatTurns === 0 ? "\n- This is the FIRST message — introduce yourself briefly and ask the first question" : ""}`;
+
+  const messages: Array<{role: string; content: string}> = [
+    ...conversationHistory,
+    ...(clientMessage ? [{ role: "user" as const, content: clientMessage }] : [])
+  ];
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 200,
+        system: systemPrompt,
+        messages: messages.length > 0 ? messages : [{ role: "user", content: "Please start the intake conversation." }]
+      })
+    });
+    const data = await res.json() as any;
+    return data.content?.[0]?.text || `Hi ${firstName}! To process your ${formType} application, I need to ask you a few questions. What is your current marital status?`;
+  } catch (e) {
+    console.error("AI message failed:", e);
+    return `Hi ${firstName}! I'm here to help with your ${formType} application. Could you please tell me your full current mailing address including postal code?`;
+  }
+}
+
+// Extract info from client's answer using AI
+async function extractInfo(question: string, answer: string, formType: string): Promise<Record<string, string>> {
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 300,
+        messages: [{
+          role: "user",
+          content: `Extract the key information from this immigration intake answer.
+
+Question asked: "${question}"
+Client answered: "${answer}"
+Application type: ${formType}
+
+Return ONLY a JSON object with key-value pairs of extracted info. Keys should be short snake_case field names. Example: {"marital_status": "Single", "address": "123 Main St, Surrey BC V3S 1A1"}
+
+If the answer is unclear or evasive return: {"raw_answer": "${answer.slice(0,100)}"}`
+        }]
+      })
+    });
+    const data = await res.json() as any;
+    const text = data.content?.[0]?.text || "{}";
+    const clean = text.replace(/```json|```/g, "").trim();
+    return JSON.parse(clean);
+  } catch {
+    return { raw_answer: answer.slice(0, 200) };
+  }
 }
 
 // Handle incoming reply from client
 export async function handleIncomingReply(params: {
   phone: string;
   message: string;
-  companyId?: string;
+  companyId: string;
 }): Promise<void> {
   const { phone, message, companyId } = params;
   const session = await getSession(phone, companyId);
+  if (!session) return;
 
-  if (!session) {
-    // No session — just save message to any matching case
-    console.log(`No active session for ${phone} — message ignored`);
+  const text = message.trim();
+
+  // Phase: waiting for template reply → start AI chat
+  if (session.phase === "awaiting_template_reply") {
+    session.phase = "ai_chat";
+    session.chatTurns = 0;
+    await setSession(phone, session);
+
+    const firstMsg = await getAiNextMessage(session, null);
+    session.conversationHistory.push({ role: "assistant", content: firstMsg });
+    await setSession(phone, session);
+    await sendWhatsAppText(phone, firstMsg);
     return;
   }
 
-  // Save this answer
-  const currentQ = session.questions[session.currentIndex];
-  if (currentQ) {
-    session.answers[currentQ] = message.trim();
-    session.currentIndex++;
-  }
+  // Phase: AI chat — process client answer and send next question
+  if (session.phase === "ai_chat") {
+    // Add client message to history
+    session.conversationHistory.push({ role: "user", content: text });
 
-  // Save to CRM immediately
-  await saveAnswersToCRM(session);
+    // Extract info from this answer
+    const currentQuestion = session.questions[Math.min(session.chatTurns, session.questions.length - 1)];
+    const extracted = await extractInfo(currentQuestion, text, session.formType);
+    session.collectedFields = { ...session.collectedFields, ...extracted };
+    session.chatTurns++;
 
-  // Next question or finish
-  if (session.currentIndex < session.questions.length) {
-    await setSession(phone, session);
-    await sendNextQuestion(session);
-  } else {
-    session.phase = "complete";
-    await setSession(phone, session);
-    await completeIntake(session);
-  }
-}
+    // Check if done
+    const isDone = Object.keys(session.collectedFields).length >= Math.min(session.questions.length, 15) 
+      || session.chatTurns >= 20;
 
-async function sendNextQuestion(session: IntakeSession): Promise<void> {
-  const q = session.questions[session.currentIndex];
-  if (!q) return;
+    // Get AI's next message
+    const nextMsg = await getAiNextMessage(session, text);
+    session.conversationHistory.push({ role: "assistant", content: nextMsg });
 
-  const total = session.questions.length;
-  const num = session.currentIndex + 1;
-
-  const msg = `*Question ${num} of ${total}:*
-${q}`;
-
-  await sendWhatsAppText(session.phone, msg);
-}
-
-async function saveAnswersToCRM(session: IntakeSession): Promise<void> {
-  try {
-    const caseItem = await getCase(session.companyId, session.caseId);
-    if (!caseItem) return;
-
-    await updateCaseProcessing(session.companyId, session.caseId, {
-      pgwpIntake: {
-        ...((caseItem.pgwpIntake as Record<string, string>) || {}),
-        applicationSpecificAnswers: JSON.stringify(session.answers),
-        whatsappIntakeProgress: `${session.currentIndex}/${session.questions.length}`,
-        whatsappIntakePhase: session.phase
-      }
-    });
-
-    // Log to case messages
-    const latestQ = session.questions[session.currentIndex - 1];
-    const latestA = session.answers[latestQ] || "";
-    if (latestQ && latestA) {
-      await addMessage({
-        companyId: session.companyId,
-        caseId: session.caseId,
-        senderName: session.clientName,
-        senderType: "client",
-        text: `[WhatsApp] Q: ${latestQ}\nA: ${latestA}`
-      });
+    if (isDone) {
+      session.phase = "complete";
     }
-  } catch (err) {
-    console.error("Failed to save answers to CRM:", err);
+
+    await setSession(phone, session);
+    await sendWhatsAppText(phone, nextMsg);
+
+    // If complete, trigger intake completion
+    if (isDone || session.phase === "complete") {
+      // Save all collected data to case
+      const allAnswers = {
+        ...session.collectedFields,
+        conversationLog: JSON.stringify(session.conversationHistory),
+        whatsappIntakePhase: "complete",
+        whatsappIntakeCompletedAt: new Date().toISOString(),
+      };
+
+      await updateCaseProcessing(session.companyId, session.caseId, {
+        pgwpIntake: allAnswers,
+        aiStatus: "intake_complete"
+      });
+
+      // Complete intake — send checklist and generate forms
+      await completeIntake(session);
+    }
+
+    return;
+  }
+
+  // Fallback for old bulk phase
+  if (session.phase === "awaiting_bulk") {
+    // Parse numbered answers
+    const lines = text.split(/\n+/);
+    const answers: Record<string, string> = {};
+    for (const line of lines) {
+      const m = line.match(/^(\d+)[.):\s]+(.+)/);
+      if (m) {
+        const idx = parseInt(m[1]) - 1;
+        if (idx >= 0 && idx < session.questions.length) {
+          answers[session.questions[idx]] = m[2].trim();
+          answers[`q${idx + 1}`] = m[2].trim();
+        }
+      }
+    }
+    session.answers = { ...session.answers, ...answers };
+    session.collectedFields = { ...session.collectedFields, ...answers };
+
+    const answered = Object.keys(answers).filter(k => !k.startsWith("q")).length;
+    if (answered >= 5 || Object.keys(session.answers).length >= 10) {
+      session.phase = "complete";
+      await setSession(phone, session);
+      await sendWhatsAppText(phone, `Thank you ${session.clientName.split(" ")[0]}! 🙏 Your answers have been saved. Our team will prepare your application forms now!\n\n— Newton Immigration Team 🍁`);
+      await updateCaseProcessing(session.companyId, session.caseId, {
+        pgwpIntake: { ...session.answers, whatsappIntakePhase: "complete", whatsappIntakeCompletedAt: new Date().toISOString() },
+        aiStatus: "intake_complete"
+      });
+      await completeIntake(session);
+    } else {
+      await sendWhatsAppText(phone, `Thank you for your answers! Please also provide answers for the remaining questions if you haven't already. 🙏`);
+    }
+    return;
   }
 }
 
 async function completeIntake(session: IntakeSession): Promise<void> {
   try {
-    // Mark case as intake complete
     const caseItem = await getCase(session.companyId, session.caseId);
-    if (caseItem) {
-      await updateCaseProcessing(session.companyId, session.caseId, {
-        pgwpIntake: {
-          ...((caseItem.pgwpIntake as Record<string, string>) || {}),
-          applicationSpecificAnswers: JSON.stringify(session.answers),
-          whatsappIntakePhase: "complete",
-          whatsappIntakeCompletedAt: new Date().toISOString()
-        },
-        aiStatus: "intake_complete"
-      });
-    }
 
     // Get document checklist
     const checklistKey = resolveApplicationChecklistKey(session.formType);
-    const { APPLICATION_CHECKLISTS } = await import("@/lib/application-checklists");
-    const checklist = (APPLICATION_CHECKLISTS as Record<string, Array<{ required: boolean; label: string }>>)[checklistKey] || [];
-    const requiredDocs = checklist
-      .filter((item) => item.required)
-      .map((item) => item.label);
+    const { getChecklistForFormType } = await import("@/lib/application-checklists");
+    const checklist = getChecklistForFormType(session.formType);
+    const requiredDocs = checklist.filter(i => i.required).map(i => i.label);
 
     const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL || process.env.APP_BASE_URL || "https://junglecrm-builder-web-production-d358.up.railway.app"}/questionnaire/${session.caseId}`;
 
@@ -227,7 +354,30 @@ async function completeIntake(session: IntakeSession): Promise<void> {
     clearSession(session.phone);
     console.log(`✅ WhatsApp intake complete for case ${session.caseId}`);
 
-    // Auto-generate IRCC form if applicable (IMM5710 for PGWP/OWP/SOWP etc)
+    // Auto-generate AI notes
+    try {
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_BASE_URL || "https://junglecrm-builder-web-production-d358.up.railway.app";
+      const aiRes = await fetch(`${appUrl}/api/cases/${session.caseId}/ai-smart`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "draft_notes", systemToken: process.env.AUTH_RECOVERY_TOKEN })
+      });
+      if (aiRes.ok) {
+        const aiData = await aiRes.json();
+        if (aiData.text) {
+          await fetch(`${appUrl}/api/cases/${session.caseId}/notes`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              text: `🤖 AI Draft Notes (from WhatsApp conversation):\n${aiData.text}`,
+              addedBy: "AI"
+            })
+          });
+        }
+      }
+    } catch { /* non-fatal */ }
+
+    // Auto-generate IRCC forms
     try {
       const imm5710Types = ["pgwp", "owp", "sowp", "bowp", "vowp", "open work permit", "work permit", "restoration"];
       const ft = session.formType.toLowerCase();
@@ -242,10 +392,6 @@ async function completeIntake(session: IntakeSession): Promise<void> {
         if (res.ok) {
           const d = await res.json();
           console.log(`📄 Auto-generated forms for ${session.caseId}:`, d.generated);
-          // Notify client their form is being prepared
-          await sendWhatsAppText(session.phone,
-            `✅ Thank you ${session.clientName.split(" ")[0]}! Your information has been saved and your application form is being prepared automatically. Our team will review everything and be in touch soon. — Newton Immigration 🙏`
-          );
         }
       }
     } catch (e) {
