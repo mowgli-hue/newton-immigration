@@ -132,9 +132,11 @@ export async function POST(req: NextRequest) {
               try {
                 const classifyRes = await fetch("https://api.anthropic.com/v1/messages", {
                   method: "POST",
-                  headers: { "Content-Type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_API_KEY || "",
-        "anthropic-version": "2023-06-01" },
+                  headers: {
+                    "Content-Type": "application/json",
+                    "x-api-key": process.env.ANTHROPIC_API_KEY || "",
+                    "anthropic-version": "2023-06-01"
+                  },
                   body: JSON.stringify({
                     model: "claude-haiku-4-5-20251001",
                     max_tokens: 150,
@@ -198,9 +200,11 @@ Reply with ONLY a JSON object:
                   const imageBase64 = media.buffer.toString("base64");
                   const extractRes = await fetch("https://api.anthropic.com/v1/messages", {
                     method: "POST",
-                    headers: { "Content-Type": "application/json",
+                    headers: {
+        "Content-Type": "application/json",
         "x-api-key": process.env.ANTHROPIC_API_KEY || "",
-        "anthropic-version": "2023-06-01" },
+        "anthropic-version": "2023-06-01"
+      },
                     body: JSON.stringify({
                       model: "claude-haiku-4-5-20251001",
                       max_tokens: 400,
@@ -307,9 +311,11 @@ Reply with ONLY a JSON object:
             const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_BASE_URL || "https://junglecrm-builder-web-production-d358.up.railway.app";
             const aiRes = await fetch(`${appUrl}/api/ai-reply`, {
               method: "POST",
-              headers: { "Content-Type": "application/json",
+              headers: {
+        "Content-Type": "application/json",
         "x-api-key": process.env.ANTHROPIC_API_KEY || "",
-        "anthropic-version": "2023-06-01" },
+        "anthropic-version": "2023-06-01"
+      },
               body: JSON.stringify({
                 phone: from,
                 message: text,
