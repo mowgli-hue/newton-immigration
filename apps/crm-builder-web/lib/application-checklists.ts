@@ -80,9 +80,14 @@ const CHECKLISTS: Record<string, ApplicationChecklistItem[]> = {
     { key: "ties", label: "Proof of Ties to Home Country", required: false, keywords: ["ties", "property", "employment", "family"] }
   ],
   visitor_visa: [
-    { key: "current_permit", label: "Current Permit", required: true, keywords: ["current permit", "permit"] },
-    { key: "passport", label: "Passport", required: true, keywords: ["passport"] },
-    { key: "digital_photo", label: "Digital Photo", required: true, keywords: ["digital photo", "photo"] }
+    { key: "passport", label: "Passport (all pages, valid min 6 months)", required: true, keywords: ["passport"] },
+    { key: "digital_photo", label: "Digital Photo (recent, white background)", required: true, keywords: ["photo", "digital photo"] },
+    { key: "employment_letter", label: "Employment Letter (current employer, salary, position, leave approval)", required: true, keywords: ["employment letter", "job letter", "salary"] },
+    { key: "bank_statements", label: "Bank Statements (last 3-6 months)", required: true, keywords: ["bank", "statement", "fund"] },
+    { key: "property_docs", label: "Property Documents / Proof of Ties to Home Country", required: false, keywords: ["property", "ties", "asset"] },
+    { key: "invitation_letter", label: "Invitation Letter from Contact in Canada (if visiting someone)", required: false, keywords: ["invitation", "invite", "sponsor letter"] },
+    { key: "travel_history", label: "Previous Visas / Travel History (US visa, Schengen, etc.)", required: false, keywords: ["previous visa", "travel history", "us visa"] },
+    { key: "education_docs", label: "Education Documents (degrees, diplomas)", required: false, keywords: ["degree", "diploma", "education"] }
   ],
   visitor_record: [
     { key: "passport", label: "Passport (all pages, clear copies)", required: true, keywords: ["passport"] },
