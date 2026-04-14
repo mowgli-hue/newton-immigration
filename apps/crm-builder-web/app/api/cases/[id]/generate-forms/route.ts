@@ -30,7 +30,7 @@ fill_imm5710(merged, ${JSON.stringify(blankPath)}, ${JSON.stringify(outputPath)}
 `;
   const result = spawnSync(PYTHON_BIN, ["-c", runner], { timeout: 30_000, encoding: "utf8" });
   await unlink(tmpJson).catch(() => {});
-  if (result.status !== 0) throw new Error(result.stderr?.trim() || "Python fill script failed");
+  if (result.status !== 0) const errMsg = `Python failed (exit ${result.status}): ${result.stderr?.trim() || result.stdout?.trim() || "no output"}`; console.error(errMsg); throw new Error(errMsg);
 }
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
