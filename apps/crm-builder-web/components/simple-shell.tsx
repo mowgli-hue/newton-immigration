@@ -29,6 +29,7 @@ import { getChecklistForFormType, resolveApplicationChecklistKey } from "@/lib/a
 import { isQuestionnaireComplete, getQuestionPromptsForFormType } from "@/lib/application-question-flows";
 import { canCreateCase, canManageUsers, canAssignCases, canChangeStatus, canStaffAccessCase, tabsForRole, type AppScreen } from "@/lib/rbac";
 import { IMPORT_CASES_DATA } from "@/lib/import-data";
+import { generateVisitorVisaScript } from "@/lib/ircc-script-generator";
 
 type Screen = AppScreen;
 type ClientScreen = "retainer" | "overview" | "documents" | "questions" | "results" | "chat";
@@ -844,6 +845,13 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     const params = new URLSearchParams(window.location.search);
     setClientPortalAccess(params.get("client") === "1");
   }, []);
+
+  useEffect(() => {
+    if (!selectedCaseId) return;
+    apiFetch(`/cases/${selectedCaseId}/notes`).then(r => r?.json()).then(d => {
+      if (d?.notes) setCaseNotes(prev => ({ ...prev, [selectedCaseId]: d.notes }));
+    }).catch(() => {});
+  }, [selectedCaseId]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -5744,6 +5752,31 @@ We will notify you as soon as we receive a decision. This usually takes a few we
                               setTimeout(() => setCaseActionStatus(""), 4000);
                             }} className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 shrink-0">
                               ⚡ Generate Now
+                            </button>
+                          </div>
+                        )}
+
+                        {/* ── IRCC Portal Script Generator ── */}
+                        {(selectedCase.formType.toLowerCase().includes("visitor visa") || selectedCase.formType.toLowerCase().includes("trv")) && (
+                          <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 flex items-center justify-between gap-3 flex-wrap">
+                            <div>
+                              <p className="text-xs font-bold text-blue-900">🌐 IRCC Portal Script</p>
+                              <p className="text-[10px] text-blue-700 mt-0.5">Pre-filled JS script for IRCC portal</p>
+                            </div>
+                            <button onClick={() => {
+                              const intake = (selectedCase as any).pgwpIntake || {};
+                              const script = generateVisitorVisaScript(selectedCase, intake, {
+                                visitDateFrom: { year: "2025", month: "06", day: "01" },
+                                visitDateTo:   { year: "2025", month: "08", day: "31" },
+                                visitPurpose:  "Tourism and visiting family in Canada",
+                                funds: "15000",
+                              });
+                              navigator.clipboard.writeText(script).then(() => {
+                                setCaseActionStatus("✅ Script copied — paste in browser console on IRCC portal Page 1");
+                                setTimeout(() => setCaseActionStatus(""), 5000);
+                              });
+                            }} className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700 shrink-0">
+                              📋 Copy Script
                             </button>
                           </div>
                         )}
