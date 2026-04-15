@@ -1,6 +1,9 @@
 FROM node:20-slim
 
-RUN apt-get update && apt-get install -y python3 python3-pip --no-install-recommends && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y \
+    python3 python3-pip \
+    libqpdf-dev \
+    --no-install-recommends && rm -rf /var/lib/apt/lists/*
 RUN pip3 install pypdf "cryptography==41.0.7" pikepdf --break-system-packages
 
 WORKDIR /app
