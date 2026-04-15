@@ -522,7 +522,6 @@ def fill_imm5709(client: dict, input_pdf: str, output_pdf: str) -> str:
     stream_end = raw.find(b"endstream", stream_start)
     with open(output_pdf, 'wb') as f:
         f.write(raw[:stream_start] + new_xml + raw[stream_end:])
-        pdf.save(output_pdf)
 
     print(f"✅  IMM5709 filled → {output_pdf}")
     return output_pdf
