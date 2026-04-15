@@ -455,9 +455,9 @@ def fill_imm5708(client: dict, input_pdf: str, output_pdf: str) -> str:
 
     # ── Save ──────────────────────────────────────────────────────
     ET.register_namespace('xfa', XFA_NS)
-    ds_stream.set_data(ET.tostring(root, encoding='unicode').encode('utf-8'))
-    writer = PdfWriter()
-    writer.append(reader)
+    new_xml = ET.tostring(root, encoding='unicode').encode('utf-8')
+    ds_stream.set_data(new_xml)
+    writer = PdfWriter(clone_from=reader)
     with open(output_pdf, 'wb') as f:
         writer.write(f)
 
