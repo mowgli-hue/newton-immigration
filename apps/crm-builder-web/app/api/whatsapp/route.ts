@@ -171,14 +171,16 @@ Reply with ONLY a JSON object:
               }
 
               // Re-upload with proper filename to Drive
+              let driveLink = "";
               if (driveFolderId && properFileName !== docName) {
                 try {
-                  await uploadFileToDriveFolder({
+                  const driveResult = await uploadFileToDriveFolder({
                     folderId: driveFolderId,
                     fileName: properFileName,
                     fileBuffer: media.buffer,
                     mimeType: media.mimeType
                   });
+                  driveLink = driveResult.webViewLink || "";
                 } catch { /* already uploaded above */ }
               }
 
@@ -191,7 +193,7 @@ Reply with ONLY a JSON object:
                 category: docCategory,
                 uploadedBy: matched.client || "Client (WhatsApp)",
                 status: "received",
-                link: `wa://media/${mediaId}`
+                link: driveLink || `wa://media/${mediaId}`
               });
 
               // If passport detected — extract data and auto-fill intake fields
