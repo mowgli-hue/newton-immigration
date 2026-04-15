@@ -566,12 +566,11 @@ def fill_imm5710(client: dict, input_pdf: str, output_pdf: str) -> str:
 
     # ── Save PDF ──────────────────────────────────────────────────
     ET.register_namespace('xfa', XFA_NS)
-    new_xml = ET.tostring(root, encoding='unicode').encode('utf-8')
-    obj_num = ds_stream.indirect_reference.idnum
-    with pikepdf.open(input_pdf, allow_overwriting_input=False) as pdf:
-        xfa_obj = pdf.get_object(obj_num, 0)
-        xfa_obj.stream_data = new_xml
-        pdf.save(output_pdf)
+    ds_stream.set_data(ET.tostring(root, encoding='unicode').encode('utf-8'))
+    writer = PdfWriter()
+    writer.append(reader)
+    with open(output_pdf, 'wb') as f:
+        writer.write(f)
 
     print(f"✅  IMM5710 filled → {output_pdf}")
     return output_pdf
