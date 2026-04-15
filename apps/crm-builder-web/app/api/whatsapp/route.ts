@@ -114,7 +114,28 @@ export async function POST(req: NextRequest) {
               const { uploadFileToDriveFolder, extractDriveFolderId } = await import("@/lib/google-drive");
               const { putObjectToS3, buildS3ObjectKey, toS3StoredLink, isS3StorageEnabled } = await import("@/lib/object-storage");
               const caseItem = await getCase(COMPANY_ID, matched.id);
-              const driveFolderId = extractDriveFolderId(caseItem?.docsUploadLink || "");
+              let driveFolderId = extractDriveFolderId(caseItem?.docsUploadLink || "");
+              // Auto-create Drive folder if none exists
+              if (!driveFolderId) {
+                try {
+                  const { createCaseDriveStructure } = await import("@/lib/google-drive");
+                  const { updateCaseLinks } = await import("@/lib/store");
+                  const rootFolderId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID || "";
+                  if (rootFolderId) {
+                    const structure = await createCaseDriveStructure(rootFolderId, `${matched.client} - ${matched.formType}`);
+                    driveFolderId = structure.subfolders.clientDocuments.id;
+                    await updateCaseLinks(matched.companyId || COMPANY_ID, matched.id, {
+                      docsUploadLink: structure.subfolders.clientDocuments.webViewLink,
+                      applicationFormsLink: structure.subfolders.applicationForms.webViewLink,
+                      submittedFolderLink: structure.subfolders.submitted.webViewLink,
+                      correspondenceFolderLink: structure.subfolders.correspondence.webViewLink,
+                    });
+                    console.log(`📁 Auto-created Drive folders for ${matched.client}`);
+                  }
+                } catch (e) {
+                  console.error("Auto Drive folder creation failed:", e);
+                }
+              }
               let savedLink = "";
               if (driveFolderId) {
                 const saveFileName = originalFilename || `WA_${matched.client}_${media.filename}`;
