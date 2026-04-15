@@ -38,7 +38,6 @@ SECTIONS:
 """
 
 from pypdf import PdfReader, PdfWriter
-import pikepdf
 import xml.etree.ElementTree as ET
 
 
@@ -581,12 +580,17 @@ def fill_imm5710(client: dict, input_pdf: str, output_pdf: str) -> str:
     stream_end = raw.find(b"endstream", stream_start)
     old_stream = raw[stream_start:stream_end]
 
-    # Use pikepdf to correctly update XFA stream with proper xref
     obj_num = ds_stream.indirect_reference.idnum
-    with pikepdf.open(input_pdf, allow_overwriting_input=False) as pdf:
-        xfa_stream = pdf.get_object(obj_num, 0)
-        xfa_stream.read_raw_bytes()  # force decode
-        xfa_stream.write(new_xml, filter=pikepdf.Name.FlateDecode)
+    with open(input_pdf, 'rb') as f:
+        raw = f.read()
+    marker = f"{obj_num} 0 obj".encode()
+    obj_pos = raw.find(marker)
+    stream_start = raw.find(b"stream", obj_pos) + 6
+    if raw[stream_start] == 13: stream_start += 2
+    else: stream_start += 1
+    stream_end = raw.find(b"endstream", stream_start)
+    with open(output_pdf, 'wb') as f:
+        f.write(raw[:stream_start] + new_xml + raw[stream_end:])
         pdf.save(output_pdf)
 
     print(f"✅  IMM5710 filled → {output_pdf}")
