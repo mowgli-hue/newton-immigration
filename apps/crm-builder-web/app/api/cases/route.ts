@@ -212,6 +212,21 @@ ${summaryData.text}`,
           }
         }
       } catch (e) { console.error("Auto AI summary failed:", e); }
+
+      // Auto-start WhatsApp intake if phone number exists
+      try {
+        const phone = String(created.leadPhone || "").replace(/\D/g, "");
+        const skipFormTypes = ["college change", "college transfer", "study permit extension"];
+        const shouldSkip = skipFormTypes.some(t => created.formType.toLowerCase().includes(t));
+        if (phone && !shouldSkip) {
+          await fetch(`${appUrl}/api/cases/${created.id}/wa-intake`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({})
+          });
+          console.log(`📱 Auto-started WhatsApp intake for ${created.client} (${created.id})`);
+        }
+      } catch (e) { console.error("Auto WA intake failed:", e); }
     }, 3000);
   } catch { /* non-fatal */ }
 
