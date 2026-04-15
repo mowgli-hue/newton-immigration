@@ -1,7 +1,7 @@
 FROM node:20-slim
 
 RUN apt-get update && apt-get install -y python3 python3-pip --no-install-recommends && rm -rf /var/lib/apt/lists/*
-RUN pip3 install pypdf cryptography --break-system-packages
+RUN pip3 install pypdf cryptography pikepdf --break-system-packages
 
 WORKDIR /app
 COPY package.json package-lock.json ./
