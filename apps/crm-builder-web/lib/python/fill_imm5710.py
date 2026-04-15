@@ -580,7 +580,16 @@ def fill_imm5710(client: dict, input_pdf: str, output_pdf: str) -> str:
     stream_end = raw.find(b"endstream", stream_start)
     old_stream = raw[stream_start:stream_end]
 
-    patched = raw[:stream_start] + new_xml + raw[stream_end:]
+    # Update the stream Length in the object header
+    old_len = stream_end - stream_start
+    new_len = len(new_xml)
+    obj_header = raw[obj_pos:stream_start].decode('latin1')
+    updated_header = obj_header.replace(f'/Length {old_len}', f'/Length {new_len}')
+    # Also try replacing any indirect length reference with direct value
+    import re as _re
+    updated_header = _re.sub(r'/Length\s+\d+\s+\d+\s+R', f'/Length {new_len}', updated_header)
+    updated_header = _re.sub(r'/Length\s+\d+', f'/Length {new_len}', updated_header)
+    patched = raw[:obj_pos] + updated_header.encode('latin1') + new_xml + raw[stream_end:]
     with open(output_pdf, 'wb') as f:
         f.write(patched)
 
