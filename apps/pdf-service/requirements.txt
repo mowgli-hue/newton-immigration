@@ -1,0 +1,4 @@
+flask
+pypdf
+cryptography==41.0.7
+pikepdf
