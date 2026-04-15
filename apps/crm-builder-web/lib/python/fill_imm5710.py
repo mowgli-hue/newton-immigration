@@ -565,12 +565,20 @@ def fill_imm5710(client: dict, input_pdf: str, output_pdf: str) -> str:
 
     # ── Save PDF ──────────────────────────────────────────────────
     ET.register_namespace('xfa', XFA_NS)
-    ds_stream.set_data(ET.tostring(root, encoding='unicode').encode('utf-8'))
-
-    writer = PdfWriter()
-    writer.append(reader)
-    with open(output_pdf, 'wb') as f:
-        writer.write(f)
+    new_xml = ET.tostring(root, encoding='unicode').encode('utf-8')
+    with open(input_pdf, 'rb') as f:
+        raw = bytearray(f.read())
+    old_xml = ds_stream.get_data()
+    old_pos = raw.find(old_xml[:60])
+    if old_pos != -1:
+        raw[old_pos:old_pos+len(old_xml)] = new_xml
+        with open(output_pdf, 'wb') as f:
+            f.write(bytes(raw))
+    else:
+        ds_stream.set_data(new_xml)
+        w = PdfWriter(); w.append(reader)
+        with open(output_pdf, 'wb') as f:
+            w.write(f)
 
     print(f"✅  IMM5710 filled → {output_pdf}")
     return output_pdf
