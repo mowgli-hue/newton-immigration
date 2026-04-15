@@ -38,6 +38,7 @@ SECTIONS:
 """
 
 from pypdf import PdfReader, PdfWriter
+import pikepdf
 import xml.etree.ElementTree as ET
 
 
@@ -566,36 +567,11 @@ def fill_imm5710(client: dict, input_pdf: str, output_pdf: str) -> str:
     # ── Save PDF ──────────────────────────────────────────────────
     ET.register_namespace('xfa', XFA_NS)
     new_xml = ET.tostring(root, encoding='unicode').encode('utf-8')
-
-    # Read raw PDF bytes and find+replace the datasets stream directly
-    with open(input_pdf, 'rb') as f:
-        raw = f.read()
-
-    # Find stream boundaries using object number
-    obj_marker = f"{ds_stream.indirect_reference.idnum} 0 obj".encode()
-    obj_pos = raw.find(obj_marker)
-    stream_start = raw.find(b"stream", obj_pos) + 6
-    if raw[stream_start] == 13: stream_start += 2
-    else: stream_start += 1
-    stream_end = raw.find(b"endstream", stream_start)
-    old_stream = raw[stream_start:stream_end]
-
     obj_num = ds_stream.indirect_reference.idnum
-    with open(input_pdf, 'rb') as f:
-        raw = f.read()
-    marker = f"{obj_num} 0 obj".encode()
-    obj_pos = raw.find(marker)
-    stream_start = raw.find(b"stream", obj_pos) + 6
-    if raw[stream_start] == 13: stream_start += 2
-    else: stream_start += 1
-    stream_end = raw.find(b"endstream", stream_start)
-    # Remove FlateDecode filter and update Length so Adobe reads plain XML
-    obj_header = raw[obj_pos:stream_start].decode('latin1')
-    obj_header = obj_header.replace('/FlateDecode', '').replace('/Fl ', '')
-    import re as _re
-    obj_header = _re.sub(r'/Length\s+\d+(\s+\d+\s+R)?', f'/Length {len(new_xml)}', obj_header)
-    with open(output_pdf, 'wb') as f:
-        f.write(raw[:obj_pos] + obj_header.encode('latin1') + new_xml + raw[stream_end:])
+    with pikepdf.open(input_pdf, allow_overwriting_input=False) as pdf:
+        xfa_stream = pdf.get_object(pikepdf.ObjectHelper(pdf, obj_num))
+        xfa_stream.write(new_xml)
+        pdf.save(output_pdf) + new_xml + raw[stream_end:])
 
     print(f"✅  IMM5710 filled → {output_pdf}")
     return output_pdf
