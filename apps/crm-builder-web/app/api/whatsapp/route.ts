@@ -110,19 +110,37 @@ export async function POST(req: NextRequest) {
           try {
             const media = await downloadWaMedia(mediaId);
             if (media) {
-              // Upload to Drive via the documents API
+              // Upload to Drive or S3 as fallback
               const { uploadFileToDriveFolder, extractDriveFolderId } = await import("@/lib/google-drive");
+              const { putObjectToS3, buildS3ObjectKey, toS3StoredLink, isS3StorageEnabled } = await import("@/lib/object-storage");
               const caseItem = await getCase(COMPANY_ID, matched.id);
               const driveFolderId = extractDriveFolderId(caseItem?.docsUploadLink || "");
+              let savedLink = "";
               if (driveFolderId) {
                 const saveFileName = originalFilename || `WA_${matched.client}_${media.filename}`;
-                await uploadFileToDriveFolder({
-                  folderId: driveFolderId,
-                  fileName: saveFileName,
-                  fileBuffer: media.buffer,
-                  mimeType: media.mimeType
-                });
-                console.log(`✅ Saved to Drive: WA_${matched.client}_${media.filename}`);
+                try {
+                  const driveRes = await uploadFileToDriveFolder({
+                    folderId: driveFolderId,
+                    fileName: saveFileName,
+                    fileBuffer: media.buffer,
+                    mimeType: media.mimeType
+                  });
+                  savedLink = driveRes.webViewLink || "";
+                  console.log(`✅ Saved to Drive: ${saveFileName}`);
+                } catch (e) {
+                  console.error("Drive upload failed, trying S3:", e);
+                }
+              }
+              // S3 fallback — always save regardless of Drive
+              if (isS3StorageEnabled()) {
+                try {
+                  const s3Key = buildS3ObjectKey({ companyId: COMPANY_ID, caseId: matched.id, fileName: originalFilename || media.filename });
+                  await putObjectToS3({ key: s3Key, body: media.buffer, contentType: media.mimeType });
+                  if (!savedLink) savedLink = toS3StoredLink(s3Key);
+                  console.log(`✅ Saved to S3: ${s3Key}`);
+                } catch (e) {
+                  console.error("S3 upload failed:", e);
+                }
               }
               // AI classify the document
               let docCategory = "client";
