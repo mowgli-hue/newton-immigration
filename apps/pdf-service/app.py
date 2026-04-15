@@ -6,7 +6,13 @@ sys.path.insert(0, "/app/python")
 
 @app.route("/health", methods=["GET"])
 def health():
-    return jsonify({"ok": True})
+    import pypdf, sys
+    try:
+        import cryptography
+        cv = cryptography.__version__
+    except:
+        cv = "not installed"
+    return jsonify({"ok": True, "pypdf": pypdf.__version__, "python": sys.version, "cryptography": cv})
 
 @app.route("/fill", methods=["POST"])
 def fill():
