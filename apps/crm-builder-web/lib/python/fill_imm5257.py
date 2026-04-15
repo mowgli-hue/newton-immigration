@@ -511,8 +511,13 @@ def fill_imm5257(client: dict, input_pdf: str, output_pdf: str) -> str:
     if raw[stream_start] == 13: stream_start += 2
     else: stream_start += 1
     stream_end = raw.find(b"endstream", stream_start)
+    # Remove FlateDecode filter and update Length so Adobe reads plain XML
+    obj_header = raw[obj_pos:stream_start].decode('latin1')
+    obj_header = obj_header.replace('/FlateDecode', '').replace('/Fl ', '')
+    import re as _re
+    obj_header = _re.sub(r'/Length\s+\d+(\s+\d+\s+R)?', f'/Length {len(new_xml)}', obj_header)
     with open(output_pdf, 'wb') as f:
-        f.write(raw[:stream_start] + new_xml + raw[stream_end:])
+        f.write(raw[:obj_pos] + obj_header.encode('latin1') + new_xml + raw[stream_end:])
 
     print(f"✅  IMM5257 filled → {output_pdf}")
     return output_pdf
