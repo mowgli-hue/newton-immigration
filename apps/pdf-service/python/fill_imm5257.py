@@ -491,9 +491,9 @@ def fill_imm5257(client: dict, input_pdf: str, output_pdf: str) -> str:
     new_xml = ET.tostring(root, encoding='unicode').encode('utf-8')
     obj_num = ds_stream.indirect_reference.idnum
     with pikepdf.open(input_pdf, allow_overwriting_input=False) as pdf:
-        xfa_stream = pdf.get_object(pikepdf.ObjectHelper(pdf, obj_num))
-        xfa_stream.write(new_xml)
-        pdf.save(output_pdf) + new_xml + raw[stream_end:])
+        xfa_obj = pdf.get_object(obj_num, 0)
+        xfa_obj.stream_data = new_xml
+        pdf.save(output_pdf)
 
     print(f"✅  IMM5257 filled → {output_pdf}")
     return output_pdf
