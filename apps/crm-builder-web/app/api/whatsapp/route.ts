@@ -235,6 +235,41 @@ Reply with ONLY a JSON object:
                 link: driveLink || `wa://media/${mediaId}`
               });
 
+              // Extract data from permit documents (study permit / work permit)
+              if ((docCategory === "study_permit" || docCategory === "work_permit") && 
+                  (media.mimeType.includes("image") || media.mimeType.includes("pdf"))) {
+                try {
+                  const imageBase64 = media.buffer.toString("base64");
+                  const extractRes = await fetch("https://api.anthropic.com/v1/messages", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY || "", "anthropic-version": "2023-06-01" },
+                    body: JSON.stringify({
+                      model: "claude-haiku-4-5-20251001",
+                      max_tokens: 300,
+                      messages: [{ role: "user", content: [
+                        { type: "image", source: { type: "base64", media_type: media.mimeType as any, data: imageBase64 } },
+                        { type: "text", text: 'Extract permit data. Reply ONLY with JSON: {"permitNumber": "", "expiryDate": "YYYY-MM-DD", "issueDate": "YYYY-MM-DD", "permitType": "", "gender": "", "dateOfBirth": "YYYY-MM-DD", "firstName": "", "lastName": ""}' }
+                      ]}]
+                    })
+                  });
+                  if (extractRes.ok) {
+                    const data = await extractRes.json() as any;
+                    const permit = JSON.parse(data.content?.[0]?.text?.replace(/```json|```/g,"").trim() || "{}");
+                    if (permit.permitNumber) {
+                      await updateCasePgwpIntake(COMPANY_ID, matched.id, {
+                        permitDetails: permit.permitNumber,
+                        studyPermitExpiryDate: permit.expiryDate,
+                        sex: permit.gender,
+                        dateOfBirth: permit.dateOfBirth || undefined,
+                        firstName: permit.firstName || undefined,
+                        lastName: permit.lastName || undefined,
+                      } as any);
+                      console.log(`📋 Permit data extracted for ${matched.client}: ${permit.permitNumber}`);
+                    }
+                  }
+                } catch(e) { console.error("Permit extraction failed:", e); }
+              }
+
               // If passport detected — extract data and auto-fill intake fields
               if (docCategory === "passport" && (media.mimeType.includes("image") || media.mimeType.includes("pdf"))) {
                 try {
