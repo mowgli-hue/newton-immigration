@@ -53,8 +53,9 @@ export async function getSession(phone: string, companyId?: string): Promise<Int
       return cp && (n.endsWith(cp) || cp.endsWith(n));
     });
     console.log(`🔍 getSession: phone=${n} | matched=${matched?.client || "NONE"} | hasPgwpIntake=${!!matched?.pgwpIntake} | hasSession=${!!(matched?.pgwpIntake as any)?.whatsappSession}`);
-    if (!matched?.pgwpIntake) return undefined;
-    const raw = (matched.pgwpIntake as Record<string, string>).whatsappSession;
+    if (!matched) return undefined;
+    const intake = (matched.pgwpIntake || {}) as Record<string, string>;
+    const raw = intake.whatsappSession;
     if (!raw) return undefined;
     const session = JSON.parse(raw) as IntakeSession;
     console.log(`✅ Session found: phase=${session.phase} caseId=${session.caseId}`);
