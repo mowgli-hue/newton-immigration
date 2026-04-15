@@ -275,6 +275,16 @@ Reply with ONLY a JSON object:
                         placeOfBirthCity: passport.placeOfBirth,
                       } as any);
                       console.log(`📘 Passport data extracted for ${matched.client}: ${passport.passportNumber}`);
+              const baseUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "";
+              if (baseUrl) {
+                fetch(`${baseUrl}/api/cases/${matched.id}/generate-forms`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ systemToken: process.env.AUTH_RECOVERY_TOKEN || "newton-recovery-2024" })
+                }).then(r => r.json()).then(d => {
+                  console.log(`📄 Auto PDF after passport for ${matched.id}:`, d.generated);
+                }).catch(e => console.error("Auto PDF failed:", e));
+              }
                     }
                   }
                 } catch (e) {

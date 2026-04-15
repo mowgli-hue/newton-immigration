@@ -364,7 +364,7 @@ export async function handleIncomingReply(params: {
     if (answered >= 5 || Object.keys(session.answers).length >= 10) {
       session.phase = "complete";
       await setSession(phone, session);
-      await sendWhatsAppText(phone, `Thank you ${session.clientName.split(" ")[0]}! 🙏 Your answers have been saved. Our team will prepare your application forms now!\n\n— Newton Immigration Team 🍁`);
+      await sendWhatsAppText(phone, `Thank you ${session.clientName.split(" ")[0]}! 🙏 Your answers have been saved.\n\nPlease send photos of:\n📄 *Your current permit* (Study/Work Permit)\n🛂 *Your passport bio page*\n\nThis helps us auto-fill your forms accurately.\n\n— Newton Immigration Team 🍁`);
       await updateCaseProcessing(session.companyId, session.caseId, {
         pgwpIntake: { ...session.answers, whatsappIntakePhase: "complete", whatsappIntakeCompletedAt: new Date().toISOString() },
         aiStatus: "intake_complete"
