@@ -376,6 +376,20 @@ export async function appendToAllCasesSheet(caseData: {
       caseData.caseId,
       today,
     ]];
+    // Check if case already exists in sheet to prevent duplicates
+    const checkRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${ALL_CASES_SHEET_ID}/values/Client Sheet!I:I`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (checkRes.ok) {
+      const checkData = await checkRes.json() as { values?: string[][] };
+      const existingIds = (checkData.values || []).flat();
+      if (existingIds.includes(caseData.caseId)) {
+        console.log(`⏭️ Case ${caseData.caseId} already in sheet — skipping`);
+        return;
+      }
+    }
+
     const res = await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${ALL_CASES_SHEET_ID}/values/Client Sheet!A:J:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
       {
