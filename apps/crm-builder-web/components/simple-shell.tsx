@@ -864,12 +864,13 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
     const byRole = filterCasesByRole(cases, viewRole, sessionUser?.name);
     const q = caseSearch.trim().toLowerCase();
     // Exclude submitted cases from main view — they live in Submission tab
+    const isProcessingCase = (c: CaseItem) => !NON_PROCESSING_APPLICATION_TYPES.has(c.formType);
     const byStatus =
       caseStatusFilter === "all"
-        ? byRole.filter(c => c.processingStatus !== "submitted")
+        ? byRole.filter(c => c.processingStatus !== "submitted" && isProcessingCase(c))
         : caseStatusFilter === "submitted"
-          ? byRole.filter(c => c.processingStatus === "submitted")
-          : byRole.filter((c) => (c.processingStatus || "docs_pending") === caseStatusFilter);
+          ? byRole.filter(c => c.processingStatus === "submitted" && isProcessingCase(c))
+          : byRole.filter((c) => (c.processingStatus || "docs_pending") === caseStatusFilter && isProcessingCase(c));
     if (!q) return byStatus;
     return byStatus.filter((c) => {
       const candidate = `${c.id} ${c.client} ${c.formType} ${c.assignedTo || ""} ${c.processingStatus || ""} ${c.processingStatusOther || ""}`.toLowerCase();
