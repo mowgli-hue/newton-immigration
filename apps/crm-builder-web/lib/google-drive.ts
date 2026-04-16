@@ -363,7 +363,7 @@ export async function appendToAllCasesSheet(caseData: {
 }): Promise<void> {
   try {
     const token = await getSheetsAccessToken();
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toLocaleDateString('en-CA', {timeZone: 'America/Vancouver'});
     const values = [[
       caseData.name,
       "'" + String(caseData.phone || "").replace(/\D/g, ""),
