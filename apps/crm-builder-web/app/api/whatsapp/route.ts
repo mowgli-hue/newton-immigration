@@ -368,9 +368,9 @@ Reply with ONLY a JSON object:
           });
 
           if (!existingLead) {
-            // First message — ask for name and service
-            await sendWhatsAppText(from, `Hello! Thank you for contacting Newton Immigration. 🍁\n\nਸਤਿ ਸ੍ਰੀ ਅਕਾਲ! ਨਿਊਟਨ ਇਮੀਗ੍ਰੇਸ਼ਨ ਵਿੱਚ ਤੁਹਾਡਾ ਸੁਆਗਤ ਹੈ।\n\nWe have received your message and our team will get back to you shortly.\n\nTo help you better, please share:\n1️⃣ Your full name / ਤੁਹਾਡਾ ਪੂਰਾ ਨਾਮ\n2️⃣ What service do you need? (Work Permit / Study Permit / PR / Visitor Visa / Other)\n\n— Newton Immigration Team 🍁`);
-            console.log(`📱 New unknown number ${from} — sent intro message`);
+            // First message — ask for name to look up their file
+            await sendWhatsAppText(from, `Hello! Thank you for contacting Newton Immigration. 🍁\n\nਸਤਿ ਸ੍ਰੀ ਅਕਾਲ! ਨਿਊਟਨ ਇਮੀਗ੍ਰੇਸ਼ਨ ਵਿੱਚ ਤੁਹਾਡਾ ਸੁਆਗਤ ਹੈ।\n\nWe received your message. To pull up your file, could you please share your *full name*? / ਕਿਰਪਾ ਕਰਕੇ ਆਪਣਾ *ਪੂਰਾ ਨਾਮ* ਦੱਸੋ।\n\n— Newton Immigration Team 🍁`);
+            console.log(`📱 New unknown number ${from} — asked for name`);
           } else {
             // They replied — AI extracts name + service type and updates lead
             try {
@@ -391,7 +391,49 @@ Reply ONLY with JSON: {"name": "full name or empty", "serviceType": "Work Permit
                 const extracted = JSON.parse(extractData.content?.[0]?.text?.replace(/\`\`\`json|\`\`\`/g,"").trim() || "{}");
                 
                 if (extracted.name || extracted.serviceType) {
-                  // Create a proper lead case
+                  // Search existing cases by name first
+                  const nameToFind = (extracted.name || "").toLowerCase().trim();
+                  const existingCase = nameToFind ? allCases.find((c: any) => 
+                    String(c.client || "").toLowerCase().includes(nameToFind) ||
+                    nameToFind.includes(String(c.client || "").toLowerCase().split(" ")[0])
+                  ) : null;
+
+                  if (existingCase) {
+                    // Found their case — link phone number and notify staff
+                    const { updateCaseProcessing } = await import("@/lib/store");
+                    await updateCaseProcessing(COMPANY_ID, existingCase.id, { 
+                      leadPhone: `+${from}` 
+                    } as any);
+                    
+                    const firstName = (extracted.name || "").split(" ")[0];
+                    const statusMsg = existingCase.processingStatus === "submitted" 
+                      ? `Your application has been submitted. Application number: ${(existingCase as any).applicationNumber || "pending"}.`
+                      : existingCase.processingStatus === "under_review"
+                      ? "Your application is currently under review by our team."
+                      : "Your file is currently being processed by our team.";
+                    
+                    await sendWhatsAppText(from, `Hello ${firstName}! 👋\n\nWe found your file — *${existingCase.formType}* application.\n\n${statusMsg}\n\nOur team will be in touch with any updates. If you have a specific question, please feel free to ask!\n\n— Newton Immigration Team 🍁`);
+                    
+                    // Notify assigned staff
+                    const assignedStaff = (store.users || []).find((u: any) => u.name === existingCase.assignedTo);
+                    const notifyTargets = assignedStaff ? [assignedStaff] : (store.users || []).filter((u: any) => ["Admin", "ProcessingLead"].includes(u.role));
+                    for (const target of notifyTargets.slice(0, 2)) {
+                      store.notifications = store.notifications || [];
+                      store.notifications.unshift({
+                        id: `NTF-LINK-${Date.now()}-${target.id}`,
+                        companyId: COMPANY_ID,
+                        userId: target.id,
+                        type: "ai_alert",
+                        message: `📱 ${extracted.name} (+${from.slice(-10)}) linked to ${existingCase.id} — they asked: "${text.slice(0, 60)}"`,
+                        caseId: existingCase.id,
+                        read: false,
+                        createdAt: new Date().toISOString()
+                      });
+                    }
+                    await writeStore(store);
+                    console.log(`✅ Linked ${extracted.name} to ${existingCase.id}`);
+                  } else {
+                  // Not found — Create a proper lead case
                   const newCase = await createCase({
                     companyId: COMPANY_ID,
                     client: extracted.name || `Lead +${from.slice(-10)}`,
@@ -422,6 +464,7 @@ Reply ONLY with JSON: {"name": "full name or empty", "serviceType": "Work Permit
                   const firstName = (extracted.name || "").split(" ")[0] || "there";
                   await sendWhatsAppText(from, `Thank you ${firstName}! ✅\n\nWe have noted your inquiry for *${extracted.serviceType || "immigration services"}*.\n\nOne of our consultants will contact you shortly to discuss your case.\n\n— Newton Immigration Team 🍁`);
                   console.log(`✅ New lead created: ${extracted.name} — ${extracted.serviceType} (${newCase.id})`);
+                  } // end else (not found in existing cases)
                 }
               }
             } catch(e) { console.error("Lead extraction failed:", e); }
