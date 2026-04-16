@@ -201,7 +201,9 @@ Reply with ONLY a JSON object:
                     // Rename file: [Client Name]- [Label].ext
                     const clientNameClean = String(matched.client || "").replace(/[^a-zA-Z0-9 ]/g, "").trim();
                     const ext = docName.includes(".") ? docName.split(".").pop() : media.mimeType.includes("pdf") ? "pdf" : "jpg";
-                    properFileName = `${clientNameClean}- ${parsed.label}.${ext}`;
+                    // Better naming: ClientName - DocumentType - Date.ext
+                    const dateStr = new Date().toLocaleDateString("en-CA", {timeZone: "America/Vancouver"});
+                    properFileName = `${clientNameClean} - ${parsed.label}.${ext}`;
                     console.log(`🤖 AI classified: ${docName} → ${properFileName} (${docCategory})`);
                   }
                 }
