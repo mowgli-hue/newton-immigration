@@ -5519,6 +5519,7 @@ We will notify you as soon as we receive a decision. This usually takes a few we
                           {id:"profile",  icon:"👤", label:"Profile"},
                           {id:"documents",icon:"📎", label:"Docs"},
                           {id:"tasks",    icon:"✅", label:"Tasks"},
+                          {id:"ai",       icon:"🤖", label:"Ask AI"},
                           {id:"communication",icon:"💬",label:"Chat"},
                           {id:"notes",    icon:"📝", label:"Notes"},
                         ] as const).map(tab => (
