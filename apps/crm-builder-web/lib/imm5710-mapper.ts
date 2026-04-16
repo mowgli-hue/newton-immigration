@@ -158,22 +158,58 @@ export function mapIntakeToImm5710(intake: Record<string, any>, formType: string
   const empRaw = getByNum(14) || getQ("employment") || i.employmentHistory || "";
   const employment: any[] = [];
   if (empRaw.toLowerCase() !== "none" && empRaw.length > 5) {
-    // Parse lines like "Company Name, Job Title, City, 2020-01 to 2023-12"
-    const lines = empRaw.split(/\n|;/).filter((l: string) => l.trim().length > 3).slice(0, 3);
-    lines.forEach((line: string) => {
-      const dateMatches = line.match(/(\d{4})-(\d{2})/g);
+    // Parse numbered employment entries: "1)Job Title\nEmployer-Name\nFrom date to date"
+    const parseEmpDate = (dateStr: string): { year: string; month: string } => {
+      // Handle various formats: "2023-05-12", "2023-June-06", "9th september 2020", "2023-06"
+      const months: Record<string, string> = {
+        jan:"01",feb:"02",mar:"03",apr:"04",may:"05",jun:"06",
+        jul:"07",aug:"08",sep:"09",oct:"10",nov:"11",dec:"12"
+      };
+      const isoMatch = dateStr.match(/(\d{4})[-/](\d{1,2})/);
+      if (isoMatch) return { year: isoMatch[1], month: isoMatch[2].padStart(2,"0") };
+      const wordMatch = dateStr.match(/(\d{4})/);
+      const monthMatch = dateStr.toLowerCase().match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/);
+      return { year: wordMatch?.[1] || "", month: monthMatch ? months[monthMatch[1]] : "01" };
+    };
+
+    // Split by numbered entries: 1) or 1.
+    const entries = empRaw.split(/\n?\d+[\)\.]\s*/).filter((e: string) => e.trim().length > 3);
+    
+    for (const entry of entries.slice(0, 3)) {
+      const lines = entry.split("\n").map((l: string) => l.trim()).filter(Boolean);
+      if (!lines.length) continue;
+      
+      // Line 1: Job title (may include country in brackets)
+      const jobLine = lines[0] || "";
+      const countryMatch = jobLine.match(/\(([^)]+)\)/);
+      const occupation = jobLine.replace(/\([^)]+\)/, "").trim();
+      const country = countryMatch?.[1]?.trim() || "Canada";
+      
+      // Line 2: Employer (format: "Employer-Name" or "Employer -Name" or "Employer: Name")
+      const empLine = lines[1] || "";
+      const employer = empLine.replace(/^Employer\s*[-:]\s*/i, "").trim();
+      
+      // Line 3: Dates (format: "From date to date" or "From date to continuing/present")
+      const dateLine = lines[2] || lines[1] || "";
+      const fromMatch = dateLine.match(/[Ff]rom\s+(.+?)\s+to\s+/);
+      const toMatch = dateLine.match(/\s+to\s+(.+)$/i);
+      const isCurrent = /continuing|present|current/i.test(dateLine);
+      
+      const fromDate = fromMatch ? parseEmpDate(fromMatch[1]) : { year: "", month: "" };
+      const toDate = !isCurrent && toMatch ? parseEmpDate(toMatch[1]) : { year: "", month: "" };
+
       employment.push({
-        from_year: dateMatches?.[0]?.split("-")[0] || "",
-        from_month: dateMatches?.[0]?.split("-")[1] || "",
-        to_year: dateMatches?.[1]?.split("-")[0] || "Present",
-        to_month: dateMatches?.[1]?.split("-")[1] || "",
-        occupation: line.split(",")[1]?.trim() || line.split(",")[0]?.trim() || "",
-        employer: line.split(",")[0]?.trim() || "",
-        city: line.split(",")[2]?.trim() || "",
-        country: "Canada",
+        from_year: fromDate.year,
+        from_month: fromDate.month,
+        to_year: isCurrent ? "" : toDate.year,
+        to_month: isCurrent ? "" : toDate.month,
+        occupation,
+        employer,
+        city: "",
+        country,
         prov_state: "",
       });
-    });
+    }
   }
 
   // Q11/Q12/Q13: Background
