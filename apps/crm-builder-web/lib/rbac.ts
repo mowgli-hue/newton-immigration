@@ -12,24 +12,25 @@ export type AppScreen =
   | "chat"
   | "files"
   | "team"
-  | "inbox";
+  | "inbox"
+  | "newton-ai";
 
 // Each role only sees what they need
 const STAFF_ROLE_TAB_ACCESS: Record<Exclude<Role, "Client">, AppScreen[]> = {
   // Admin sees everything
-  Admin: ["dashboard", "cases", "communications", "results", "submission", "accounting", "tasks", "inbox", "team", "settings"],
+  Admin: ["dashboard", "cases", "communications", "results", "submission", "accounting", "tasks", "inbox", "team", "settings", "newton-ai"],
 
   // Marketing creates cases, tracks leads, sees accounting
-  Marketing: ["dashboard", "cases", "communications", "tasks", "inbox", "team"],
+  Marketing: ["dashboard", "cases", "communications", "tasks", "inbox", "team", "newton-ai"],
 
   // Processing works cases assigned to them — no need to create cases or see accounting
-  Processing: ["dashboard", "cases", "submission", "tasks", "inbox", "team"],
+  Processing: ["dashboard", "cases", "submission", "tasks", "inbox", "team", "newton-ai"],
 
   // Processing Lead can also see results and reassign
-  ProcessingLead: ["dashboard", "cases", "results", "submission", "tasks", "inbox", "team", "settings"],
+  ProcessingLead: ["dashboard", "cases", "results", "submission", "tasks", "inbox", "team", "settings", "newton-ai"],
 
   // Reviewer just reviews cases
-  Reviewer: ["dashboard", "cases", "tasks", "inbox", "team"],
+  Reviewer: ["dashboard", "cases", "tasks", "inbox", "team", "newton-ai"],
 };
 
 function normalizeRole(role: Role | string): Role {
