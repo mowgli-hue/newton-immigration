@@ -49,49 +49,16 @@ export function NewtonAiAgent({ cases, user }: { cases: any[]; user: any }) {
     const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Vancouver" });
 
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/api/newton-ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 2000,
-          system: `You are Newton, the personal AI assistant for Newton Immigration — a Canadian immigration consulting firm in Surrey, BC.
-Today's date: ${today}
-Staff member: ${user?.name || "Staff"} (${user?.role || "staff"})
-
-ACTIVE CASES (${cases.length} total):
-${caseContext}
-
-YOUR CAPABILITIES:
-1. IRCC NEWS & UPDATES — provide latest policy changes, processing times, new programs (use your knowledge up to your cutoff, note if info may be outdated)
-2. CASE ANALYSIS — when asked ANALYZE_CASES, review the case list above for urgent items, expiring permits, patterns
-3. LETTER GENERATION — draft professional letters:
-   - Letter of Explanation (LOE)
-   - Cover letters
-   - Employment verification
-   - Employer support letters  
-   - Financial support letters
-   - Reconsideration requests
-   Format letters properly with: [Date], [Recipient], Subject:, body paragraphs, professional closing
-4. WHATSAPP MESSAGES — draft in English. If Punjabi requested, include Punjabi script
-5. DOCUMENT CHECKLISTS — comprehensive lists for any application type
-6. ELIGIBILITY ASSESSMENT — check requirements for any program
-7. PROCESSING TIMES — current IRCC estimates
-
-RESPONSE STYLE:
-- Be concise and professional
-- For letters, format them completely ready to use
-- For case analysis, be specific about which cases need attention
-- Flag anything urgent clearly with 🚨
-- Use bullet points for lists`,
-          messages: [
-            ...messages.slice(-8).map(m => ({ role: m.role, content: m.text })),
-            { role: "user", content: userMsg }
-          ]
+          message: userMsg,
+          history: messages.slice(-8).map(m => ({ role: m.role, content: m.text }))
         })
       });
       const data = await res.json();
-      const reply = data.content?.[0]?.text || "Sorry, I couldn't generate a response.";
+      const reply = data.reply || data.error || "Sorry, I couldn't generate a response.";
       setMessages(prev => [...prev, { role: "assistant", text: reply, time: new Date().toLocaleTimeString("en-CA", { hour: "2-digit", minute: "2-digit" }) }]);
     } catch {
       setMessages(prev => [...prev, { role: "assistant", text: "Connection error. Please try again.", time }]);
