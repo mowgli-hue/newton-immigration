@@ -18,7 +18,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     if (!phone) return NextResponse.json({ error: "No phone number on this case" }, { status: 400 });
 
     // Skip WhatsApp intake for College Change / SPE cases - handled manually
-    const skipFormTypes = ["college change", "college transfer", "study permit extension", "spe"];
+    const skipFormTypes = ["college change", "college transfer"];
     const formTypeLower = String(caseItem.formType || "").toLowerCase();
     if (skipFormTypes.some(t => formTypeLower.includes(t))) {
       return NextResponse.json({ ok: false, message: `WhatsApp intake skipped for ${caseItem.formType} — handled manually by team` });

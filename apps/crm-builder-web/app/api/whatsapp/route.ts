@@ -348,7 +348,7 @@ Reply with ONLY a JSON object:
           console.log(`🔍 Session lookup for ${from}: ${session ? `FOUND phase=${session.phase}` : "NOT FOUND"}`);
           
           // Skip intake for College Change / Study Permit Extension cases
-          const skipFormTypes = ["college change", "college transfer", "study permit extension", "spe"];
+          const skipFormTypes = ["college change", "college transfer"];
           const matchedFormType = String(matched?.formType || "").toLowerCase();
           const skipIntake = skipFormTypes.some(t => matchedFormType.includes(t));
           
