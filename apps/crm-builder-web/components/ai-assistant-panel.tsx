@@ -23,18 +23,16 @@ export function AiAssistantPanel({ caseId, caseItem }: { caseId: string; caseIte
     setMessages(prev => [...prev, { role: "user", text: userMsg }]);
     setLoading(true);
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/api/cases/" + caseId + "/ai-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          system: `You are an AI assistant for Newton Immigration. Help staff with case ${caseId} for ${caseItem.client} applying for ${caseItem.formType}. Be concise and focus on Canadian immigration.`,
-          messages: [...messages.map(m => ({ role: m.role, content: m.text })), { role: "user", content: userMsg }]
+          message: userMsg,
+          history: messages.slice(-8).map(m => ({ role: m.role, content: m.text }))
         })
       });
       const data = await res.json();
-      setMessages(prev => [...prev, { role: "assistant", text: data.content?.[0]?.text || "Error" }]);
+      setMessages(prev => [...prev, { role: "assistant", text: data.reply || data.error || "Error" }]);
     } catch { setMessages(prev => [...prev, { role: "assistant", text: "Connection error." }]); }
     finally { setLoading(false); }
   };
