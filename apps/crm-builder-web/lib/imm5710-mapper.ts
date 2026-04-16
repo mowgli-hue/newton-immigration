@@ -14,7 +14,12 @@ export function mapIntakeToImm5710(intake: Record<string, any>, formType: string
   } catch { /* ignore */ }
 
   // Helper to get specific answer by question number or keyword
+  // Also reads q1, q2, q3... keys saved directly by WhatsApp AI intake
   const getByNum = (n: number): string => {
+    // First try direct q1, q2 keys from WhatsApp AI intake
+    const directKey = `q${n}`;
+    if (i[directKey]) return String(i[directKey]);
+    // Then try applicationSpecificAnswers
     const key = Object.keys(specific)[n - 1];
     return key ? String(specific[key] || "") : "";
   };
