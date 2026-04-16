@@ -352,28 +352,80 @@ Reply with ONLY a JSON object:
         }
       }
 
-      // Handle unknown numbers — notify staff and auto-reply
+      // Handle unknown numbers — save as lead, notify staff, auto-reply
       if (!matched && msgType === "text" && text) {
         try {
           const { sendWhatsAppText } = await import("@/lib/whatsapp");
-          const { readStore, writeStore } = await import("@/lib/store");
+          const { readStore, writeStore, createCase, listCases } = await import("@/lib/store");
           const store = await readStore();
-          const admins = (store.users || []).filter((u: any) => u.companyId === COMPANY_ID && ["Admin", "ProcessingLead"].includes(u.role));
-          for (const admin of admins.slice(0, 3)) {
-            store.notifications = store.notifications || [];
-            store.notifications.unshift({
-              id: `NTF-UNK-${Date.now()}-${admin.id}`,
-              companyId: COMPANY_ID,
-              userId: admin.id,
-              type: "ai_alert",
-              message: `📱 Unknown number +${from} sent: "${text.slice(0, 80)}" — Check Inbox to create a case`,
-              read: false,
-              createdAt: new Date().toISOString()
-            });
+
+          // Check if this number already has a lead
+          const allCases = await listCases(COMPANY_ID);
+          const existingLead = allCases.find((c: any) => {
+            const cp = String(c.leadPhone || "").replace(/\D/g, "");
+            const fp = String(from || "").replace(/\D/g, "");
+            return cp && fp && (cp.endsWith(fp.slice(-9)) || fp.endsWith(cp.slice(-9)));
+          });
+
+          if (!existingLead) {
+            // First message — ask for name and service
+            await sendWhatsAppText(from, `Hello! Thank you for contacting Newton Immigration. 🍁\n\nਸਤਿ ਸ੍ਰੀ ਅਕਾਲ! ਨਿਊਟਨ ਇਮੀਗ੍ਰੇਸ਼ਨ ਵਿੱਚ ਤੁਹਾਡਾ ਸੁਆਗਤ ਹੈ।\n\nWe have received your message and our team will get back to you shortly.\n\nTo help you better, please share:\n1️⃣ Your full name / ਤੁਹਾਡਾ ਪੂਰਾ ਨਾਮ\n2️⃣ What service do you need? (Work Permit / Study Permit / PR / Visitor Visa / Other)\n\n— Newton Immigration Team 🍁`);
+            console.log(`📱 New unknown number ${from} — sent intro message`);
+          } else {
+            // They replied — AI extracts name + service type and updates lead
+            try {
+              const extractRes = await fetch("https://api.anthropic.com/v1/messages", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY || "", "anthropic-version": "2023-06-01" },
+                body: JSON.stringify({
+                  model: "claude-haiku-4-5-20251001",
+                  max_tokens: 200,
+                  messages: [{ role: "user", content: `Extract from this WhatsApp message:
+"${text}"
+
+Reply ONLY with JSON: {"name": "full name or empty", "serviceType": "Work Permit|Study Permit|PR|Visitor Visa|PGWP|SOWP|Sponsorship|Citizenship|Other", "notes": "brief summary of their query"}` }]
+                })
+              });
+              if (extractRes.ok) {
+                const extractData = await extractRes.json() as any;
+                const extracted = JSON.parse(extractData.content?.[0]?.text?.replace(/\`\`\`json|\`\`\`/g,"").trim() || "{}");
+                
+                if (extracted.name || extracted.serviceType) {
+                  // Create a proper lead case
+                  const newCase = await createCase({
+                    companyId: COMPANY_ID,
+                    client: extracted.name || `Lead +${from.slice(-10)}`,
+                    formType: extracted.serviceType || "Consultation",
+                    leadPhone: `+${from}`,
+                    additionalNotes: extracted.notes || text,
+                    assignedTo: "Unassigned",
+                  });
+
+                  // Notify admins with lead details
+                  const admins = (store.users || []).filter((u: any) => u.companyId === COMPANY_ID && ["Admin", "ProcessingLead"].includes(u.role));
+                  for (const admin of admins.slice(0, 3)) {
+                    store.notifications = store.notifications || [];
+                    store.notifications.unshift({
+                      id: `NTF-LEAD-${Date.now()}-${admin.id}`,
+                      companyId: COMPANY_ID,
+                      userId: admin.id,
+                      type: "ai_alert",
+                      message: `🆕 New Lead: ${extracted.name || "Unknown"} (+${from.slice(-10)}) — ${extracted.serviceType || "Consultation"}: ${extracted.notes || text.slice(0, 60)}`,
+                      caseId: newCase.id,
+                      read: false,
+                      createdAt: new Date().toISOString()
+                    });
+                  }
+                  await writeStore(store);
+
+                  // Send confirmation to client
+                  const firstName = (extracted.name || "").split(" ")[0] || "there";
+                  await sendWhatsAppText(from, `Thank you ${firstName}! ✅\n\nWe have noted your inquiry for *${extracted.serviceType || "immigration services"}*.\n\nOne of our consultants will contact you shortly to discuss your case.\n\n— Newton Immigration Team 🍁`);
+                  console.log(`✅ New lead created: ${extracted.name} — ${extracted.serviceType} (${newCase.id})`);
+                }
+              }
+            } catch(e) { console.error("Lead extraction failed:", e); }
           }
-          await writeStore(store);
-          await sendWhatsAppText(from, `Hello! Thank you for contacting Newton Immigration. 🍁\n\nਸਤਿ ਸ੍ਰੀ ਅਕਾਲ! ਨਿਊਟਨ ਇਮੀਗ੍ਰੇਸ਼ਨ ਵਿੱਚ ਤੁਹਾਡਾ ਸੁਆਗਤ ਹੈ।\n\nWe received your message. Our team will contact you shortly.\n\nPlease share:\n• Your full name / ਤੁਹਾਡਾ ਪੂਰਾ ਨਾਮ\n• Service needed / ਕਿਹੜੀ ਸੇਵਾ ਚਾਹੀਦੀ ਹੈ\n\n— Newton Immigration Team 🍁`);
-          console.log(`📱 Unknown number ${from} — notified staff and sent auto-reply`);
         } catch(e) { console.error("Unknown number handler error:", e); }
       }
 
