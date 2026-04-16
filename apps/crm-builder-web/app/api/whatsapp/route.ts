@@ -329,11 +329,22 @@ Reply with ONLY a JSON object:
                 }
               }
 
-              // Send confirmation with what was identified
-              const { sendWhatsAppText } = await import("@/lib/whatsapp");
+              // Send AI-powered confirmation with context
+              const { sendWhatsAppText: sendDocReply } = await import("@/lib/whatsapp");
               const firstName = String(matched.client || "").split(" ")[0];
               const docLabel = properFileName.split("- ")[1]?.replace(/\.[^.]+$/, "") || "document";
-              await sendWhatsAppText(from, `✅ Got it ${firstName}! I've saved your *${docLabel}* to your file. Our team will review it. 🙏\n\n— Newton Immigration Team`);
+              
+              // Build smart reply based on what was extracted
+              let replyMsg = `✅ Got it ${firstName}! I've saved your *${docLabel}* to your file.`;
+              if (docCategory === "passport") replyMsg += `\n\nI've extracted your passport details automatically. 📘`;
+              else if (docCategory === "study_permit") replyMsg += `\n\nI've noted your study permit details. 📋`;
+              else if (docCategory === "work_permit") replyMsg += `\n\nI've noted your work permit details. 📋`;
+              else if (docCategory === "transcripts") replyMsg += `\n\nThank you for your transcripts! 🎓`;
+              else if (docCategory === "completion_letter") replyMsg += `\n\nCompletion letter received! ✅`;
+              else if (docCategory === "language_test") replyMsg += `\n\nLanguage test result saved! 📝`;
+              else if (docCategory === "bank_statement") replyMsg += `\n\nFinancial document received! 💰`;
+              replyMsg += `\n\n— Newton Immigration Team 🍁`;
+              await sendDocReply(from, replyMsg);
             }
           } catch (e) {
             console.error("Media upload error:", (e as Error).message);
