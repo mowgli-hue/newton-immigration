@@ -315,9 +315,7 @@ export async function appendToSubmittedSheet(row: {
   try {
     const token = await getSheetsAccessToken();
     // Append a new row: Date | Name | Application Type | Phone | App Number | Assigned To | Amount Paid | Status
-    const today = new Date().toLocaleDateString("en-CA");
     const values = [[
-      today,
       row.name,
       row.appType,
       row.phone,
