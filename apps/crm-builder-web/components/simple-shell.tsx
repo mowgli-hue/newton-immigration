@@ -1,4 +1,5 @@
 "use client" // v2.0.1;
+import { NewtonAiAgent } from "@/components/newton-ai-agent";
 import { AiAssistantPanel } from "@/components/ai-assistant-panel";
 
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
@@ -372,7 +373,8 @@ const tabs: { id: Screen; label: string; icon: ReactNode }[] = [
   { id: "settings", label: "Settings", icon: <Settings2 size={16} /> },
   { id: "tasks", label: "Tasks", icon: <CheckSquare size={16} /> },
   { id: "inbox", label: "Inbox", icon: <MessageCircle size={16} /> },
-  { id: "team", label: "Team", icon: <Users size={16} /> }
+  { id: "team", label: "Team", icon: <Users size={16} /> },
+  { id: "newton-ai", label: "Newton AI", icon: <span>🤖</span> }
 ];
 
 function filterCasesByRole(allCases: CaseItem[], role: Role, userName?: string) {
