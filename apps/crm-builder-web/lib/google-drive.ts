@@ -349,6 +349,51 @@ export async function appendToSubmittedSheet(row: {
 
 // ── Under Review Sheet Sync ──────────────────────────────────────────────────
 const UNDER_REVIEW_SHEET_ID = "1CcuWebtyrSmpINzh2ZxvxZUdZ_zC-ojh6fKmTYBuZb4";
+const ALL_CASES_SHEET_ID = "1CcuWebtyrSmpINzh2ZxvxZUdZ_zC-ojh6fKmTYBuZb4";
+
+export async function appendToAllCasesSheet(caseData: {
+  caseId: string;
+  name: string;
+  phone: string;
+  formType: string;
+  permitExpiry?: string;
+  uci?: string;
+  isUrgent?: boolean;
+  amountPaid?: number;
+}): Promise<void> {
+  try {
+    const token = await getSheetsAccessToken();
+    const today = new Date().toLocaleDateString("en-CA");
+    const values = [[
+      today,
+      caseData.caseId,
+      caseData.name,
+      caseData.phone,
+      caseData.formType,
+      caseData.permitExpiry || "",
+      caseData.uci || "",
+      caseData.isUrgent ? "🔴 Urgent" : "",
+      "", // Results
+      caseData.amountPaid ? `$${caseData.amountPaid}` : "",
+    ]];
+    const res = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${ALL_CASES_SHEET_ID}/values/All Cases!A:J:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ values }),
+      }
+    );
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      console.error("All Cases sheet append error:", err);
+    } else {
+      console.log(`✅ Added to All Cases sheet: ${caseData.name} (${caseData.caseId})`);
+    }
+  } catch (e) {
+    console.error("appendToAllCasesSheet failed:", (e as Error).message);
+  }
+}
 
 export async function syncCaseToUnderReviewSheet(caseItem: {
   client: string;

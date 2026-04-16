@@ -213,6 +213,21 @@ ${summaryData.text}`,
         }
       } catch (e) { console.error("Auto AI summary failed:", e); }
 
+      // Add to All Cases tracking sheet
+      try {
+        const { appendToAllCasesSheet } = await import("@/lib/google-drive");
+        await appendToAllCasesSheet({
+          caseId: created.id,
+          name: created.client,
+          phone: String(created.leadPhone || ""),
+          formType: created.formType,
+          permitExpiry: String((created as any).permitExpiryDate || ""),
+          uci: "",
+          isUrgent: created.isUrgent || false,
+          amountPaid: created.amountPaid || 0,
+        });
+      } catch(e) { console.error("All Cases sheet failed:", e); }
+
       // Auto-start WhatsApp intake if phone number exists
       try {
         const phone = String(created.leadPhone || "").replace(/\D/g, "");
