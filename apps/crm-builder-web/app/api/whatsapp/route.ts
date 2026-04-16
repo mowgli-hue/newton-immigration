@@ -340,6 +340,21 @@ Reply with ONLY a JSON object:
       }
 
       // Handle text messages — intake flow or general message notification
+      // Also handle images/documents during intake (send next question after saving doc)
+      if (msgType === "image" || msgType === "document") {
+        try {
+          const intakeMod = await import("@/lib/whatsapp-ai-intake");
+          const session = await intakeMod.getActiveSession(from, COMPANY_ID);
+          const skipFormTypes = ["college change", "college transfer"];
+          const matchedFormType = String(matched?.formType || "").toLowerCase();
+          const skipIntake = skipFormTypes.some(t => matchedFormType.includes(t));
+          if (session && session.phase === "ai_chat" && !skipIntake) {
+            // Acknowledge doc and send next question
+            await intakeMod.handleIncomingReply({ phone: from, message: "[document received]", companyId: COMPANY_ID });
+          }
+        } catch(e) { console.error("Intake image handler error:", e); }
+      }
+
       if (msgType === "text" && text) {
         let handledByIntake = false;
         try {
