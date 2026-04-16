@@ -433,37 +433,24 @@ Reply ONLY with JSON: {"name": "full name or empty", "serviceType": "Work Permit
                     await writeStore(store);
                     console.log(`✅ Linked ${extracted.name} to ${existingCase.id}`);
                   } else {
-                  // Not found — Create a proper lead case
-                  const newCase = await createCase({
-                    companyId: COMPANY_ID,
-                    client: extracted.name || `Lead +${from.slice(-10)}`,
-                    formType: extracted.serviceType || "Consultation",
-                    leadPhone: `+${from}`,
-                    additionalNotes: extracted.notes || text,
-                    assignedTo: "Unassigned",
-                  });
-
-                  // Notify admins with lead details
+                  // Not found in existing cases — notify staff to check manually
                   const admins = (store.users || []).filter((u: any) => u.companyId === COMPANY_ID && ["Admin", "ProcessingLead"].includes(u.role));
                   for (const admin of admins.slice(0, 3)) {
                     store.notifications = store.notifications || [];
                     store.notifications.unshift({
-                      id: `NTF-LEAD-${Date.now()}-${admin.id}`,
+                      id: `NTF-UNK-${Date.now()}-${admin.id}`,
                       companyId: COMPANY_ID,
                       userId: admin.id,
                       type: "ai_alert",
-                      message: `🆕 New Lead: ${extracted.name || "Unknown"} (+${from.slice(-10)}) — ${extracted.serviceType || "Consultation"}: ${extracted.notes || text.slice(0, 60)}`,
-                      caseId: newCase.id,
+                      message: `❓ Unknown client +${from.slice(-10)} says their name is "${extracted.name || text.slice(0, 30)}" — couldn't find their file. Please check manually.`,
                       read: false,
                       createdAt: new Date().toISOString()
                     });
                   }
                   await writeStore(store);
-
-                  // Send confirmation to client
                   const firstName = (extracted.name || "").split(" ")[0] || "there";
-                  await sendWhatsAppText(from, `Thank you ${firstName}! ✅\n\nWe have noted your inquiry for *${extracted.serviceType || "immigration services"}*.\n\nOne of our consultants will contact you shortly to discuss your case.\n\n— Newton Immigration Team 🍁`);
-                  console.log(`✅ New lead created: ${extracted.name} — ${extracted.serviceType} (${newCase.id})`);
+                  await sendWhatsAppText(from, `Thank you ${firstName}! We have forwarded your message to our team and someone will get back to you shortly.\n\nਸਾਡੀ ਟੀਮ ਜਲਦੀ ਤੁਹਾਡੇ ਨਾਲ ਸੰਪਰਕ ਕਰੇਗੀ। 🙏\n\n— Newton Immigration Team 🍁`);
+                  console.log(`❓ Unknown client ${extracted.name} (+${from}) — not found in cases, staff notified`);
                   } // end else (not found in existing cases)
                 }
               }
