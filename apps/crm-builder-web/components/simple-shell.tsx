@@ -4155,7 +4155,11 @@ We will notify you as soon as we receive a decision. This usually takes a few we
           {error ? <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
 
           <div className="space-y-4">
-          {screen === "dashboard" ? (
+          {screen === "newton-ai" ? (
+            <div className="flex-1 h-full overflow-hidden">
+              <NewtonAiAgent cases={cases} user={sessionUser} />
+            </div>
+          ) : screen === "dashboard" ? (
             <>
               {/* ── Role-aware personal workspace ── */}
               {(() => {
