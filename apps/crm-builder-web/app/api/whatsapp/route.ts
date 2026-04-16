@@ -352,6 +352,31 @@ Reply with ONLY a JSON object:
         }
       }
 
+      // Handle unknown numbers — notify staff and auto-reply
+      if (!matched && msgType === "text" && text) {
+        try {
+          const { sendWhatsAppText } = await import("@/lib/whatsapp");
+          const { readStore, writeStore } = await import("@/lib/store");
+          const store = await readStore();
+          const admins = (store.users || []).filter((u: any) => u.companyId === COMPANY_ID && ["Admin", "ProcessingLead"].includes(u.role));
+          for (const admin of admins.slice(0, 3)) {
+            store.notifications = store.notifications || [];
+            store.notifications.unshift({
+              id: `NTF-UNK-${Date.now()}-${admin.id}`,
+              companyId: COMPANY_ID,
+              userId: admin.id,
+              type: "ai_alert",
+              message: `📱 Unknown number +${from} sent: "${text.slice(0, 80)}" — Check Inbox to create a case`,
+              read: false,
+              createdAt: new Date().toISOString()
+            });
+          }
+          await writeStore(store);
+          await sendWhatsAppText(from, `Hello! Thank you for contacting Newton Immigration. 🍁\n\nਸਤਿ ਸ੍ਰੀ ਅਕਾਲ! ਨਿਊਟਨ ਇਮੀਗ੍ਰੇਸ਼ਨ ਵਿੱਚ ਤੁਹਾਡਾ ਸੁਆਗਤ ਹੈ।\n\nWe received your message. Our team will contact you shortly.\n\nPlease share:\n• Your full name / ਤੁਹਾਡਾ ਪੂਰਾ ਨਾਮ\n• Service needed / ਕਿਹੜੀ ਸੇਵਾ ਚਾਹੀਦੀ ਹੈ\n\n— Newton Immigration Team 🍁`);
+          console.log(`📱 Unknown number ${from} — notified staff and sent auto-reply`);
+        } catch(e) { console.error("Unknown number handler error:", e); }
+      }
+
       // Handle text messages — intake flow or general message notification
       // Also handle images/documents during intake (send next question after saving doc)
       if (msgType === "image" || msgType === "document") {
