@@ -60,6 +60,24 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       }
     }
 
+    if (!folderId && process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID) {
+      try {
+        const { createCaseDriveStructure } = await import("@/lib/google-drive");
+        const structure = await createCaseDriveStructure(
+          process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID,
+          `${clientName} - ${formType}`
+        );
+        folderId = structure.subfolders.applicationForms.id;
+        await updateCaseLinks(companyId, params.id, {
+          docsUploadLink: structure.subfolders.clientDocuments.webViewLink,
+          applicationFormsLink: structure.subfolders.applicationForms.webViewLink,
+          submittedFolderLink: structure.subfolders.submitted.webViewLink,
+          correspondenceFolderLink: structure.subfolders.correspondence.webViewLink,
+        });
+        console.log(`📁 Auto-created Drive folders for ${clientName}`);
+      } catch(e) { console.error("Auto Drive folder creation failed:", e); }
+    }
+
     if (!folderId) {
       errors.push("no Drive folder — open case and set up Drive folders first");
     } else {
