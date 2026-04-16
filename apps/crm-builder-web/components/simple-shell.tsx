@@ -273,7 +273,7 @@ const APPLICATION_TYPES: string[] = [
   "Other"
 ];
 
-const NON_PROCESSING_APPLICATION_TYPES = new Set(["PR Consultation", "Not for Processing"]);
+const NON_PROCESSING_APPLICATION_TYPES = new Set(["PR Consultation", "Not for Processing", "College Change"]);
 
 const PROCESSING_ASSIGNEE_FALLBACK: string[] = [
   "Unassigned",
