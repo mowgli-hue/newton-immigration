@@ -479,8 +479,9 @@ Reply ONLY with JSON: {"name": "full name or empty", "serviceType": "Work Permit
                         createdAt: new Date().toISOString()
                       });
                     }
-                    await sendWhatsAppText(from, `Hello ${firstName}! Thank you for contacting us. 🙏\n\nWe have forwarded your message to our team and someone will get back to you shortly.\n\nਸਾਡੀ ਟੀਮ ਜਲਦੀ ਤੁਹਾਡੇ ਨਾਲ ਸੰਪਰਕ ਕਰੇਗੀ।\n\n— Newton Immigration Team 🍁`);
-                    console.log(`❓ ${extracted.name} (+${from}) — not found anywhere, staff notified`);
+                    // Collect their query details before notifying team
+                    await sendWhatsAppText(from, `Hello ${firstName}! Thank you for contacting Newton Immigration. 🍁\n\nTo help our team assist you better, please share:\n\n1️⃣ Your full name / ਪੂਰਾ ਨਾਮ\n2️⃣ Your application/UCI number (if you have it)\n3️⃣ What is your query about? / ਤੁਹਾਡਾ ਸਵਾਲ ਕੀ ਹੈ?\n\nOur team will get back to you shortly! 🙏\n\n— Newton Immigration Team 🍁`);
+                    console.log(`❓ ${extracted.name} (+${from}) — not found anywhere, asking for more details`);
                   }
                   await writeStore(store);
                   } // end else (not found in existing cases)
