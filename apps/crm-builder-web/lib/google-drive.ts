@@ -377,7 +377,7 @@ export async function appendToAllCasesSheet(caseData: {
       caseData.amountPaid ? `$${caseData.amountPaid}` : "",
     ]];
     const res = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${ALL_CASES_SHEET_ID}/values/All Cases!A:J:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${ALL_CASES_SHEET_ID}/values/Client Sheet!A:J:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
       {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
