@@ -433,24 +433,56 @@ Reply ONLY with JSON: {"name": "full name or empty", "serviceType": "Work Permit
                     await writeStore(store);
                     console.log(`✅ Linked ${extracted.name} to ${existingCase.id}`);
                   } else {
-                  // Not found in existing cases — notify staff to check manually
+                  // Not found in active cases — check submitted_apps_lookup by name
+                  const { Pool } = await import("pg");
+                  const pool2 = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+                  const nameSearch = (extracted.name || "").trim();
+                  let submittedResult = null;
+                  if (nameSearch) {
+                    const dbRes = await pool2.query(
+                      `SELECT * FROM submitted_apps_lookup WHERE LOWER(name) ILIKE $1 ORDER BY updated_at DESC LIMIT 1`,
+                      [`%${nameSearch.toLowerCase()}%`]
+                    );
+                    if (dbRes.rows.length > 0) submittedResult = dbRes.rows[0];
+                  }
+
+                  const firstName = (extracted.name || "").split(" ")[0] || "there";
                   const admins = (store.users || []).filter((u: any) => u.companyId === COMPANY_ID && ["Admin", "ProcessingLead"].includes(u.role));
-                  for (const admin of admins.slice(0, 3)) {
-                    store.notifications = store.notifications || [];
-                    store.notifications.unshift({
-                      id: `NTF-UNK-${Date.now()}-${admin.id}`,
-                      companyId: COMPANY_ID,
-                      userId: admin.id,
-                      type: "ai_alert",
-                      message: `❓ Unknown client +${from.slice(-10)} says their name is "${extracted.name || text.slice(0, 30)}" — couldn't find their file. Please check manually.`,
-                      read: false,
-                      createdAt: new Date().toISOString()
-                    });
+
+                  if (submittedResult) {
+                    // Found in submitted apps — notify staff with result info
+                    for (const admin of admins.slice(0, 3)) {
+                      store.notifications = store.notifications || [];
+                      store.notifications.unshift({
+                        id: `NTF-SUB-${Date.now()}-${admin.id}`,
+                        companyId: COMPANY_ID,
+                        userId: admin.id,
+                        type: "ai_alert",
+                        message: `📱 ${extracted.name} (+${from.slice(-10)}) asking about their file — Found in submitted: ${submittedResult.app_type} (${submittedResult.app_num}) submitted ${submittedResult.submission_date} — Result: ${submittedResult.result || "pending"}. Please follow up.`,
+                        read: false,
+                        createdAt: new Date().toISOString()
+                      });
+                    }
+                    await sendWhatsAppText(from, `Hello ${firstName}! 👋\n\nThank you for reaching out. We have located your file and our team has been notified.\n\nA consultant will get back to you shortly with an update.\n\nਸਾਡੀ ਟੀਮ ਜਲਦੀ ਤੁਹਾਡੇ ਨਾਲ ਸੰਪਰਕ ਕਰੇਗੀ। 🙏\n\n— Newton Immigration Team 🍁`);
+                    console.log(`✅ Found ${extracted.name} in submitted apps — staff notified with result`);
+                  } else {
+                    // Truly not found — notify staff to check manually
+                    for (const admin of admins.slice(0, 3)) {
+                      store.notifications = store.notifications || [];
+                      store.notifications.unshift({
+                        id: `NTF-UNK-${Date.now()}-${admin.id}`,
+                        companyId: COMPANY_ID,
+                        userId: admin.id,
+                        type: "ai_alert",
+                        message: `❓ ${extracted.name || "Unknown"} (+${from.slice(-10)}) — not found in any file. Query: "${text.slice(0, 60)}". Please check manually.`,
+                        read: false,
+                        createdAt: new Date().toISOString()
+                      });
+                    }
+                    await sendWhatsAppText(from, `Hello ${firstName}! Thank you for contacting us. 🙏\n\nWe have forwarded your message to our team and someone will get back to you shortly.\n\nਸਾਡੀ ਟੀਮ ਜਲਦੀ ਤੁਹਾਡੇ ਨਾਲ ਸੰਪਰਕ ਕਰੇਗੀ।\n\n— Newton Immigration Team 🍁`);
+                    console.log(`❓ ${extracted.name} (+${from}) — not found anywhere, staff notified`);
                   }
                   await writeStore(store);
-                  const firstName = (extracted.name || "").split(" ")[0] || "there";
-                  await sendWhatsAppText(from, `Thank you ${firstName}! We have forwarded your message to our team and someone will get back to you shortly.\n\nਸਾਡੀ ਟੀਮ ਜਲਦੀ ਤੁਹਾਡੇ ਨਾਲ ਸੰਪਰਕ ਕਰੇਗੀ। 🙏\n\n— Newton Immigration Team 🍁`);
-                  console.log(`❓ Unknown client ${extracted.name} (+${from}) — not found in cases, staff notified`);
                   } // end else (not found in existing cases)
                 }
               }
