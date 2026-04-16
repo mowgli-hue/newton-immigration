@@ -365,16 +365,16 @@ export async function appendToAllCasesSheet(caseData: {
     const token = await getSheetsAccessToken();
     const today = new Date().toISOString().split('T')[0];
     const values = [[
-      today,
-      caseData.caseId,
       caseData.name,
-      caseData.phone,
+      "'" + String(caseData.phone || "").replace(/\D/g, ""),
       caseData.formType,
       caseData.permitExpiry || "",
       caseData.uci || "",
-      caseData.isUrgent ? "🔴 Urgent" : "",
+      caseData.isUrgent ? "Urgent" : "",
       "", // Results
-      caseData.amountPaid ? `$${caseData.amountPaid}` : "",
+      caseData.amountPaid ? String(caseData.amountPaid) : "",
+      caseData.caseId,
+      today,
     ]];
     const res = await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${ALL_CASES_SHEET_ID}/values/Client Sheet!A:J:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
