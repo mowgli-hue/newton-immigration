@@ -296,7 +296,7 @@ async function getSheetsAccessToken(): Promise<string> {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth2:grant-type:jwt-bearer",
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
       assertion,
     }).toString(),
   });
@@ -314,17 +314,18 @@ export async function appendToSubmittedSheet(row: {
 }): Promise<void> {
   try {
     const token = await getSheetsAccessToken();
-    // Append a new row: Name | Application Type | Contact Number | Application Number | Submission Date
+    // Append a new row: Date | Name | Application Type | Phone | App Number | Assigned To | Amount Paid | Status
+    const today = new Date().toLocaleDateString("en-CA");
     const values = [[
+      today,
       row.name,
       row.appType,
       row.phone,
       row.appNumber,
       row.submissionDate,
       "", // Submission Shared
-      "", // WP Extension
-      "", // Request Letter
-      "", // Result Shared
+      "", // Result
+      "", // Notes
     ]];
     const res = await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${SUBMITTED_SHEET_ID}/values/Sheet1!A:I:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
