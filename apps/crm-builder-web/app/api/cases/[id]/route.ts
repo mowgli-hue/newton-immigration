@@ -125,6 +125,24 @@ export async function PATCH(
         processingStatus: String(updated.processingStatus || "")
       }
     });
+    // Notify when case is reassigned
+    if (assignedTo && assignedTo !== (currentCase as any).assignedTo) {
+      try {
+        const { listUsers, addNotification } = await import("@/lib/store");
+        const allUsers = await listUsers(user.companyId);
+        const assignedUser = allUsers.find(u => u.name === assignedTo);
+        if (assignedUser && assignedUser.id !== user.id) {
+          await addNotification({
+            companyId: user.companyId,
+            userId: assignedUser.id,
+            type: "ai_alert",
+            message: `📌 You have been assigned to ${updated.client} (${updated.id} — ${updated.formType}) by ${user.name}`,
+            caseId: updated.id,
+          } as any);
+        }
+      } catch(e) { console.error("Assignment notification failed:", e); }
+    }
+
     // Sync to Under Review sheet (non-fatal)
     syncCaseToUnderReviewSheet({
       client: updated.client,
