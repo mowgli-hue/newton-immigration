@@ -1,4 +1,5 @@
 "use client" // v2.0.1;
+import { AiAssistantPanel } from "@/components/ai-assistant-panel";
 
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import UnderReviewPanel from "@/components/under-review-panel";
@@ -5534,7 +5535,10 @@ We will notify you as soon as we receive a decision. This usually takes a few we
                             {tab.id === "documents" && documents.filter(d=>d.caseId===selectedCase.id).length > 0 && (
                               <span className="rounded-full bg-blue-100 px-1.5 text-[9px] font-bold text-blue-700">{documents.filter(d=>d.caseId===selectedCase.id).length}</span>
                             )}
-                            {tab.id === "notes" && (caseNotes[selectedCase.id]||[]).length > 0 && (
+                            {tab.id === "ai" && (
+                  <AiAssistantPanel caseId={selectedCase.id} caseItem={selectedCase} />
+                )}
+                {tab.id === "notes" && (caseNotes[selectedCase.id]||[]).length > 0 && (
                               <span className="rounded-full bg-amber-100 px-1.5 text-[9px] font-bold text-amber-700">{(caseNotes[selectedCase.id]||[]).length}</span>
                             )}
                           </button>
