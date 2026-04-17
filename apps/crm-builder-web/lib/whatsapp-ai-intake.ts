@@ -413,6 +413,50 @@ async function completeIntake(session: IntakeSession): Promise<void> {
     clearSession(session.phone);
     console.log(`✅ WhatsApp intake complete for case ${session.caseId}`);
 
+    // Save intake answers as PDF in Drive
+    try {
+      const appUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "https://junglecrm-builder-web-production-d358.up.railway.app";
+      
+      // Generate forms PDF
+      fetch(`${appUrl}/api/cases/${session.caseId}/generate-forms`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ systemToken: process.env.AUTH_RECOVERY_TOKEN || "newton-recovery-2024" })
+      }).catch(e => console.error("Auto PDF failed:", e));
+
+      // Save intake answers as a text PDF in Drive
+      const answersText = Object.entries(session.answers)
+        .filter(([k]) => k.startsWith("q") && !isNaN(Number(k.slice(1))))
+        .sort(([a], [b]) => Number(a.slice(1)) - Number(b.slice(1)))
+        .map(([k, v], i) => `Q${i+1}: ${session.questions[i] || k}
+A: ${v}`)
+        .join("
+
+");
+
+      // Upload answers to Drive as text file
+      const { uploadFileToDriveFolder, extractDriveFolderId } = await import("@/lib/google-drive");
+      const { getCase } = await import("@/lib/store");
+      const caseItem2 = await getCase(session.companyId, session.caseId);
+      const folderId = extractDriveFolderId(caseItem2?.docsUploadLink || "");
+      if (folderId && answersText) {
+        const answersBuffer = Buffer.from(`WHATSAPP INTAKE ANSWERS
+Case: ${session.caseId}
+Client: ${session.clientName}
+Form: ${session.formType}
+Date: ${new Date().toLocaleDateString("en-CA", {timeZone: "America/Vancouver"})}
+
+${answersText}`, "utf-8");
+        await uploadFileToDriveFolder({
+          folderId,
+          fileName: `${session.clientName} - Intake Answers.txt`,
+          fileBuffer: answersBuffer,
+          mimeType: "text/plain"
+        });
+        console.log(`📄 Intake answers saved to Drive for ${session.clientName}`);
+      }
+    } catch(e) { console.error("Intake PDF save failed:", e); }
+
     // Auto-generate AI notes
     try {
       const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_BASE_URL || "https://junglecrm-builder-web-production-d358.up.railway.app";
