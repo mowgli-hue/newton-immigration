@@ -110,123 +110,136 @@ export async function POST(req: NextRequest) {
           try {
             const media = await downloadWaMedia(mediaId);
             if (media) {
-              // Upload to Drive or S3 as fallback
-              const { uploadFileToDriveFolder, extractDriveFolderId } = await import("@/lib/google-drive");
               const { putObjectToS3, buildS3ObjectKey, toS3StoredLink, isS3StorageEnabled } = await import("@/lib/object-storage");
+              const { uploadFileToDriveFolder, extractDriveFolderId, createCaseDriveStructure } = await import("@/lib/google-drive");
+              const { addDocument, updateCasePgwpIntake, updateCaseLinks } = await import("@/lib/store");
               const caseItem = await getCase(COMPANY_ID, matched.id);
-              let driveFolderId = extractDriveFolderId(caseItem?.docsUploadLink || "");
-              // Auto-create Drive folder if none exists
-              if (!driveFolderId) {
-                try {
-                  const { createCaseDriveStructure } = await import("@/lib/google-drive");
-                  const { updateCaseLinks } = await import("@/lib/store");
-                  const rootFolderId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID || "";
-                  if (rootFolderId) {
-                    const structure = await createCaseDriveStructure(rootFolderId, `${matched.client} - ${matched.formType}`);
-                    driveFolderId = structure.subfolders.clientDocuments.id;
-                    await updateCaseLinks(matched.companyId || COMPANY_ID, matched.id, {
-                      docsUploadLink: structure.subfolders.clientDocuments.webViewLink,
-                      applicationFormsLink: structure.subfolders.applicationForms.webViewLink,
-                      submittedFolderLink: structure.subfolders.submitted.webViewLink,
-                      correspondenceFolderLink: structure.subfolders.correspondence.webViewLink,
-                    });
-                    console.log(`📁 Auto-created Drive folders for ${matched.client}`);
-                  }
-                } catch (e) {
-                  console.error("Auto Drive folder creation failed:", e);
-                }
-              }
-              let savedLink = "";
-              if (driveFolderId) {
-                const saveFileName = originalFilename || `WA_${matched.client}_${media.filename}`;
-                try {
-                  const driveRes = await uploadFileToDriveFolder({
-                    folderId: driveFolderId,
-                    fileName: saveFileName,
-                    fileBuffer: media.buffer,
-                    mimeType: media.mimeType
-                  });
-                  savedLink = driveRes.webViewLink || "";
-                  console.log(`✅ Saved to Drive: ${saveFileName}`);
-                } catch (e) {
-                  console.error("Drive upload failed, trying S3:", e);
-                }
-              }
-              // S3 fallback — always save regardless of Drive
-              if (isS3StorageEnabled()) {
-                try {
-                  const s3Key = buildS3ObjectKey({ companyId: COMPANY_ID, caseId: matched.id, fileName: originalFilename || media.filename });
-                  await putObjectToS3({ key: s3Key, body: media.buffer, contentType: media.mimeType });
-                  if (!savedLink) savedLink = toS3StoredLink(s3Key);
-                  console.log(`✅ Saved to S3: ${s3Key}`);
-                } catch (e) {
-                  console.error("S3 upload failed:", e);
-                }
-              }
-              // AI classify the document
-              let docCategory = "client";
-              let docName = originalFilename || mediaCaption || media.filename;
-              let properFileName = docName;
+              const clientNameClean = String(matched.client || "").replace(/[^a-zA-Z0-9 ]/g, "").trim();
+              const ext = (originalFilename || media.filename || "").includes(".")
+                ? (originalFilename || media.filename).split(".").pop()
+                : media.mimeType.includes("pdf") ? "pdf" : "jpg";
 
+              // ── STEP 1: SAVE TO S3 IMMEDIATELY ──────────────────────────
+              let s3Link = "";
+              const timestamp = Date.now();
+              const s3Key = buildS3ObjectKey({ 
+                companyId: COMPANY_ID, 
+                caseId: matched.id, 
+                fileName: `${timestamp}-${originalFilename || media.filename}` 
+              });
               try {
-                const classifyRes = await fetch("https://api.anthropic.com/v1/messages", {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                    "x-api-key": process.env.ANTHROPIC_API_KEY || "",
-                    "anthropic-version": "2023-06-01"
-                  },
-                  body: JSON.stringify({
-                    model: "claude-haiku-4-5-20251001",
-                    max_tokens: 150,
-                    messages: [{
-                      role: "user",
-                      content: `Classify this document for an immigration application.
-Filename: "${docName}"
-File type: ${media.mimeType}
-Client name: ${matched.client}
-Application type: ${matched.formType}
+                await putObjectToS3({ key: s3Key, body: media.buffer, contentType: media.mimeType });
+                s3Link = toS3StoredLink(s3Key);
+                console.log(`✅ S3 saved: ${s3Key}`);
+              } catch(e) { console.error("S3 save failed:", e); }
 
-Reply with ONLY a JSON object:
-{"category": "passport|study_permit|work_permit|completion_letter|transcripts|language_test|photo|bank_statement|job_offer|medical|police_clearance|other", "label": "Short document label e.g. Passport, Study Permit, Completion Letter"}`
-                    }]
-                  })
+              // ── STEP 2: AI CLASSIFY & EXTRACT DATA ──────────────────────
+              let docCategory = "client";
+              let properFileName = `${clientNameClean} - Document.${ext}`;
+              const isImage = media.mimeType.includes("image");
+              const isPdf = media.mimeType.includes("pdf");
+              
+              try {
+                const scanContent: any[] = [];
+                if (isImage || isPdf) {
+                  scanContent.push({ type: "image", source: { type: "base64", media_type: media.mimeType as any, data: media.buffer.toString("base64") } });
+                }
+                scanContent.push({ type: "text", text: `Scan this immigration document for client ${matched.client} (${matched.formType}).
+Reply ONLY with JSON: {
+  "category": "passport|study_permit|work_permit|completion_letter|transcripts|language_test|photo|bank_statement|job_offer|medical|police_clearance|ielts|lmia|eap|copr|other",
+  "label": "Short label e.g. Passport, Study Permit, Completion Letter",
+  "expiryDate": "YYYY-MM-DD or empty",
+  "documentNumber": "number or empty",
+  "firstName": "or empty",
+  "lastName": "or empty",
+  "dateOfBirth": "YYYY-MM-DD or empty",
+  "gender": "Male/Female or empty",
+  "issuingCountry": "or empty",
+  "issueDate": "YYYY-MM-DD or empty",
+  "programOrField": "or empty",
+  "institutionOrEmployer": "or empty"
+}` });
+
+                const classRes = await fetch("https://api.anthropic.com/v1/messages", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY || "", "anthropic-version": "2023-06-01" },
+                  body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 400, messages: [{ role: "user", content: scanContent }] })
                 });
-                if (classifyRes.ok) {
-                  const classifyData = await classifyRes.json() as any;
-                  const raw = classifyData.content?.[0]?.text || "{}";
-                  const parsed = JSON.parse(raw.replace(/```json|```/g, "").trim());
+
+                if (classRes.ok) {
+                  const classData = await classRes.json() as any;
+                  const parsed = JSON.parse(classData.content?.[0]?.text?.replace(/```json|```/g,"").trim() || "{}");
+                  
                   if (parsed.category) docCategory = parsed.category;
+                  
+                  // Build proper filename: ClientName - DocumentType (exp DATE).ext
                   if (parsed.label) {
-                    // Rename file: [Client Name]- [Label].ext
-                    const clientNameClean = String(matched.client || "").replace(/[^a-zA-Z0-9 ]/g, "").trim();
-                    const ext = docName.includes(".") ? docName.split(".").pop() : media.mimeType.includes("pdf") ? "pdf" : "jpg";
-                    // Better naming: ClientName - DocumentType - Date.ext
-                    const dateStr = new Date().toLocaleDateString("en-CA", {timeZone: "America/Vancouver"});
-                    properFileName = `${clientNameClean} - ${parsed.label}.${ext}`;
-                    console.log(`🤖 AI classified: ${docName} → ${properFileName} (${docCategory})`);
+                    const expiryPart = parsed.expiryDate ? ` (exp ${parsed.expiryDate})` : "";
+                    properFileName = `${clientNameClean} - ${parsed.label}${expiryPart}.${ext}`;
+                  }
+
+                  // Save extracted fields to pgwpIntake
+                  const fields: Record<string, string> = {};
+                  if (parsed.firstName) fields.firstName = parsed.firstName;
+                  if (parsed.lastName) fields.lastName = parsed.lastName;
+                  if (parsed.dateOfBirth) fields.dateOfBirth = parsed.dateOfBirth;
+                  if (parsed.gender) fields.sex = parsed.gender;
+                  if (parsed.issuingCountry) fields.citizenship = parsed.issuingCountry;
+                  if (parsed.documentNumber) {
+                    if (parsed.category === "passport") fields.passportNumber = parsed.documentNumber;
+                    else fields.permitDetails = parsed.documentNumber;
+                  }
+                  if (parsed.expiryDate) {
+                    if (parsed.category === "passport") fields.passportExpiryDate = parsed.expiryDate;
+                    else if (parsed.category === "study_permit") fields.studyPermitExpiryDate = parsed.expiryDate;
+                    else if (parsed.category === "work_permit") fields.workPermitExpiryDate = parsed.expiryDate;
+                  }
+                  if (parsed.issueDate && parsed.category === "passport") fields.passportIssueDate = parsed.issueDate;
+                  if (parsed.programOrField) fields.programOfStudy = parsed.programOrField;
+                  if (parsed.institutionOrEmployer) fields.institutionName = parsed.institutionOrEmployer;
+
+                  if (Object.keys(fields).length > 0) {
+                    await updateCasePgwpIntake(COMPANY_ID, matched.id, fields as any);
+                    console.log(`📋 Extracted ${Object.keys(fields).length} fields from ${parsed.label} for ${matched.client}`);
                   }
                 }
-              } catch (e) {
-                console.error("AI doc classification failed (non-fatal):", e);
-              }
+              } catch(e) { console.error("AI scan failed (non-fatal):", e); }
 
-              // Re-upload with proper filename to Drive
+              // ── STEP 3: SAVE TO DRIVE WITH PROPER NAME ──────────────────
               let driveLink = "";
-              if (driveFolderId && properFileName !== docName) {
-                try {
-                  const driveResult = await uploadFileToDriveFolder({
+              try {
+                let driveFolderId = extractDriveFolderId(caseItem?.docsUploadLink || "");
+                
+                // Auto-create Drive folders if missing
+                if (!driveFolderId && process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID) {
+                  const structure = await createCaseDriveStructure(
+                    process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID,
+                    `${matched.client} - ${matched.formType}`
+                  );
+                  driveFolderId = structure.subfolders.clientDocuments.id;
+                  await updateCaseLinks(COMPANY_ID, matched.id, {
+                    docsUploadLink: structure.subfolders.clientDocuments.webViewLink,
+                    applicationFormsLink: structure.subfolders.applicationForms.webViewLink,
+                    submittedFolderLink: structure.subfolders.submitted.webViewLink,
+                    correspondenceFolderLink: structure.subfolders.correspondence.webViewLink,
+                  });
+                  console.log(`📁 Auto-created Drive folders for ${matched.client}`);
+                }
+
+                if (driveFolderId) {
+                  const driveRes = await uploadFileToDriveFolder({
                     folderId: driveFolderId,
                     fileName: properFileName,
                     fileBuffer: media.buffer,
                     mimeType: media.mimeType
                   });
-                  driveLink = driveResult.webViewLink || "";
-                } catch { /* already uploaded above */ }
-              }
+                  driveLink = driveRes.webViewLink || "";
+                  console.log(`✅ Drive saved: ${properFileName}`);
+                }
+              } catch(e) { console.error("Drive save failed (non-fatal):", e); }
 
-              // Also save as document in case
-              const { addDocument, updateCasePgwpIntake } = await import("@/lib/store");
+              // ── STEP 4: SAVE DOCUMENT RECORD IN CRM ─────────────────────
+              const finalLink = driveLink || s3Link || `wa://media/${mediaId}`;
               await addDocument({
                 companyId: COMPANY_ID,
                 caseId: matched.id,
@@ -234,262 +247,40 @@ Reply with ONLY a JSON object:
                 category: docCategory,
                 uploadedBy: matched.client || "Client (WhatsApp)",
                 status: "received",
-                link: driveLink || `wa://media/${mediaId}`
+                link: finalLink
               });
 
-              // Extract data from permit documents (study permit / work permit)
-              if ((docCategory === "study_permit" || docCategory === "work_permit") && 
-                  (media.mimeType.includes("image") || media.mimeType.includes("pdf"))) {
-                try {
-                  const imageBase64 = media.buffer.toString("base64");
-                  const extractRes = await fetch("https://api.anthropic.com/v1/messages", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY || "", "anthropic-version": "2023-06-01" },
-                    body: JSON.stringify({
-                      model: "claude-haiku-4-5-20251001",
-                      max_tokens: 300,
-                      messages: [{ role: "user", content: [
-                        { type: "image", source: { type: "base64", media_type: media.mimeType as any, data: imageBase64 } },
-                        { type: "text", text: 'Extract permit data. Reply ONLY with JSON: {"permitNumber": "", "expiryDate": "YYYY-MM-DD", "issueDate": "YYYY-MM-DD", "permitType": "", "gender": "", "dateOfBirth": "YYYY-MM-DD", "firstName": "", "lastName": ""}' }
-                      ]}]
-                    })
-                  });
-                  if (extractRes.ok) {
-                    const data = await extractRes.json() as any;
-                    const permit = JSON.parse(data.content?.[0]?.text?.replace(/```json|```/g,"").trim() || "{}");
-                    if (permit.permitNumber) {
-                      await updateCasePgwpIntake(COMPANY_ID, matched.id, {
-                        permitDetails: permit.permitNumber,
-                        studyPermitExpiryDate: permit.expiryDate,
-                        sex: permit.gender,
-                        dateOfBirth: permit.dateOfBirth || undefined,
-                        firstName: permit.firstName || undefined,
-                        lastName: permit.lastName || undefined,
-                      } as any);
-                      console.log(`📋 Permit data extracted for ${matched.client}: ${permit.permitNumber}`);
-                    }
-                  }
-                } catch(e) { console.error("Permit extraction failed:", e); }
-              }
+              // ── STEP 5: SEND SMART ACKNOWLEDGMENT ───────────────────────
+              const { sendWhatsAppText } = await import("@/lib/whatsapp");
+              const firstName = String(matched.client || "").split(" ")[0];
+              const docLabel = properFileName.split(" - ")[1]?.replace(/\.[^.]+$/, "").replace(/ \(exp.*\)/, "") || "document";
+              let ackMsg = `✅ ${firstName}, I've saved your *${docLabel}* to your file.`;
+              if (docCategory === "passport") ackMsg += `\n\n📘 Passport details have been recorded automatically.`;
+              else if (docCategory === "study_permit" || docCategory === "work_permit") ackMsg += `\n\n📋 Permit details have been noted.`;
+              else if (docCategory === "completion_letter") ackMsg += `\n\n🎓 Completion letter received!`;
+              else if (docCategory === "transcripts") ackMsg += `\n\n📚 Transcripts received!`;
+              else if (docCategory === "language_test" || docCategory === "ielts") ackMsg += `\n\n📝 Language test result saved!`;
+              ackMsg += `\n\n— Newton Immigration Team 🍁`;
+              await sendWhatsAppText(from, ackMsg);
 
-              // If passport detected — extract data and auto-fill intake fields
-              if (docCategory === "passport" && (media.mimeType.includes("image") || media.mimeType.includes("pdf"))) {
-                try {
-                  const imageBase64 = media.buffer.toString("base64");
-                  const extractRes = await fetch("https://api.anthropic.com/v1/messages", {
+              // ── STEP 6: AUTO-GENERATE PDF IF PASSPORT RECEIVED ──────────
+              if (docCategory === "passport") {
+                const baseUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "";
+                if (baseUrl) {
+                  fetch(`${baseUrl}/api/cases/${matched.id}/generate-forms`, {
                     method: "POST",
-                    headers: {
-        "Content-Type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_API_KEY || "",
-        "anthropic-version": "2023-06-01"
-      },
-                    body: JSON.stringify({
-                      model: "claude-haiku-4-5-20251001",
-                      max_tokens: 400,
-                      messages: [{
-                        role: "user",
-                        content: [
-                          { type: "image", source: { type: "base64", media_type: media.mimeType as any, data: imageBase64 } },
-                          { type: "text", text: `Extract passport data from this image. Reply ONLY with valid JSON (no markdown): {"firstName": "", "lastName": "", "fullName": "", "dateOfBirth": "YYYY-MM-DD", "passportNumber": "", "passportIssueDate": "YYYY-MM-DD", "passportExpiryDate": "YYYY-MM-DD", "nationality": "", "placeOfBirth": "", "gender": ""}` }
-                        ]
-                      }]
-                    })
-                  });
-                  if (extractRes.ok) {
-                    const extractData = await extractRes.json() as any;
-                    const raw = extractData.content?.[0]?.text || "{}";
-                    const passport = JSON.parse(raw.replace(/\`\`\`json|\`\`\`/g, "").trim());
-                    if (passport.passportNumber) {
-                      await updateCasePgwpIntake(COMPANY_ID, matched.id, {
-                        firstName: passport.firstName,
-                        lastName: passport.lastName,
-                        fullName: passport.fullName,
-                        dateOfBirth: passport.dateOfBirth,
-                        passportNumber: passport.passportNumber,
-                        passportIssueDate: passport.passportIssueDate,
-                        passportExpiryDate: passport.passportExpiryDate,
-                        citizenship: passport.nationality,
-                        placeOfBirthCity: passport.placeOfBirth,
-                      } as any);
-                      console.log(`📘 Passport data extracted for ${matched.client}: ${passport.passportNumber}`);
-              const baseUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "";
-              if (baseUrl) {
-                fetch(`${baseUrl}/api/cases/${matched.id}/generate-forms`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ systemToken: process.env.AUTH_RECOVERY_TOKEN || "newton-recovery-2024" })
-                }).then(r => r.json()).then(d => {
-                  console.log(`📄 Auto PDF after passport for ${matched.id}:`, d.generated);
-                }).catch(e => console.error("Auto PDF failed:", e));
-              }
-                    }
-                  }
-                } catch (e) {
-                  console.error("Passport extraction failed (non-fatal):", e);
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ systemToken: process.env.AUTH_RECOVERY_TOKEN || "newton-recovery-2024" })
+                  }).then(r => r.json()).then(d => {
+                    console.log(`📄 Auto PDF after passport for ${matched.id}:`, d.generated);
+                  }).catch(e => console.error("Auto PDF failed:", e));
                 }
               }
-
-              // Send AI-powered confirmation with context
-              const { sendWhatsAppText: sendDocReply } = await import("@/lib/whatsapp");
-              const firstName = String(matched.client || "").split(" ")[0];
-              const docLabel = properFileName.split("- ")[1]?.replace(/\.[^.]+$/, "") || "document";
-              
-              // Build smart reply based on what was extracted
-              let replyMsg = `✅ Got it ${firstName}! I've saved your *${docLabel}* to your file.`;
-              if (docCategory === "passport") replyMsg += `\n\nI've extracted your passport details automatically. 📘`;
-              else if (docCategory === "study_permit") replyMsg += `\n\nI've noted your study permit details. 📋`;
-              else if (docCategory === "work_permit") replyMsg += `\n\nI've noted your work permit details. 📋`;
-              else if (docCategory === "transcripts") replyMsg += `\n\nThank you for your transcripts! 🎓`;
-              else if (docCategory === "completion_letter") replyMsg += `\n\nCompletion letter received! ✅`;
-              else if (docCategory === "language_test") replyMsg += `\n\nLanguage test result saved! 📝`;
-              else if (docCategory === "bank_statement") replyMsg += `\n\nFinancial document received! 💰`;
-              replyMsg += `\n\n— Newton Immigration Team 🍁`;
-              await sendDocReply(from, replyMsg);
             }
-          } catch (e) {
+          } catch(e) {
             console.error("Media upload error:", (e as Error).message);
           }
         }
-      }
-
-      // Handle unknown numbers — save as lead, notify staff, auto-reply
-      if (!matched && msgType === "text" && text) {
-        try {
-          const { sendWhatsAppText } = await import("@/lib/whatsapp");
-          const { readStore, writeStore, createCase, listCases } = await import("@/lib/store");
-          const store = await readStore();
-
-          // Check if this number already has a lead
-          const allCases = await listCases(COMPANY_ID);
-          const existingLead = allCases.find((c: any) => {
-            const cp = String(c.leadPhone || "").replace(/\D/g, "");
-            const fp = String(from || "").replace(/\D/g, "");
-            return cp && fp && (cp.endsWith(fp.slice(-9)) || fp.endsWith(cp.slice(-9)));
-          });
-
-          if (!existingLead) {
-            // First message — ask for name to look up their file
-            await sendWhatsAppText(from, `Hello! Thank you for contacting Newton Immigration. 🍁\n\nਸਤਿ ਸ੍ਰੀ ਅਕਾਲ! ਨਿਊਟਨ ਇਮੀਗ੍ਰੇਸ਼ਨ ਵਿੱਚ ਤੁਹਾਡਾ ਸੁਆਗਤ ਹੈ।\n\nWe received your message. To pull up your file, could you please share your *full name*? / ਕਿਰਪਾ ਕਰਕੇ ਆਪਣਾ *ਪੂਰਾ ਨਾਮ* ਦੱਸੋ।\n\n— Newton Immigration Team 🍁`);
-            console.log(`📱 New unknown number ${from} — asked for name`);
-          } else {
-            // They replied — AI extracts name + service type and updates lead
-            try {
-              const extractRes = await fetch("https://api.anthropic.com/v1/messages", {
-                method: "POST",
-                headers: { "Content-Type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY || "", "anthropic-version": "2023-06-01" },
-                body: JSON.stringify({
-                  model: "claude-haiku-4-5-20251001",
-                  max_tokens: 200,
-                  messages: [{ role: "user", content: `Extract from this WhatsApp message:
-"${text}"
-
-Reply ONLY with JSON: {"name": "full name or empty", "serviceType": "Work Permit|Study Permit|PR|Visitor Visa|PGWP|SOWP|Sponsorship|Citizenship|Other", "notes": "brief summary of their query"}` }]
-                })
-              });
-              if (extractRes.ok) {
-                const extractData = await extractRes.json() as any;
-                const extracted = JSON.parse(extractData.content?.[0]?.text?.replace(/\`\`\`json|\`\`\`/g,"").trim() || "{}");
-                
-                if (extracted.name || extracted.serviceType) {
-                  // Search existing cases by name first
-                  const nameToFind = (extracted.name || "").toLowerCase().trim();
-                  const existingCase = nameToFind ? allCases.find((c: any) => 
-                    String(c.client || "").toLowerCase().includes(nameToFind) ||
-                    nameToFind.includes(String(c.client || "").toLowerCase().split(" ")[0])
-                  ) : null;
-
-                  if (existingCase) {
-                    // Found their case — link phone number and notify staff
-                    const { updateCaseProcessing } = await import("@/lib/store");
-                    await updateCaseProcessing(COMPANY_ID, existingCase.id, { 
-                      leadPhone: `+${from}` 
-                    } as any);
-                    
-                    const firstName = (extracted.name || "").split(" ")[0];
-                    const statusMsg = existingCase.processingStatus === "submitted" 
-                      ? `Your application has been submitted. Application number: ${(existingCase as any).applicationNumber || "pending"}.`
-                      : existingCase.processingStatus === "under_review"
-                      ? "Your application is currently under review by our team."
-                      : "Your file is currently being processed by our team.";
-                    
-                    await sendWhatsAppText(from, `Hello ${firstName}! 👋\n\nWe found your file — *${existingCase.formType}* application.\n\n${statusMsg}\n\nOur team will be in touch with any updates. If you have a specific question, please feel free to ask!\n\n— Newton Immigration Team 🍁`);
-                    
-                    // Notify assigned staff
-                    const assignedStaff = (store.users || []).find((u: any) => u.name === existingCase.assignedTo);
-                    const notifyTargets = assignedStaff ? [assignedStaff] : (store.users || []).filter((u: any) => ["Admin", "ProcessingLead"].includes(u.role));
-                    for (const target of notifyTargets.slice(0, 2)) {
-                      store.notifications = store.notifications || [];
-                      store.notifications.unshift({
-                        id: `NTF-LINK-${Date.now()}-${target.id}`,
-                        companyId: COMPANY_ID,
-                        userId: target.id,
-                        type: "ai_alert",
-                        message: `📱 ${extracted.name} (+${from.slice(-10)}) linked to ${existingCase.id} — they asked: "${text.slice(0, 60)}"`,
-                        caseId: existingCase.id,
-                        read: false,
-                        createdAt: new Date().toISOString()
-                      });
-                    }
-                    await writeStore(store);
-                    console.log(`✅ Linked ${extracted.name} to ${existingCase.id}`);
-                  } else {
-                  // Not found in active cases — check submitted_apps_lookup by name
-                  const { Pool } = await import("pg");
-                  const pool2 = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
-                  const nameSearch = (extracted.name || "").trim();
-                  let submittedResult = null;
-                  if (nameSearch) {
-                    const dbRes = await pool2.query(
-                      `SELECT * FROM submitted_apps_lookup WHERE LOWER(name) ILIKE $1 ORDER BY updated_at DESC LIMIT 1`,
-                      [`%${nameSearch.toLowerCase()}%`]
-                    );
-                    if (dbRes.rows.length > 0) submittedResult = dbRes.rows[0];
-                  }
-
-                  const firstName = (extracted.name || "").split(" ")[0] || "there";
-                  const admins = (store.users || []).filter((u: any) => u.companyId === COMPANY_ID && ["Admin", "ProcessingLead"].includes(u.role));
-
-                  if (submittedResult) {
-                    // Found in submitted apps — notify staff with result info
-                    for (const admin of admins.slice(0, 3)) {
-                      store.notifications = store.notifications || [];
-                      store.notifications.unshift({
-                        id: `NTF-SUB-${Date.now()}-${admin.id}`,
-                        companyId: COMPANY_ID,
-                        userId: admin.id,
-                        type: "ai_alert",
-                        message: `📱 ${extracted.name} (+${from.slice(-10)}) asking about their file — Found in submitted: ${submittedResult.app_type} (${submittedResult.app_num}) submitted ${submittedResult.submission_date} — Result: ${submittedResult.result || "pending"}. Please follow up.`,
-                        read: false,
-                        createdAt: new Date().toISOString()
-                      });
-                    }
-                    await sendWhatsAppText(from, `Hello ${firstName}! 👋\n\nThank you for reaching out. We have located your file and our team has been notified.\n\nA consultant will get back to you shortly with an update.\n\nਸਾਡੀ ਟੀਮ ਜਲਦੀ ਤੁਹਾਡੇ ਨਾਲ ਸੰਪਰਕ ਕਰੇਗੀ। 🙏\n\n— Newton Immigration Team 🍁`);
-                    console.log(`✅ Found ${extracted.name} in submitted apps — staff notified with result`);
-                  } else {
-                    // Truly not found — notify staff to check manually
-                    for (const admin of admins.slice(0, 3)) {
-                      store.notifications = store.notifications || [];
-                      store.notifications.unshift({
-                        id: `NTF-UNK-${Date.now()}-${admin.id}`,
-                        companyId: COMPANY_ID,
-                        userId: admin.id,
-                        type: "ai_alert",
-                        message: `❓ ${extracted.name || "Unknown"} (+${from.slice(-10)}) — not found in any file. Query: "${text.slice(0, 60)}". Please check manually.`,
-                        read: false,
-                        createdAt: new Date().toISOString()
-                      });
-                    }
-                    // Collect their query details before notifying team
-                    await sendWhatsAppText(from, `Hello ${firstName}! Thank you for contacting Newton Immigration. 🍁\n\nTo help our team assist you better, please share:\n\n1️⃣ Your full name / ਪੂਰਾ ਨਾਮ\n2️⃣ What is your query about? / ਤੁਹਾਡਾ ਸਵਾਲ ਕੀ ਹੈ?\n\nOur team will get back to you shortly! 🙏\n\n— Newton Immigration Team 🍁`);
-                    console.log(`❓ ${extracted.name} (+${from}) — not found anywhere, asking for more details`);
-                  }
-                  await writeStore(store);
-                  } // end else (not found in existing cases)
-                }
-              }
-            } catch(e) { console.error("Lead extraction failed:", e); }
-          }
-        } catch(e) { console.error("Unknown number handler error:", e); }
       }
 
       // Handle text messages — intake flow or general message notification
