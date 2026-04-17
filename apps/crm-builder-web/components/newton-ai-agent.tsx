@@ -51,6 +51,7 @@ export function NewtonAiAgent({ cases, user }: { cases: any[]; user: any }) {
     try {
       const res = await fetch("/api/newton-ai", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: userMsg,
