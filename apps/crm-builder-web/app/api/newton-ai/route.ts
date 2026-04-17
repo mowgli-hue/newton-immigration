@@ -46,7 +46,7 @@ Help with: IRCC news, case analysis, letters (LOE, cover letters, employer lette
     if (!res.ok) {
       const err = await res.text();
       console.error("Anthropic error:", err);
-      return NextResponse.json({ error: "AI service error" }, { status: 500 });
+      return NextResponse.json({ error: "AI service error", details: err }, { status: 500 });
     }
 
     const data = await res.json() as any;
