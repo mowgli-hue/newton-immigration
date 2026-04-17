@@ -428,11 +428,8 @@ async function completeIntake(session: IntakeSession): Promise<void> {
       const answersText = Object.entries(session.answers)
         .filter(([k]) => k.startsWith("q") && !isNaN(Number(k.slice(1))))
         .sort(([a], [b]) => Number(a.slice(1)) - Number(b.slice(1)))
-        .map(([k, v], i) => `Q${i+1}: ${session.questions[i] || k}
-A: ${v}`)
-        .join("
-
-");
+        .map(([k, v], i) => `Q${i+1}: ${session.questions[i] || k}\nA: ${v}`)
+        .join("\n\n");
 
       // Upload answers to Drive as text file
       const { uploadFileToDriveFolder, extractDriveFolderId } = await import("@/lib/google-drive");
