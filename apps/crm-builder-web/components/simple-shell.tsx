@@ -488,6 +488,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [inboxMessages, setInboxMessages] = useState<Array<{id:string;phone:string;message:string;direction:string;matched_case_id:string|null;matched_case_name:string|null;is_read:boolean;created_at:string}>>([]);
   const [inboxLoaded, setInboxLoaded] = useState(false);
   const [inboxShowArchived, setInboxShowArchived] = useState(false);
+  const [inboxSearch, setInboxSearch] = useState<Record<string,string>>({});
   const [aiResult, setAiResult] = useState<{caseId:string;text:string;action:string}|null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [inboxAiSuggestion, setInboxAiSuggestion] = useState<Record<string,string>>({});
@@ -7782,19 +7783,89 @@ We will notify you as soon as we receive a decision. This usually takes a few we
                       </div>
                     </div>
 
+                    {/* Search bar */}
+                    <div className="px-4 py-2 border-b border-slate-100 bg-white shrink-0">
+                      <input
+                        value={inboxSearch[phone]||""}
+                        onChange={e=>setInboxSearch(prev=>({...prev,[phone]:e.target.value}))}
+                        placeholder="🔍 Search messages..."
+                        className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs focus:outline-none focus:border-emerald-400"
+                      />
+                    </div>
+
                     {/* Messages */}
-                    <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2 bg-slate-50">
-                      {sortedMsgs.map((m,idx) => (
-                        <div key={m.id||idx} className={`flex ${m.direction==="outbound"?"justify-end":"justify-start"}`}>
-                          <div className={`max-w-[70%] rounded-2xl px-3.5 py-2.5 ${m.direction==="outbound"?"bg-emerald-600 text-white rounded-br-sm":"bg-white text-slate-900 rounded-bl-sm shadow-sm border border-slate-100"}`}>
-                            <p className="text-sm whitespace-pre-wrap break-words">{m.message}</p>
-                            <p className={`text-[10px] mt-1 ${m.direction==="outbound"?"text-emerald-200":"text-slate-400"}`}>
-                              {m.direction==="outbound"?"You":clientName} · {new Date(m.created_at).toLocaleTimeString("en-CA",{hour:"2-digit",minute:"2-digit"})}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                      {sortedMsgs.length === 0 && <p className="text-center text-xs text-slate-400 py-8">No messages yet</p>}
+                    <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1 bg-[#f0f2f5]">
+                      {(() => {
+                        const searchQ = (inboxSearch[phone]||"").toLowerCase();
+                        const filtered = searchQ ? sortedMsgs.filter(m=>m.message.toLowerCase().includes(searchQ)) : sortedMsgs;
+                        const elements: React.ReactNode[] = [];
+                        let lastDate = "";
+                        filtered.forEach((m, idx) => {
+                          // Date separator
+                          const msgDate = new Date(m.created_at);
+                          const today = new Date();
+                          const yesterday = new Date(today); yesterday.setDate(today.getDate()-1);
+                          const dateStr = msgDate.toDateString();
+                          let dateLabel = "";
+                          if (dateStr === today.toDateString()) dateLabel = "Today";
+                          else if (dateStr === yesterday.toDateString()) dateLabel = "Yesterday";
+                          else dateLabel = msgDate.toLocaleDateString("en-CA", {day:"numeric",month:"long",year:"numeric"});
+                          
+                          if (dateLabel !== lastDate) {
+                            lastDate = dateLabel;
+                            elements.push(
+                              <div key={`date-${idx}`} className="flex justify-center my-3">
+                                <span className="bg-white text-slate-500 text-[11px] font-medium px-3 py-1 rounded-full shadow-sm border border-slate-200">{dateLabel}</span>
+                              </div>
+                            );
+                          }
+
+                          // Message bubble
+                          const isOut = m.direction==="outbound";
+                          const isMedia = m.message.includes("[image received]") || m.message.includes("[document received]");
+                          const isImage = m.message.includes("[image received]");
+                          const isDoc = m.message.includes("[document received]");
+                          const isAudio = m.message.includes("[audio received]");
+                          const time = new Date(m.created_at).toLocaleTimeString("en-CA",{hour:"2-digit",minute:"2-digit"});
+                          
+                          elements.push(
+                            <div key={m.id||idx} className={`flex ${isOut?"justify-end":"justify-start"} mb-1`}>
+                              <div className={`max-w-[72%] ${isOut?"bg-[#d9fdd3]":"bg-white"} rounded-2xl px-3.5 py-2 shadow-sm ${isOut?"rounded-br-sm":"rounded-bl-sm"} ${searchQ && m.message.toLowerCase().includes(searchQ) ? "ring-2 ring-yellow-400" : ""}`}>
+                                {isImage && (
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-2xl">🖼️</span>
+                                    <span className="text-sm text-slate-600 font-medium">Image</span>
+                                  </div>
+                                )}
+                                {isDoc && (
+                                  <div className="flex items-center gap-2 mb-1 bg-slate-50 rounded-xl p-2 border border-slate-200">
+                                    <span className="text-2xl">📄</span>
+                                    <div>
+                                      <p className="text-sm font-semibold text-slate-800">Document</p>
+                                      <p className="text-[10px] text-slate-500">Tap to open in case docs</p>
+                                    </div>
+                                  </div>
+                                )}
+                                {isAudio && (
+                                  <div className="flex items-center gap-2 bg-slate-50 rounded-xl p-2 border border-slate-200">
+                                    <span className="text-xl">🎵</span>
+                                    <span className="text-sm text-slate-600">Voice message</span>
+                                  </div>
+                                )}
+                                {!isMedia && <p className="text-sm text-slate-900 whitespace-pre-wrap break-words leading-relaxed">{m.message}</p>}
+                                <div className={`flex items-center justify-end gap-1 mt-0.5`}>
+                                  <span className="text-[10px] text-slate-400">{time}</span>
+                                  {isOut && <span className="text-[11px] text-blue-500">✓✓</span>}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        });
+                        if (filtered.length === 0) {
+                          elements.push(<p key="empty" className="text-center text-xs text-slate-400 py-8">{searchQ ? "No messages found" : "No messages yet"}</p>);
+                        }
+                        return elements;
+                      })()}
                     </div>
 
                     {/* Reply box */}
