@@ -141,8 +141,13 @@ export async function POST(req: NextRequest) {
               
               try {
                 const scanContent: any[] = [];
-                if (isImage || isPdf) {
-                  scanContent.push({ type: "image", source: { type: "base64", media_type: media.mimeType as any, data: media.buffer.toString("base64") } });
+                if (isImage) {
+                  // Images go as image type
+                  const safeType = media.mimeType.includes("png") ? "image/png" : media.mimeType.includes("gif") ? "image/gif" : media.mimeType.includes("webp") ? "image/webp" : "image/jpeg";
+                  scanContent.push({ type: "image", source: { type: "base64", media_type: safeType, data: media.buffer.toString("base64") } });
+                } else if (isPdf) {
+                  // PDFs go as document type
+                  scanContent.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: media.buffer.toString("base64") } });
                 }
                 scanContent.push({ type: "text", text: `Scan this immigration document for client ${matched.client} (${matched.formType}).
 Reply ONLY with JSON: {
