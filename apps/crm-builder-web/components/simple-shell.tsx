@@ -488,6 +488,7 @@ export function SimpleShell({ expectedSlug }: SimpleShellProps) {
   const [inboxMessages, setInboxMessages] = useState<Array<{id:string;phone:string;message:string;direction:string;matched_case_id:string|null;matched_case_name:string|null;is_read:boolean;created_at:string}>>([]);
   const [inboxLoaded, setInboxLoaded] = useState(false);
   const [inboxShowArchived, setInboxShowArchived] = useState(false);
+  const [newtonBriefing, setNewtonBriefing] = useState<{loaded:boolean; data:any}>({loaded:false, data:null});
   const [inboxSearch, setInboxSearch] = useState<Record<string,string>>({});
   const [aiResult, setAiResult] = useState<{caseId:string;text:string;action:string}|null>(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -4186,8 +4187,96 @@ We will notify you as soon as we receive a decision. This usually takes a few we
 
                 return (
                   <>
+                    {/* ── Newton AI Daily Briefing Widget ── */}
+                    {(isAdmin || myRole === "ProcessingLead") && (
+                      <section className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg">🤖</span>
+                            <div>
+                              <p className="text-sm font-bold text-emerald-800">Newton AI Daily Briefing</p>
+                              <p className="text-[11px] text-emerald-600">{new Date().toLocaleDateString("en-CA", {timeZone:"America/Vancouver", weekday:"long", month:"long", day:"numeric"})}</p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={async () => {
+                              setNewtonBriefing({loaded:false, data:null});
+                              try {
+                                const res = await apiFetch("/newton-briefing", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({token:"newton-recovery-2024"})});
+                                const data = await res.json();
+                                setNewtonBriefing({loaded:true, data});
+                              } catch(e) { setNewtonBriefing({loaded:true, data:{error:"Failed"}}); }
+                            }}
+                            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700"
+                          >
+                            {newtonBriefing.loaded ? "↻ Refresh" : "▶ Run Briefing"}
+                          </button>
+                        </div>
+
+                        {!newtonBriefing.loaded && (
+                          <div className="grid grid-cols-4 gap-3">
+                            {[
+                              {icon:"📊", label:"Active Cases", value:visibleCases.length, color:"text-slate-700"},
+                              {icon:"🔴", label:"Urgent", value:urgentCases.length, color:"text-red-600"},
+                              {icon:"🔍", label:"Under Review", value:underReviewCases.length, color:"text-amber-600"},
+                              {icon:"⚠️", label:"Expiring Soon", value:visibleCases.filter(c=>{
+                                const intake=(c.pgwpIntake||{}) as any;
+                                const exp=intake.studyPermitExpiryDate||intake.workPermitExpiryDate||(c as any).permitExpiryDate||"";
+                                if(!exp) return false;
+                                const days=Math.floor((new Date(exp).getTime()-Date.now())/86400000);
+                                return days>=0&&days<=30;
+                              }).length, color:"text-orange-600"},
+                            ].map((stat,i) => (
+                              <div key={i} className="rounded-xl bg-white border border-slate-100 p-3 text-center shadow-sm">
+                                <p className="text-xl">{stat.icon}</p>
+                                <p className={`text-xl font-bold ${stat.color}`}>{stat.value}</p>
+                                <p className="text-[10px] text-slate-500 font-medium">{stat.label}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {newtonBriefing.loaded && newtonBriefing.data && (
+                          <div className="space-y-2">
+                            <div className="grid grid-cols-4 gap-2">
+                              {[
+                                {icon:"📊", label:"Active", value:newtonBriefing.data.urgentCases !== undefined ? visibleCases.length : "—"},
+                                {icon:"🔴", label:"Urgent", value:newtonBriefing.data.urgentCases ?? "—"},
+                                {icon:"⚠️", label:"Expiring", value:newtonBriefing.data.expiringCases ?? "—"},
+                                {icon:"✅", label:"New Results", value:newtonBriefing.data.recentResults ?? "—"},
+                              ].map((s,i) => (
+                                <div key={i} className="rounded-lg bg-white border border-slate-100 p-2 text-center">
+                                  <p className="text-lg">{s.icon}</p>
+                                  <p className="text-lg font-bold text-slate-800">{s.value}</p>
+                                  <p className="text-[10px] text-slate-500">{s.label}</p>
+                                </div>
+                              ))}
+                            </div>
+                            {newtonBriefing.data.staleCases > 0 && (
+                              <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
+                                💤 <strong>{newtonBriefing.data.staleCases} stale cases</strong> — no updates in 7+ days
+                              </div>
+                            )}
+                            <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-700">
+                              ✅ Briefing sent to team • Client reminders: {newtonBriefing.data.clientReminders?.length || 0} sent
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="mt-3 pt-3 border-t border-emerald-100 flex gap-2">
+                          <button onClick={() => setScreen("newton-ai")} className="text-xs text-emerald-600 font-semibold hover:underline">
+                            💬 Ask Newton AI →
+                          </button>
+                          <span className="text-slate-300">|</span>
+                          <button onClick={() => setScreen("cases")} className="text-xs text-slate-500 hover:underline">
+                            View all cases →
+                          </button>
+                        </div>
+                      </section>
+                    )}
+
                     {/* ── Personal greeting header ── */}
-                    <section className="rounded-2xl border-2 border-slate-900 bg-slate-900 p-4 text-white" style={{background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)"}}>
+                    <section className="rounded-2xl border-2 border-slate-900 bg-slate-900 p-4 text-white" style={{background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)"}}> 
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Newton Immigration · {myRole}</p>
